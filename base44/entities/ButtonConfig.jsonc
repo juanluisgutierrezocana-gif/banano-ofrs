@@ -1,0 +1,34 @@
+{
+  "name": "ButtonConfig",
+  "type": "object",
+  "properties": {
+    "position": {
+      "type": "number",
+      "description": "Orden del bot\u00f3n"
+    },
+    "color_id": {
+      "type": "string",
+      "description": "ID del color asignado"
+    },
+    "color_name": {
+      "type": "string"
+    },
+    "color_hex": {
+      "type": "string"
+    },
+    "week_age": {
+      "type": "number",
+      "description": "Semana de edad"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "position",
+    "color_name",
+    "color_hex",
+    "week_age"
+  ]
+}

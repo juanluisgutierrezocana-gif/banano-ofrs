@@ -1,0 +1,31 @@
+{
+  "name": "Perdida",
+  "type": "object",
+  "properties": {
+    "embolse_id": {
+      "type": "string",
+      "description": "ID del embolse asociado"
+    },
+    "semana": {
+      "type": "number"
+    },
+    "color_name": {
+      "type": "string"
+    },
+    "cantidad": {
+      "type": "number",
+      "description": "Cantidad de p\u00e9rdida"
+    },
+    "fecha": {
+      "type": "string",
+      "format": "date"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "embolse_id",
+    "cantidad"
+  ]
+}

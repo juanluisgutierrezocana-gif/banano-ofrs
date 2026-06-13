@@ -1,0 +1,42 @@
+{
+  "name": "LaborAgricola",
+  "type": "object",
+  "properties": {
+    "nombre": {
+      "type": "string",
+      "description": "Nombre de la labor agr\u00edcola"
+    },
+    "num_ciclos": {
+      "type": "number",
+      "description": "N\u00famero de ciclos para esta labor",
+      "default": 9,
+      "minimum": 1,
+      "maximum": 9
+    },
+    "activa": {
+      "type": "boolean",
+      "default": true
+    },
+    "unidad_extra": {
+      "type": "string",
+      "enum": [
+        "litros",
+        "galones",
+        "sacos",
+        "matas",
+        "racimos"
+      ],
+      "description": "Unidad adicional habilitada para esta labor (opcional)"
+    },
+    "secciones_excluidas": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "IDs de secciones desactivadas para esta labor"
+    }
+  },
+  "required": [
+    "nombre"
+  ]
+}

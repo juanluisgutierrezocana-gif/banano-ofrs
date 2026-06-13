@@ -1,0 +1,47 @@
+{
+  "name": "Embolse",
+  "type": "object",
+  "properties": {
+    "semana": {
+      "type": "number",
+      "description": "N\u00famero de semana"
+    },
+    "color_name": {
+      "type": "string"
+    },
+    "color_hex": {
+      "type": "string"
+    },
+    "seccion": {
+      "type": "string",
+      "description": "Secci\u00f3n (opcional, puede ser total general)"
+    },
+    "total": {
+      "type": "number",
+      "description": "Total de embolse"
+    },
+    "cosechado": {
+      "type": "number",
+      "description": "Total cosechado descontado",
+      "default": 0
+    },
+    "perdidas": {
+      "type": "number",
+      "description": "Total p\u00e9rdidas descontadas",
+      "default": 0
+    },
+    "saldo": {
+      "type": "number",
+      "description": "Saldo actual = total - cosechado - perdidas"
+    },
+    "week_age": {
+      "type": "number",
+      "description": "Semanas de edad de la cinta"
+    }
+  },
+  "required": [
+    "semana",
+    "color_name",
+    "total"
+  ]
+}

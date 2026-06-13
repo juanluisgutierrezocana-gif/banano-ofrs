@@ -1,0 +1,27 @@
+{
+  "name": "SeccionAgricola",
+  "type": "object",
+  "properties": {
+    "nombre": {
+      "type": "string",
+      "description": "Nombre de la secci\u00f3n"
+    },
+    "acres": {
+      "type": "number",
+      "description": "Cantidad de acres"
+    },
+    "minifinca": {
+      "type": "string",
+      "description": "Nombre de la minifinca a la que pertenece"
+    },
+    "activa": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "nombre",
+    "acres",
+    "minifinca"
+  ]
+}

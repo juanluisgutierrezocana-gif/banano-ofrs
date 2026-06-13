@@ -1,0 +1,27 @@
+{
+  "name": "OrdenCalibre",
+  "type": "object",
+  "properties": {
+    "fecha": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha de la orden de corte"
+    },
+    "semana": {
+      "type": "number",
+      "description": "N\u00famero de semana (10-14)"
+    },
+    "sub_basal": {
+      "type": "number",
+      "description": "Valor Sub-Basal"
+    },
+    "apical": {
+      "type": "number",
+      "description": "Valor Apical"
+    }
+  },
+  "required": [
+    "fecha",
+    "semana"
+  ]
+}

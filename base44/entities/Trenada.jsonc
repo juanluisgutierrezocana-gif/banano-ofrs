@@ -1,0 +1,66 @@
+{
+  "name": "Trenada",
+  "type": "object",
+  "properties": {
+    "fecha": {
+      "type": "string",
+      "format": "date"
+    },
+    "hora": {
+      "type": "string",
+      "description": "Hora de ingreso"
+    },
+    "cuadrilla": {
+      "type": "number",
+      "description": "N\u00famero de cuadrilla"
+    },
+    "conchero": {
+      "type": "string"
+    },
+    "cortero": {
+      "type": "string"
+    },
+    "seccion": {
+      "type": "string"
+    },
+    "linea": {
+      "type": "string",
+      "description": "L\u00ednea de ingreso a planta"
+    },
+    "racimos": {
+      "type": "array",
+      "description": "Detalle de racimos por color [{color_name, color_hex, week_age, count}]",
+      "items": {
+        "type": "object",
+        "properties": {
+          "color_name": {
+            "type": "string"
+          },
+          "color_hex": {
+            "type": "string"
+          },
+          "week_age": {
+            "type": "number"
+          },
+          "count": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "total_racimos": {
+      "type": "number"
+    },
+    "correlativo": {
+      "type": "number",
+      "description": "N\u00famero correlativo del d\u00eda"
+    }
+  },
+  "required": [
+    "fecha",
+    "cuadrilla",
+    "conchero",
+    "cortero",
+    "seccion"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "name": "RegistroLabor",
+  "type": "object",
+  "properties": {
+    "labor_id": {
+      "type": "string",
+      "description": "ID de la labor agr\u00edcola"
+    },
+    "labor_nombre": {
+      "type": "string",
+      "description": "Nombre de la labor"
+    },
+    "fecha": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha del registro"
+    },
+    "semana": {
+      "type": "number",
+      "description": "N\u00famero de semana"
+    },
+    "seccion_id": {
+      "type": "string",
+      "description": "ID de la secci\u00f3n agr\u00edcola"
+    },
+    "seccion_nombre": {
+      "type": "string",
+      "description": "Nombre de la secci\u00f3n"
+    },
+    "acres": {
+      "type": "number",
+      "description": "Acres de la secci\u00f3n"
+    },
+    "minifinca": {
+      "type": "string",
+      "description": "Minifinca de la secci\u00f3n"
+    },
+    "ciclo": {
+      "type": "number",
+      "description": "N\u00famero de ciclo (1-9)"
+    },
+    "hectareas": {
+      "type": "number",
+      "description": "Hect\u00e1reas ejecutadas (calculado de acres)"
+    },
+    "unidad_extra_valor": {
+      "type": "number",
+      "description": "Valor de la unidad extra (litros/galones/sacos/matas)"
+    },
+    "unidad_extra_tipo": {
+      "type": "string",
+      "description": "Tipo de unidad extra registrada"
+    }
+  },
+  "required": [
+    "labor_id",
+    "fecha",
+    "seccion_id",
+    "ciclo"
+  ]
+}

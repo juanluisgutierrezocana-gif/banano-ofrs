@@ -1,0 +1,22 @@
+{
+  "name": "ColorConfig",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nombre del color"
+    },
+    "hex": {
+      "type": "string",
+      "description": "C\u00f3digo hex del color"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "name",
+    "hex"
+  ]
+}
