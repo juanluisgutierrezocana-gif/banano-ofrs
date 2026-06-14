@@ -30,10 +30,11 @@ export default function StepConteo({ info, onSave, onBack }) {
   });
 
   // Cargar embolses para obtener saldos actualizados
+  // FIXED: listEmbolse() no existe → usar list() estándar de createEntity
   const { data: embolses = [] } = useQuery({
     queryKey: ["embolses"],
     queryFn: async () => {
-      const { data, error } = await inventory.listEmbolse("semana");
+      const { data, error } = await inventory.list("semana");
       if (error) throw error;
       return data ?? [];
     },
@@ -85,7 +86,9 @@ export default function StepConteo({ info, onSave, onBack }) {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const today = info.fecha || format(new Date(), "yyyy-MM-dd");
-      const existing = await trenadas.filter({ fecha: today });
+      // FIXED: trenadas.filter() retorna { data, error } — debe unwrapearse antes de usar .length
+      const { data: existing = [], error: existingError } = await trenadas.filter({ fecha: today });
+      if (existingError) throw existingError;
       const correlativo = existing.length + 1;
 
       const racimos = buttons
@@ -111,7 +114,9 @@ export default function StepConteo({ info, onSave, onBack }) {
         correlativo,
       };
 
-      const trenada = await trenadas.create(data);
+      // FIXED: trenadas.create() retorna { data, error } — unwrapear correctamente
+      const { data: trenada, error: createError } = await trenadas.create(data);
+      if (createError) throw createError;
 
       // Descontar cosechado de cada embolse usado
       await Promise.all(
@@ -120,7 +125,8 @@ export default function StepConteo({ info, onSave, onBack }) {
           if (!embolse) return;
           const newCosechado = (embolse.cosechado || 0) + r.count;
           const newSaldo = embolse.total - newCosechado - (embolse.perdidas || 0);
-          await inventory.updateEmbolse(r.embolse_id, {
+          // FIXED: updateEmbolse() no existe → usar update() estándar de createEntity
+          await inventory.update(r.embolse_id, {
             cosechado: newCosechado,
             saldo: newSaldo,
           });

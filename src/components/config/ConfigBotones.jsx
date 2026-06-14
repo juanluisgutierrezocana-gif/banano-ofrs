@@ -33,10 +33,11 @@ export default function ConfigBotones() {
   });
 
   // Cargar embolses del inventario con saldo > 0
+  // FIXED: listEmbolse() no existe → usar list() estándar de createEntity
   const { data: embolses = [] } = useQuery({
     queryKey: ["embolses"],
     queryFn: async () => {
-      const { data, error } = await inventory.listEmbolse("semana");
+      const { data, error } = await inventory.list("semana");
       if (error) throw error;
       return data ?? [];
     },
