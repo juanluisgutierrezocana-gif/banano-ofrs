@@ -8,8 +8,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 
 async function getFincaSettings() {
-  const { data } = await supabase.from("settings").select("finca_name").limit(1).maybeSingle();
-  return { nombre: data?.finca_name || null, logo: null };
+  const { data } = await supabase.from("settings").select("*").in("key", ["finca_nombre", "finca_logo"]);
+  const map = {};
+  (data || []).forEach(r => { map[r.key] = r.value; });
+  return { nombre: map.finca_nombre || null, logo: map.finca_logo || null };
 }
 
 function useOnlineStatus() {
@@ -108,13 +110,13 @@ export default function Sidebar() {
                   "bg-sidebar-primary text-sidebar-primary-foreground shadow-md" :
                   "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                 )}>
-                
+
                 <item.icon className="w-5 h-5" />
                 {item.label}
               </Link>);
 
           })}
-          
+
           {/* Botón salir a pantalla inicial */}
           <button
             onClick={() => { window.location.href = "/landing"; }}

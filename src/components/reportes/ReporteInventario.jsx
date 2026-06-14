@@ -16,28 +16,28 @@ export default function ReporteInventario() {
   const { data: embolses = [], isLoading } = useQuery({
     queryKey: ["embolses"],
     queryFn: async () => {
-  const { data, error } = await inventory.listEmbolse();
-  if (error) throw error;
-  return data ?? [];
-},
+      const { data, error } = await inventory.listEmbolse();
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
-  const { data: sections = [] } = useQuery({
+  const { data: sectionList = [] } = useQuery({
     queryKey: ["sections"],
     queryFn: async () => {
-  const { data, error } = await sections.filter({ active: true });
-  if (error) throw error;
-  return data ?? [];
-},
+      const { data, error } = await sections.filter({ active: true });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
-  const { data: colors = [] } = useQuery({
+  const { data: colorList = [] } = useQuery({
     queryKey: ["colors-active"],
     queryFn: async () => {
-  const { data, error } = await colors.filter({ active: true });
-  if (error) throw error;
-  return data ?? [];
-},
+      const { data, error } = await colors.filter({ active: true });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const filtered = embolses.filter(e => {
@@ -90,7 +90,7 @@ export default function ReporteInventario() {
                 <Select value={filterSeccion} onValueChange={setFilterSeccion}>
                   <SelectTrigger className="w-36"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
-                    {sections.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                    {sectionList.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -101,7 +101,7 @@ export default function ReporteInventario() {
                 <Select value={filterColor} onValueChange={setFilterColor}>
                   <SelectTrigger className="w-36"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
-                    {colors.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                    {colorList.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

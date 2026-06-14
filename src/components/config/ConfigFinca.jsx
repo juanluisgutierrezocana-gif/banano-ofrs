@@ -42,7 +42,6 @@ export default function ConfigFinca() {
     const file = e.target.files[0];
     if (!file) return;
     setPendingFile(file);
-    // Preview local inmediato sin importar el tamaño
     const url = URL.createObjectURL(file);
     setLogoPreview(url);
   };
@@ -55,10 +54,16 @@ export default function ConfigFinca() {
       // Si hay imagen nueva, subirla primero
       if (pendingFile) {
         setUploading(true);
-        const { file_url } = await supabase.storage.from("uploads").upload({ file: pendingFile });
+        const ext = pendingFile.name.split(".").pop();
+        const fileName = `logos/finca_logo_${Date.now()}.${ext}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("uploads")
+          .upload(fileName, pendingFile, { upsert: true });
         setUploading(false);
-        await upsertSetting(KEYS.logo, file_url, logoSetting);
-        setLogoPreview(file_url);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from("uploads").getPublicUrl(uploadData.path);
+        await upsertSetting(KEYS.logo, publicUrl, logoSetting);
+        setLogoPreview(publicUrl);
         setPendingFile(null);
       }
     },

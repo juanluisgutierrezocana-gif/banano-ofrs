@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports, ordenCalibre } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,11 @@ export default function OrdenCalibre() {
 
   const { data: registros = [], isLoading } = useQuery({
     queryKey: ["orden-calibre", fecha],
-    queryFn: () => supabase.from("orden_calibre").select("*").eq({ fecha }),
+    queryFn: async () => {
+      const { data, error } = await ordenCalibre.filter({ fecha });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   // Construir mapa de datos por semana
@@ -49,9 +53,9 @@ export default function OrdenCalibre() {
         apical: isNaN(apical) ? null : apical,
       };
       if (existing) {
-        await supabase.from("orden_calibre").update(existing.id, payload);
+        await ordenCalibre.update(existing.id, payload);
       } else if (!isNaN(sub_basal) || !isNaN(apical)) {
-        await supabase.from("orden_calibre").insert(payload);
+        await ordenCalibre.create(payload);
       }
     }
     setValues({});

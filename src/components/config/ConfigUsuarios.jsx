@@ -18,7 +18,7 @@ export default function ConfigUsuarios() {
   const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: users = [], isLoading } = useQuery({
+  const { data: userList = [], isLoading } = useQuery({
     queryKey: ["users-list"],
     queryFn: () => users.list(),
   });
@@ -47,7 +47,7 @@ export default function ConfigUsuarios() {
           Gestión de Usuarios
           {!isLoading && (
             <Badge variant="secondary" className="ml-2 text-xs">
-              {users.length} {users.length === 1 ? "usuario" : "usuarios"}
+              {userList.length} {userList.length === 1 ? "usuario" : "usuarios"}
             </Badge>
           )}
         </CardTitle>
@@ -60,11 +60,11 @@ export default function ConfigUsuarios() {
       <CardContent>
         {isLoading ? (
           <p className="text-center text-muted-foreground py-8">Cargando usuarios...</p>
-        ) : !users.length ? (
+        ) : !userList.length ? (
           <p className="text-center text-muted-foreground py-8">No hay usuarios registrados</p>
         ) : (
           <div className="space-y-3">
-            {users.map(u => {
+            {userList.map(u => {
               const isMe = u.id === currentUser?.id;
               const roleInfo = ROLES[u.role] || ROLES.user;
               const RoleIcon = roleInfo.icon;

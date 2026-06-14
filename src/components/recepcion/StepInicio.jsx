@@ -22,7 +22,7 @@ export default function StepInicio({ onNext }) {
     linea: "",
   });
 
-  const { data: sections = [] } = useQuery({
+  const { data: sectionList = [] } = useQuery({
     queryKey: ["sections"],
     queryFn: () => sections.filter({ active: true }),
   });
@@ -97,7 +97,7 @@ export default function StepInicio({ onNext }) {
               <SelectValue placeholder="Seleccionar sección" />
             </SelectTrigger>
             <SelectContent>
-              {sections.map(s => (
+              {sectionList.map(s => (
                 <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
               ))}
             </SelectContent>

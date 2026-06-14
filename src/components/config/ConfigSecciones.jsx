@@ -12,7 +12,7 @@ export default function ConfigSecciones() {
   const queryClient = useQueryClient();
   const [newName, setNewName] = useState("");
 
-  const { data: sections = [] } = useQuery({
+  const { data: sectionList = [] } = useQuery({
     queryKey: ["sections-all"],
     queryFn: () => sections.list(),
   });
@@ -61,7 +61,7 @@ export default function ConfigSecciones() {
         </div>
 
         <div className="space-y-2">
-          {sections.map(s => (
+          {sectionList.map(s => (
             <div key={s.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
               <div className="flex items-center gap-3">
                 <span className="font-medium">{s.name}</span>
@@ -70,19 +70,10 @@ export default function ConfigSecciones() {
                 </Badge>
               </div>
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => toggleMutation.mutate(s)}
-                >
+                <Button variant="outline" size="sm" onClick={() => toggleMutation.mutate(s)}>
                   {s.active ? "Desactivar" : "Activar"}
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => deleteMutation.mutate(s.id)}
-                  className="text-destructive"
-                >
+                <Button variant="ghost" size="sm" onClick={() => deleteMutation.mutate(s.id)} className="text-destructive">
                   <Trash2 className="w-4 h-4" />
                 </Button>
               </div>

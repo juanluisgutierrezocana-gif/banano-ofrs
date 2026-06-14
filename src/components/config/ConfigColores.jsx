@@ -13,7 +13,7 @@ export default function ConfigColores() {
   const [newName, setNewName] = useState("");
   const [newHex, setNewHex] = useState("#000000");
 
-  const { data: colors = [] } = useQuery({
+  const { data: colorList = [] } = useQuery({
     queryKey: ["colors-all"],
     queryFn: () => colors.list(),
   });
@@ -58,7 +58,7 @@ export default function ConfigColores() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-          {colors.map(c => (
+          {colorList.map(c => (
             <div key={c.id} className="flex items-center justify-between p-3 rounded-lg border">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: c.hex }} />

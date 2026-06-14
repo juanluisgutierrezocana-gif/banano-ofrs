@@ -26,7 +26,7 @@ export default function EditarTrenadas() {
     setEditCount(parseInt(localStorage.getItem(`edits_${fecha}`) || "0"));
   }, [fecha]);
 
-  const { data: trenadas = [], isLoading } = useQuery({
+  const { data: trenadaList = [], isLoading } = useQuery({
     queryKey: ["trenadas-edit", fecha],
     queryFn: () => trenadas.filter({ fecha }, "correlativo"),
   });
@@ -122,7 +122,7 @@ export default function EditarTrenadas() {
         </div>
         <div className="ml-auto text-right">
           <p className="text-xs text-muted-foreground">Trenadas del día</p>
-          <p className="text-2xl font-bold">{trenadas.length}</p>
+          <p className="text-2xl font-bold">{trenadaList.length}</p>
         </div>
       </div>
 
@@ -134,7 +134,7 @@ export default function EditarTrenadas() {
         <CardContent className="p-0">
           {isLoading ? (
             <p className="text-center text-muted-foreground py-12">Cargando...</p>
-          ) : !trenadas.length ? (
+          ) : !trenadaList.length ? (
             <p className="text-center text-muted-foreground py-12">No hay trenadas para esta fecha</p>
           ) : (
             <div className="overflow-x-auto">
@@ -153,7 +153,7 @@ export default function EditarTrenadas() {
                   </tr>
                 </thead>
                 <tbody>
-                  {trenadas.map((t, idx) => {
+                  {trenadaList.map((t, idx) => {
                    const isEditing = editingId === t.id;
                    return (
                      <React.Fragment key={t.id}>

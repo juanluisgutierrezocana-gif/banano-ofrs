@@ -61,7 +61,6 @@ function GraficaEmbolse({ embolses, loading }) {
   const semanasDisponibles = useMemo(() => {
     const set = new Set();
     embolses.forEach(e => {
-      // Filtrar por año si el embolse tiene fecha de creación, si no, mostrar todas
       set.add(e.semana);
     });
     return Array.from(set).sort((a, b) => a - b);
@@ -194,7 +193,7 @@ function GraficaEmbolse({ embolses, loading }) {
 }
 
 // ── GRÁFICA 2: Racimos cosechados por semana (filtrable por fecha) ─────────
-function GraficaCosecha({ trenadas, loading }) {
+function GraficaCosecha({ trenadas: trenadaData, loading }) {
   const [desde, setDesde] = useState(firstOfYear);
   const [hasta, setHasta] = useState(today);
 
@@ -202,7 +201,7 @@ function GraficaCosecha({ trenadas, loading }) {
     const from = parseISO(desde);
     const to = parseISO(hasta);
     const map = {};
-    trenadas
+    trenadaData
       .filter(t => t.fecha && parseISO(t.fecha) >= from && parseISO(t.fecha) <= to)
       .forEach(t => {
         const ws = startOfWeek(parseISO(t.fecha), { weekStartsOn: 1 });
@@ -212,7 +211,7 @@ function GraficaCosecha({ trenadas, loading }) {
         map[key].racimos += t.total_racimos || 0;
       });
     return Object.values(map).sort((a, b) => a.key.localeCompare(b.key));
-  }, [trenadas, desde, hasta]);
+  }, [trenadaData, desde, hasta]);
 
   const total = data.reduce((s, d) => s + d.racimos, 0);
 
@@ -272,10 +271,10 @@ function GraficaPerdidas({ loading }) {
   const { data: perdidas = [], isLoading: loadingP } = useQuery({
     queryKey: ["perdidas-reporte"],
     queryFn: async () => {
-  const { data, error } = await losses.list();
-  if (error) throw error;
-  return data ?? [];
-},
+      const { data, error } = await losses.list();
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const data = useMemo(() => {
@@ -345,25 +344,25 @@ export default function ReporteEmbolse() {
   const { data: embolses = [], isLoading: loadingEmbolses } = useQuery({
     queryKey: ["embolses-reporte"],
     queryFn: async () => {
-  const { data, error } = await inventory.listEmbolse();
-  if (error) throw error;
-  return data ?? [];
-},
+      const { data, error } = await inventory.listEmbolse();
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
-  const { data: trenadas = [], isLoading: loadingTrenadas } = useQuery({
+  const { data: trenadaList = [], isLoading: loadingTrenadas } = useQuery({
     queryKey: ["trenadas-reporte"],
     queryFn: async () => {
-  const { data, error } = await trenadas.list();
-  if (error) throw error;
-  return data ?? [];
-},
+      const { data, error } = await trenadas.list();
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   return (
     <div className="space-y-6">
       <GraficaEmbolse embolses={embolses} loading={loadingEmbolses} />
-      <GraficaCosecha trenadas={trenadas} loading={loadingTrenadas} />
+      <GraficaCosecha trenadas={trenadaList} loading={loadingTrenadas} />
       <GraficaPerdidas />
     </div>
   );

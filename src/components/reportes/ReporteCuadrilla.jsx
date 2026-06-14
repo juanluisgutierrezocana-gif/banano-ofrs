@@ -35,19 +35,19 @@ export default function ReporteCuadrilla() {
   const setWeek = () => { setDesde(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd")); setHasta(format(new Date(), "yyyy-MM-dd")); };
   const setMonth = () => { setDesde(format(startOfMonth(new Date()), "yyyy-MM-dd")); setHasta(format(new Date(), "yyyy-MM-dd")); };
 
-  const { data: trenadas = [], isLoading } = useQuery({
+  const { data: trenadaList = [], isLoading } = useQuery({
     queryKey: ["trenadas-cuadrilla", desde, hasta],
     queryFn: async () => {
-  const { data, error } = await trenadas.filter({ fecha: { $gte: desde, $lte: hasta } });
-  if (error) throw error;
-  return data ?? [];
-},
+      const { data, error } = await trenadas.filter({ fecha: { $gte: desde, $lte: hasta } });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const { crews, colorKeys, data } = useMemo(() => {
     const crewData = {};
     const colKeys = new Set();
-    trenadas.forEach(t => {
+    trenadaList.forEach(t => {
       const c = t.cuadrilla;
       if (!crewData[c]) crewData[c] = {};
       (t.racimos || []).forEach(r => {
@@ -57,7 +57,7 @@ export default function ReporteCuadrilla() {
       });
     });
     return { crews: Object.keys(crewData).map(Number).sort((a, b) => a - b), colorKeys: Array.from(colKeys), data: crewData };
-  }, [trenadas]);
+  }, [trenadaList]);
 
   const sortedCrews = useMemo(() => {
     if (!sortKey) return crews;

@@ -9,7 +9,6 @@ import { Download, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { format, startOfWeek } from "date-fns";
 import { exportStyledExcel } from "@/utils/excelExport";
 
-// sortKey: null = sin orden, string = columna; sortDir: "asc" | "desc"
 function SortIcon({ col, sortKey, sortDir }) {
   if (sortKey !== col) return <ArrowUpDown className="inline w-3 h-3 ml-1 opacity-40" />;
   return sortDir === "asc"
@@ -32,32 +31,31 @@ export default function ReporteSeccion() {
     }
   };
 
-  const { data: trenadas = [], isLoading: loadingTrenadas } = useQuery({
+  const { data: trenadaList = [], isLoading: loadingTrenadas } = useQuery({
     queryKey: ["trenadas-seccion", desde, hasta],
     queryFn: async () => {
-  const { data, error } = await trenadas.filter({ fecha: { $gte: desde, $lte: hasta } });
-  if (error) throw error;
-  return data ?? [];
-},
+      const { data, error } = await trenadas.filter({ fecha: { $gte: desde, $lte: hasta } });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const { data: activeSections = [], isLoading: loadingSections } = useQuery({
     queryKey: ["sections-active"],
     queryFn: async () => {
-  const { data, error } = await sections.filter({ active: true });
-  if (error) throw error;
-  return data ?? [];
-},
+      const { data, error } = await sections.filter({ active: true });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const isLoading = loadingTrenadas || loadingSections;
 
-  const { sections, colorKeys, data } = useMemo(() => {
+  const { sections: sectionNames, colorKeys, data: sectionData } = useMemo(() => {
     const secs = {};
-    // Inicializar todas las secciones activas con objeto vacío
     activeSections.forEach(s => { secs[s.name] = {}; });
     const colKeys = new Set();
-    trenadas.forEach(t => {
+    trenadaList.forEach(t => {
       if (!secs[t.seccion]) secs[t.seccion] = {};
       (t.racimos || []).forEach(r => {
         const key = `${r.color_name} S${r.week_age}`;
@@ -67,33 +65,33 @@ export default function ReporteSeccion() {
     });
     const baseSections = Object.keys(secs).sort();
     return { sections: baseSections, colorKeys: Array.from(colKeys), data: secs };
-  }, [trenadas, activeSections]);
+  }, [trenadaList, activeSections]);
 
   const sortedSections = useMemo(() => {
-    if (!sortKey) return sections;
-    return [...sections].sort((a, b) => {
+    if (!sortKey) return sectionNames;
+    return [...sectionNames].sort((a, b) => {
       if (sortKey === "seccion") {
         return sortDir === "asc" ? a.localeCompare(b) : b.localeCompare(a);
       }
       const valA = sortKey === "total"
-        ? colorKeys.reduce((sum, k) => sum + (data[a][k] || 0), 0)
-        : (data[a][sortKey] || 0);
+        ? colorKeys.reduce((sum, k) => sum + (sectionData[a][k] || 0), 0)
+        : (sectionData[a][sortKey] || 0);
       const valB = sortKey === "total"
-        ? colorKeys.reduce((sum, k) => sum + (data[b][k] || 0), 0)
-        : (data[b][sortKey] || 0);
+        ? colorKeys.reduce((sum, k) => sum + (sectionData[b][k] || 0), 0)
+        : (sectionData[b][sortKey] || 0);
       return sortDir === "asc" ? valA - valB : valB - valA;
     });
-  }, [sections, sortKey, sortDir, colorKeys, data]);
+  }, [sectionNames, sortKey, sortDir, colorKeys, sectionData]);
 
   const exportExcel = () => {
     const headers = ["Sección", ...colorKeys, "Total"];
-    const rows = sections.map(s => {
-      const total = colorKeys.reduce((sum, k) => sum + (data[s][k] || 0), 0);
-      return [s, ...colorKeys.map(k => data[s][k] || 0), total];
+    const rows = sectionNames.map(s => {
+      const total = colorKeys.reduce((sum, k) => sum + (sectionData[s][k] || 0), 0);
+      return [s, ...colorKeys.map(k => sectionData[s][k] || 0), total];
     });
     const totalsRow = ["TOTAL",
-      ...colorKeys.map(k => sections.reduce((s, sec) => s + (data[sec][k] || 0), 0)),
-      sections.reduce((s, sec) => s + colorKeys.reduce((sum, k) => sum + (data[sec][k] || 0), 0), 0)
+      ...colorKeys.map(k => sectionNames.reduce((s, sec) => s + (sectionData[sec][k] || 0), 0)),
+      sectionNames.reduce((s, sec) => s + colorKeys.reduce((sum, k) => sum + (sectionData[sec][k] || 0), 0), 0)
     ];
     exportStyledExcel({
       title: `Reporte por Sección — ${desde} al ${hasta}`,
@@ -117,7 +115,7 @@ export default function ReporteSeccion() {
               <Label className="text-xs">Hasta</Label>
               <Input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="w-36" />
             </div>
-            <Button variant="outline" size="sm" onClick={exportExcel} disabled={!sections.length}>
+            <Button variant="outline" size="sm" onClick={exportExcel} disabled={!sectionNames.length}>
               <Download className="w-4 h-4 mr-1" /> Exportar
             </Button>
           </div>
@@ -126,7 +124,7 @@ export default function ReporteSeccion() {
       <CardContent>
         {isLoading ? (
           <p className="text-center text-muted-foreground py-8">Cargando...</p>
-        ) : !sections.length && !activeSections.length ? (
+        ) : !sectionNames.length && !activeSections.length ? (
           <p className="text-center text-muted-foreground py-8">No hay secciones activas</p>
         ) : (
           <div className="overflow-x-auto">
@@ -151,11 +149,11 @@ export default function ReporteSeccion() {
               </thead>
               <tbody>
                 {sortedSections.map(s => {
-                  const total = colorKeys.reduce((sum, k) => sum + (data[s][k] || 0), 0);
+                  const total = colorKeys.reduce((sum, k) => sum + (sectionData[s][k] || 0), 0);
                   return (
                     <tr key={s} className="border-b hover:bg-muted/50">
                       <td className="py-2 px-3 font-semibold">{s}</td>
-                      {colorKeys.map(k => <td key={k} className="py-2 px-2 text-center">{data[s][k] || 0}</td>)}
+                      {colorKeys.map(k => <td key={k} className="py-2 px-2 text-center">{sectionData[s][k] || 0}</td>)}
                       <td className="py-2 px-3 text-center font-bold">{total}</td>
                     </tr>
                   );
@@ -164,11 +162,11 @@ export default function ReporteSeccion() {
                   <td className="py-2 px-3">TOTAL</td>
                   {colorKeys.map(k => (
                     <td key={k} className="py-2 px-2 text-center">
-                      {sections.reduce((s, sec) => s + (data[sec][k] || 0), 0)}
+                      {sectionNames.reduce((s, sec) => s + (sectionData[sec][k] || 0), 0)}
                     </td>
                   ))}
                   <td className="py-2 px-3 text-center">
-                    {sections.reduce((s, sec) => s + colorKeys.reduce((sum, k) => sum + (data[sec][k] || 0), 0), 0)}
+                    {sectionNames.reduce((s, sec) => s + colorKeys.reduce((sum, k) => sum + (sectionData[sec][k] || 0), 0), 0)}
                   </td>
                 </tr>
               </tbody>
