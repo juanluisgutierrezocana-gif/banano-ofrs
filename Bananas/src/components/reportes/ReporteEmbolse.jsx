@@ -344,7 +344,8 @@ export default function ReporteEmbolse() {
   const { data: embolses = [], isLoading: loadingEmbolses } = useQuery({
     queryKey: ["embolses-reporte"],
     queryFn: async () => {
-      const { data, error } = await inventory.listEmbolse();
+      // FIXED: listEmbolse() no existe en createEntity — usar list() estándar
+      const { data, error } = await inventory.list("-semana");
       if (error) throw error;
       return data ?? [];
     },

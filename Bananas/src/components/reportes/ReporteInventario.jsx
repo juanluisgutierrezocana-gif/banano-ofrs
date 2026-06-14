@@ -16,7 +16,8 @@ export default function ReporteInventario() {
   const { data: embolses = [], isLoading } = useQuery({
     queryKey: ["embolses"],
     queryFn: async () => {
-      const { data, error } = await inventory.listEmbolse();
+      // FIXED: listEmbolse() no existe en createEntity — usar list() estándar
+      const { data, error } = await inventory.list("-semana");
       if (error) throw error;
       return data ?? [];
     },
@@ -101,7 +102,7 @@ export default function ReporteInventario() {
                 <Select value={filterColor} onValueChange={setFilterColor}>
                   <SelectTrigger className="w-36"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
-                    {colorList.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                    {colorList.map(c => <SelectItem key={c.id} value={c.color_name}>{c.color_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
