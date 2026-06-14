@@ -70,12 +70,13 @@ export default function PanelDiario() {
     });
 
     // Asegurar que todos los botones activos aparezcan aunque tengan 0 racimos
-    // button_config tiene: color_name, color_hex, week_age (columnas añadidas via ALTER)
+    // button_config.color_name puede ser NULL si la migración no lo incluyó → usar button_name como fallback
     buttons.forEach(btn => {
-      const key = `${btn.color_name}-S${btn.week_age ?? 0}`;
+      const colorLabel = btn.color_name ?? btn.button_name;
+      const key = `${colorLabel}-S${btn.week_age ?? 0}`;
       if (!totals[key]) {
         totals[key] = {
-          color_name: btn.color_name,
+          color_name: colorLabel,
           color_hex: btn.color_hex,
           week_age: btn.week_age ?? 0,
           count: 0,
