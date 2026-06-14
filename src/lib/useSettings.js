@@ -5,7 +5,7 @@ export function useSettings() {
   const { data: settingsRow = {}, isLoading } = useQuery({
     queryKey: ["settings"],
     queryFn: async () => {
-      const { data } = await supabase.from("settings").select("*").limit(1).single();
+      const { data } = await supabase.from("settings").select("*").limit(1).maybeSingle();
       return data ?? {};
     },
   });

@@ -7,7 +7,7 @@ export default function Landing() {
   const { data: finca } = useQuery({
     queryKey: ["finca-settings-landing"],
     queryFn: async () => {
-      const { data } = await supabase.from("settings").select("finca_name").limit(1).single();
+      const { data } = await supabase.from("settings").select("finca_name").limit(1).maybeSingle();
       return { nombre: data?.finca_name || null, logo: null };
     },
     staleTime: 60000,

@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 
 async function getFincaSettings() {
-  const { data } = await supabase.from("settings").select("finca_name").limit(1).single();
+  const { data } = await supabase.from("settings").select("finca_name").limit(1).maybeSingle();
   return { nombre: data?.finca_name || null, logo: null };
 }
 
