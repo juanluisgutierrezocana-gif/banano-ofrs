@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { laborAgricola, reports } from "@/api/supabaseClient";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function WeeklyLaborTable() {
@@ -12,10 +12,11 @@ export default function WeeklyLaborTable() {
     },
   });
 
+  // FIXED: tabla correcta es "registros_labor" (con 's'), accedida via entity reports
   const { data: registros = [] } = useQuery({
     queryKey: ["registros-labor"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("registro_labor").select("*");
+      const { data, error } = await reports.list();
       if (error) throw error;
       return data ?? [];
     },

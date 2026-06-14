@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, seccionAgricola, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { seccionAgricola, laborAgricola, reports } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function CycleProgressCharts() {
@@ -13,10 +13,11 @@ export default function CycleProgressCharts() {
     },
   });
 
+  // FIXED: tabla correcta es "registros_labor" (con 's'), accedida via entity reports
   const { data: registros = [] } = useQuery({
     queryKey: ["registros-labor"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("registro_labor").select("*");
+      const { data, error } = await reports.list();
       if (error) throw error;
       return data ?? [];
     },
@@ -62,7 +63,7 @@ export default function CycleProgressCharts() {
   // Totales por minifinca y ciclo para labores de tipo Embolse
   const embolsePorMinifinca = useMemo(() => {
     const minifincas = [...new Set(secciones.map(s => s.minifinca).filter(Boolean))].sort();
-    const result = {}; // { [laborId]: { [minifinca]: { [ciclo]: total } } }
+    const result = {};
     activeLaborFiltered.forEach(labor => {
       if (!labor.nombre.toLowerCase().includes("embolse")) return;
       result[labor.id] = {};
@@ -128,19 +129,16 @@ export default function CycleProgressCharts() {
                       title={`Ciclo ${c}: ${isEmbolse ? `${racimos} racimos` : `${pct.toFixed(1)}% | ${d.acres.toFixed(1)} ac`}${d.extra > 0 && d.extra_tipo ? ` | ${d.extra.toFixed(1)} ${d.extra_tipo}` : ""}`}
                     >
                       <span className="text-xs text-muted-foreground font-medium leading-none mb-0.5">C{c}</span>
-
                       <span className={`text-sm font-bold leading-none ${style.text}`}>
                         {isEmbolse
                           ? (racimos > 0 ? `${racimos.toLocaleString()}` : "—")
                           : (pct > 0 ? `${pct.toFixed(0)}%` : "—")}
                       </span>
-
                       {d.acres > 0 && (
                         <span className="leading-none text-muted-foreground mt-0.5" style={{ fontSize: "9px" }}>
                           {isEmbolse ? "rac." : `${d.acres.toFixed(1)}ac`}
                         </span>
                       )}
-
                       {d.extra > 0 && d.extra_tipo && (
                         <span className="leading-none text-muted-foreground mt-0.5" style={{ fontSize: "8px" }}>
                           {d.extra % 1 === 0 ? d.extra : d.extra.toFixed(1)} {d.extra_tipo.slice(0, 3)}
