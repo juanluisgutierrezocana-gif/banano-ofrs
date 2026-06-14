@@ -28,7 +28,11 @@ export default function EditarTrenadas() {
 
   const { data: trenadaList = [], isLoading } = useQuery({
     queryKey: ["trenadas-edit", fecha],
-    queryFn: () => trenadas.filter({ fecha }, "correlativo"),
+    queryFn: async () => {
+      const { data, error } = await trenadas.filter({ fecha }, "correlativo");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const updateMutation = useMutation({
