@@ -12,7 +12,11 @@ export default function ConfigRango() {
   const queryClient = useQueryClient();
   const { data: settings = [] } = useQuery({
     queryKey: ["settings"],
-    queryFn: () => supabase.from("settings").select("*")(),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("settings").select("*");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const [min, setMin] = useState("25");
@@ -29,9 +33,9 @@ export default function ConfigRango() {
     mutationFn: async () => {
       const sMin = settings.find(s => s.key === "rango_min");
       const sMax = settings.find(s => s.key === "rango_max");
-      if (sMin) await supabase.from("settings").update(sMin.id, { value: min });
+      if (sMin) await supabase.from("settings").update({ value: min }).eq("id", sMin.id);
       else await supabase.from("settings").insert({ key: "rango_min", value: min });
-      if (sMax) await supabase.from("settings").update(sMax.id, { value: max });
+      if (sMax) await supabase.from("settings").update({ value: max }).eq("id", sMax.id);
       else await supabase.from("settings").insert({ key: "rango_max", value: max });
     },
     onSuccess: () => {

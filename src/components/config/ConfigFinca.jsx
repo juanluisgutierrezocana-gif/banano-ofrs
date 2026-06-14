@@ -11,13 +11,13 @@ import { toast } from "sonner";
 const KEYS = { nombre: "finca_nombre", logo: "finca_logo" };
 
 async function getSetting(key) {
-  const res = await supabase.from("settings").select("*").eq({ key });
-  return res[0] || null;
+  const { data } = await supabase.from("settings").select("*").eq("key", key);
+  return data?.[0] || null;
 }
 
 async function upsertSetting(key, value, existing) {
   if (existing?.id) {
-    await supabase.from("settings").update(existing.id, { key, value });
+    await supabase.from("settings").update({ key, value }).eq("id", existing.id);
   } else {
     await supabase.from("settings").insert({ key, value });
   }

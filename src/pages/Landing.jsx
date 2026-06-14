@@ -7,9 +7,9 @@ export default function Landing() {
   const { data: finca } = useQuery({
     queryKey: ["finca-settings-landing"],
     queryFn: async () => {
-      const res = await supabase.from("settings").select("*").eq({ key: "finca_nombre" });
-      const res2 = await supabase.from("settings").select("*").eq({ key: "finca_logo" });
-      return { nombre: res[0]?.value || null, logo: res2[0]?.value || null };
+      const { data: res } = await supabase.from("settings").select("*").eq("key", "finca_nombre");
+      const { data: res2 } = await supabase.from("settings").select("*").eq("key", "finca_logo");
+      return { nombre: res?.[0]?.value || null, logo: res2?.[0]?.value || null };
     },
     staleTime: 60000,
   });

@@ -12,7 +12,11 @@ export default function ConfigLineas() {
   const queryClient = useQueryClient();
   const { data: settings = [] } = useQuery({
     queryKey: ["settings"],
-    queryFn: () => supabase.from("settings").select("*")(),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("settings").select("*");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const [lineas, setLineas] = useState("4");
@@ -25,7 +29,7 @@ export default function ConfigLineas() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const s = settings.find(s => s.key === "lineas");
-      if (s) await supabase.from("settings").update(s.id, { value: lineas });
+      if (s) await supabase.from("settings").update({ value: lineas }).eq("id", s.id);
       else await supabase.from("settings").insert({ key: "lineas", value: lineas });
     },
     onSuccess: () => {
