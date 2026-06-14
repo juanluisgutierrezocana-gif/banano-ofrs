@@ -50,7 +50,7 @@ export default function Inventario() {
     mutationFn: async () => {
       // FIXED: createEmbolse() no existe → usar create() estándar de createEntity
       const { data, error } = await inventory.create({
-        semana: parseInt(semana),
+        semana: String(semana), // columna TEXT en Supabase
         color_name: colorName,
         color_hex: selectedColor?.color_hex || "#000",
         total: parseInt(total),
@@ -105,7 +105,7 @@ export default function Inventario() {
 
   const confirmEdit = (e) => {
     const newTotal = parseInt(editValues.total);
-    const newSemana = parseInt(editValues.semana);
+    const newSemana = String(editValues.semana); // columna TEXT en Supabase
     const newSaldo = newTotal - (e.cosechado || 0) - (e.perdidas || 0);
     updateMutation.mutate({ id: e.id, data: { semana: newSemana, total: newTotal, saldo: newSaldo } });
   };
