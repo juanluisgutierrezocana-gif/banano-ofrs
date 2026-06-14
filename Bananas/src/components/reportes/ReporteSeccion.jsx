@@ -43,7 +43,8 @@ export default function ReporteSeccion() {
   const { data: activeSections = [], isLoading: loadingSections } = useQuery({
     queryKey: ["sections-active"],
     queryFn: async () => {
-      const { data, error } = await sections.filter({ active: true });
+      // FIXED: columna real es is_active (no active)
+      const { data, error } = await sections.filter({ is_active: true });
       if (error) throw error;
       return data ?? [];
     },
@@ -53,7 +54,8 @@ export default function ReporteSeccion() {
 
   const { sections: sectionNames, colorKeys, data: sectionData } = useMemo(() => {
     const secs = {};
-    activeSections.forEach(s => { secs[s.name] = {}; });
+    // FIXED: columna real es nombre (no name)
+    activeSections.forEach(s => { secs[s.nombre] = {}; });
     const colKeys = new Set();
     trenadaList.forEach(t => {
       if (!secs[t.seccion]) secs[t.seccion] = {};

@@ -14,11 +14,16 @@ export default function ConfigSecciones() {
 
   const { data: sectionList = [] } = useQuery({
     queryKey: ["sections-all"],
-    queryFn: () => sections.list(),
+    queryFn: async () => {
+      const { data, error } = await sections.list();
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const addMutation = useMutation({
-    mutationFn: (name) => sections.create({ name, active: true }),
+    // FIXED: columnas reales son nombre e is_active (no name/active)
+    mutationFn: (name) => sections.create({ nombre: name, is_active: true }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sections-all"] });
       queryClient.invalidateQueries({ queryKey: ["sections"] });
@@ -28,7 +33,7 @@ export default function ConfigSecciones() {
   });
 
   const toggleMutation = useMutation({
-    mutationFn: (s) => sections.update(s.id, { active: !s.active }),
+    mutationFn: (s) => sections.update(s.id, { is_active: !s.is_active }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sections-all"] });
       queryClient.invalidateQueries({ queryKey: ["sections"] });
@@ -64,14 +69,14 @@ export default function ConfigSecciones() {
           {sectionList.map(s => (
             <div key={s.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
               <div className="flex items-center gap-3">
-                <span className="font-medium">{s.name}</span>
-                <Badge variant={s.active ? "default" : "secondary"}>
-                  {s.active ? "Activa" : "Inactiva"}
+                <span className="font-medium">{s.nombre}</span>
+                <Badge variant={s.is_active ? "default" : "secondary"}>
+                  {s.is_active ? "Activa" : "Inactiva"}
                 </Badge>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => toggleMutation.mutate(s)}>
-                  {s.active ? "Desactivar" : "Activar"}
+                  {s.is_active ? "Desactivar" : "Activar"}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => deleteMutation.mutate(s.id)} className="text-destructive">
                   <Trash2 className="w-4 h-4" />

@@ -24,7 +24,12 @@ export default function StepInicio({ onNext }) {
 
   const { data: sectionList = [] } = useQuery({
     queryKey: ["sections"],
-    queryFn: () => sections.filter({ active: true }),
+    queryFn: async () => {
+      // FIXED: columna real es is_active (no active)
+      const { data, error } = await sections.filter({ is_active: true });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const { getLineas } = useSettings();
@@ -98,7 +103,7 @@ export default function StepInicio({ onNext }) {
             </SelectTrigger>
             <SelectContent>
               {sectionList.map(s => (
-                <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                <SelectItem key={s.id} value={s.nombre}>{s.nombre}</SelectItem>
               ))}
             </SelectContent>
           </Select>

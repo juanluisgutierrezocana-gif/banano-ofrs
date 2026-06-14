@@ -26,7 +26,8 @@ export default function ReporteInventario() {
   const { data: sectionList = [] } = useQuery({
     queryKey: ["sections"],
     queryFn: async () => {
-      const { data, error } = await sections.filter({ active: true });
+      // FIXED: columna real es is_active (no active)
+      const { data, error } = await sections.filter({ is_active: true });
       if (error) throw error;
       return data ?? [];
     },
@@ -91,7 +92,7 @@ export default function ReporteInventario() {
                 <Select value={filterSeccion} onValueChange={setFilterSeccion}>
                   <SelectTrigger className="w-36"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
-                    {sectionList.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                    {sectionList.map(s => <SelectItem key={s.id} value={s.nombre}>{s.nombre}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
