@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { inventory, losses } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pencil, Check, X, Trash2 } from "lucide-react";
@@ -12,9 +12,14 @@ export default function HistorialPerdidas({ embolses }) {
   const [editingId, setEditingId] = useState(null);
   const [editVal, setEditVal] = useState("");
 
+  // FIXED: unwrap { data, error } del createEntity factory
   const { data: perdidas = [], isLoading } = useQuery({
     queryKey: ["perdidas-historial"],
-    queryFn: () => losses.list("-fecha"),
+    queryFn: async () => {
+      const { data, error } = await losses.list("-fecha");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   // Mapa de embolse por id para recalcular saldo

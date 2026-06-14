@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+// FIXED: importar seccionAgricola (tabla: seccion_agricola) en lugar de sections (tabla: sections)
+// Las secciones agrícolas tienen: nombre, acres, minifinca, activa — distinto de sections (name, active)
+import { seccionAgricola, laborAgricola } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,20 +27,30 @@ export default function AvancesConfiguraciones() {
   const [formLabor, setFormLabor] = useState(emptyLabor);
   const [savingLabor, setSavingLabor] = useState(false);
   const [deletingLaborId, setDeletingLaborId] = useState(null);
-  const [editingLabor, setEditingLabor] = useState(null); // { id, nombre }
+  const [editingLabor, setEditingLabor] = useState(null);
   const [savingEditLabor, setSavingEditLabor] = useState(false);
-  
+
   const [seccionesExpanded, setSeccionesExpanded] = useState(true);
   const [laboresExpanded, setLaboresExpanded] = useState(true);
 
+  // FIXED: usar seccionAgricola en lugar de sections; unwrap { data, error }; sin ordenar por columna inexistente
   const { data: secciones = [], isLoading: loadingSec } = useQuery({
     queryKey: ["secciones-agricolas"],
-    queryFn: () => sections.list("created_date"),
+    queryFn: async () => {
+      const { data, error } = await seccionAgricola.list();
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
+  // FIXED: unwrap { data, error }; usar -created_at que sí existe en Supabase
   const { data: labores = [], isLoading: loadingLab } = useQuery({
     queryKey: ["labores-agricolas"],
-    queryFn: () => laborAgricola.list("-created_date"),
+    queryFn: async () => {
+      const { data, error } = await laborAgricola.list("-created_at");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   // Secciones
@@ -47,7 +59,8 @@ export default function AvancesConfiguraciones() {
   const handleSaveSeccion = async () => {
     if (!formSeccion.nombre.trim() || !formSeccion.acres || !formSeccion.minifinca.trim()) return;
     setSavingSeccion(true);
-    await sections.create({
+    // FIXED: usar seccionAgricola.create en lugar de sections.create
+    await seccionAgricola.create({
       nombre: formSeccion.nombre.trim(),
       acres: parseFloat(formSeccion.acres),
       minifinca: formSeccion.minifinca.trim(),
@@ -60,7 +73,8 @@ export default function AvancesConfiguraciones() {
 
   const handleDeleteSeccion = async (id) => {
     setDeletingSeccionId(id);
-    await sections.delete(id);
+    // FIXED: usar seccionAgricola.delete en lugar de sections.delete
+    await seccionAgricola.delete(id);
     queryClient.invalidateQueries({ queryKey: ["secciones-agricolas"] });
     setDeletingSeccionId(null);
   };
@@ -102,7 +116,6 @@ export default function AvancesConfiguraciones() {
   };
 
   const handleToggleUnidadLabor = async (labor, unidad) => {
-    // Si ya tiene esa unidad activa, la desactiva; si no, la activa
     const nueva = labor.unidad_extra === unidad ? null : unidad;
     await laborAgricola.update(labor.id, { unidad_extra: nueva });
     queryClient.invalidateQueries({ queryKey: ["labores-agricolas"] });
@@ -385,7 +398,6 @@ export default function AvancesConfiguraciones() {
                       </div>
                       {editingLabor?.id !== l.id && (
                         <div className="flex items-center gap-1 flex-shrink-0">
-                          {/* Toggle activa */}
                           <button
                             onClick={() => handleToggleLabor(l)}
                             title={l.activa ? "Desactivar" : "Activar"}

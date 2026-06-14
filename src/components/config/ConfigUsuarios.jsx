@@ -20,7 +20,11 @@ export default function ConfigUsuarios() {
 
   const { data: userList = [], isLoading } = useQuery({
     queryKey: ["users-list"],
-    queryFn: () => users.list(),
+    queryFn: async () => {
+      const { data, error } = await users.list();
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const updateMutation = useMutation({

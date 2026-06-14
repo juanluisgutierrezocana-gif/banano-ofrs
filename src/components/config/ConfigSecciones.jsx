@@ -14,7 +14,11 @@ export default function ConfigSecciones() {
 
   const { data: sectionList = [] } = useQuery({
     queryKey: ["sections-all"],
-    queryFn: () => sections.list(),
+    queryFn: async () => {
+      const { data, error } = await sections.list();
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const addMutation = useMutation({

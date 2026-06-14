@@ -15,7 +15,11 @@ export default function ConfigColores() {
 
   const { data: colorList = [] } = useQuery({
     queryKey: ["colors-all"],
-    queryFn: () => colors.list(),
+    queryFn: async () => {
+      const { data, error } = await colors.list();
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const addMutation = useMutation({

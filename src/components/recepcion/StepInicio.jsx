@@ -24,7 +24,11 @@ export default function StepInicio({ onNext }) {
 
   const { data: sectionList = [] } = useQuery({
     queryKey: ["sections"],
-    queryFn: () => sections.filter({ active: true }),
+    queryFn: async () => {
+      const { data, error } = await sections.filter({ active: true });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const { getLineas } = useSettings();

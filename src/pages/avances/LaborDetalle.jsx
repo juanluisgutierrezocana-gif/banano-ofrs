@@ -1,7 +1,9 @@
 import { useState, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+// FIXED: importar seccionAgricola (tabla: seccion_agricola, columnas: nombre, acres, minifinca, activa)
+// y reports (tabla: registros_labor) en lugar de usar supabase.from("registro_labor") directamente
+import { supabase, laborAgricola, seccionAgricola, reports } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,9 +64,14 @@ export default function LaborDetalle() {
     setTimeout(() => nextRef?.current?.focus(), 50);
   };
 
+  // FIXED: unwrap { data, error } del createEntity factory
   const { data: labores = [] } = useQuery({
     queryKey: ["labores-agricolas"],
-    queryFn: () => laborAgricola.list(),
+    queryFn: async () => {
+      const { data, error } = await laborAgricola.list();
+      if (error) throw error;
+      return data ?? [];
+    },
   });
   const labor = labores.find((l) => l.id === laborId);
   const isEmbolse = useMemo(() => labor?.nombre?.toLowerCase().includes("embolse"), [labor?.nombre]);
@@ -74,14 +81,27 @@ export default function LaborDetalle() {
     return Array.from({ length: labor.num_ciclos }, (_, i) => i + 1);
   }, [labor?.num_ciclos]);
 
+  // FIXED: usar seccionAgricola (tabla: seccion_agricola) en lugar de sections (tabla: sections)
+  // La tabla seccion_agricola tiene: nombre, acres, minifinca, activa
   const { data: secciones = [] } = useQuery({
     queryKey: ["secciones-agricolas"],
-    queryFn: () => sections.list("nombre"),
+    queryFn: async () => {
+      const { data, error } = await seccionAgricola.list("nombre");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
+  // FIXED: usar reports.filter (tabla: registros_labor) en lugar de
+  // supabase.from("registro_labor").select("*")({ labor_id: laborId }, "-fecha")
+  // que era completamente incorrecto (llamaba el query builder como función)
   const { data: registros = [], isLoading } = useQuery({
     queryKey: ["registros-labor", laborId],
-    queryFn: () => supabase.from("registro_labor").select("*")({ labor_id: laborId }, "-fecha"),
+    queryFn: async () => {
+      const { data, error } = await reports.filter({ labor_id: laborId }, "-fecha");
+      if (error) throw error;
+      return data ?? [];
+    },
     enabled: !!laborId,
   });
 
@@ -134,7 +154,6 @@ export default function LaborDetalle() {
     setSaving(true);
     const sec = sinSecciones ? null : seccionMap[entry.seccion_id];
     const valorIngresado = parseFloat(entry.acres_realizados);
-    // Para embolse: el valor ingresado son matas (se guarda en acres para reutilizar el campo), hectáreas = 0
     const payload = {
       labor_id: laborId,
       labor_nombre: labor?.nombre || "",
@@ -151,19 +170,19 @@ export default function LaborDetalle() {
       payload.unidad_extra_valor = parseFloat(entry.unidad_extra_valor);
       payload.unidad_extra_tipo = labor.unidad_extra;
     }
-    await supabase.from("registro_labor").insert(payload);
+    // FIXED: usar supabase.from("registros_labor") (nombre correcto de tabla) en lugar de "registro_labor"
+    await supabase.from("registros_labor").insert(payload);
     queryClient.invalidateQueries({ queryKey: ["registros-labor", laborId] });
     playSuccessSound();
-    // Mantener la fecha, limpiar los otros campos
     setEntry({ fecha: entry.fecha, seccion_id: "", ciclo: "", acres_realizados: "", unidad_extra_valor: "" });
     setSaving(false);
-    // Volver al campo de sección
     setTimeout(() => seccionRef?.current?.focus(), 50);
   };
 
   const handleDelete = async (id) => {
     setDeletingId(id);
-    await supabase.from("registro_labor").delete(id);
+    // FIXED: usar reports.delete (tabla: registros_labor) con .eq("id", id) correcto
+    await reports.delete(id);
     queryClient.invalidateQueries({ queryKey: ["registros-labor", laborId] });
     setDeletingId(null);
   };
@@ -202,7 +221,8 @@ export default function LaborDetalle() {
       payload.unidad_extra_valor = editRow.unidad_extra_valor ? parseFloat(editRow.unidad_extra_valor) : null;
       payload.unidad_extra_tipo = labor.unidad_extra;
     }
-    await supabase.from("registro_labor").update(r.id, payload);
+    // FIXED: usar reports.update(id, payload) que llama .update(payload).eq("id", id) correctamente
+    await reports.update(r.id, payload);
     queryClient.invalidateQueries({ queryKey: ["registros-labor", laborId] });
     setEditingId(null);
     setEditRow({});
@@ -256,11 +276,7 @@ export default function LaborDetalle() {
                    type="date"
                    value={entry.fecha}
                    onChange={(e) => setEntry({ ...entry, fecha: e.target.value })}
-                   onKeyDown={(e) => {
-                     if (e.key === "Enter") {
-                       focusNext(seccionRef);
-                     }
-                   }}
+                   onKeyDown={(e) => { if (e.key === "Enter") focusNext(seccionRef); }}
                  />
                </div>
                {entry.fecha && (
@@ -279,11 +295,7 @@ export default function LaborDetalle() {
                     ref={seccionRef}
                     value={entry.seccion_id}
                     onChange={(e) => setEntry({ ...entry, seccion_id: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        focusNext(acresRef);
-                      }
-                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") focusNext(acresRef); }}
                     className="flex h-7 w-full rounded-md border border-input bg-transparent px-2 py-0.5 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="">Seleccionar sección</option>
@@ -307,7 +319,6 @@ export default function LaborDetalle() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       if (labor?.unidad_extra) {
-                        // Si hay unidad extra, ir a ese campo
                         setTimeout(() => document.querySelector('input[placeholder="Ej: 10"]')?.focus(), 50);
                       } else {
                         focusNext(cicloRef);
@@ -327,11 +338,7 @@ export default function LaborDetalle() {
                     placeholder="Ej: 10"
                     value={entry.unidad_extra_valor}
                     onChange={(e) => setEntry({ ...entry, unidad_extra_valor: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        focusNext(cicloRef);
-                      }
-                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") focusNext(cicloRef); }}
                   />
                 </div>
               )}
@@ -342,11 +349,7 @@ export default function LaborDetalle() {
                 ref={cicloRef}
                 value={entry.ciclo}
                 onChange={(e) => setEntry({ ...entry, ciclo: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    focusNext(btnRef);
-                  }
-                }}
+                onKeyDown={(e) => { if (e.key === "Enter") focusNext(btnRef); }}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                 <option value="">Seleccionar ciclo</option>
@@ -361,11 +364,7 @@ export default function LaborDetalle() {
                   onClick={handleSave}
                   disabled={saving || !entry.fecha || (!sinSecciones && !entry.seccion_id) || !entry.ciclo || !entry.acres_realizados}
                 className="w-full"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleSave();
-                  }
-                }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
               >
                 <Plus className="w-4 h-4" />
                 {saving ? "Guardando..." : "Agregar Registro"}
@@ -407,12 +406,9 @@ export default function LaborDetalle() {
                             {isEditing ? (
                               <>
                                 <td className="px-1 py-1">
-                                  <Input
-                                    type="date"
-                                    value={editRow.fecha}
+                                  <Input type="date" value={editRow.fecha}
                                     onChange={(e) => setEditRow({ ...editRow, fecha: e.target.value })}
-                                    className="h-7 text-xs px-1"
-                                  />
+                                    className="h-7 text-xs px-1" />
                                 </td>
                                 <td className="px-1 py-1">
                                   <select
@@ -440,25 +436,15 @@ export default function LaborDetalle() {
                                   </select>
                                 </td>
                                 <td className="px-1 py-1">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={editRow.acres}
+                                  <Input type="number" min="0" step="0.01" value={editRow.acres}
                                     onChange={(e) => setEditRow({ ...editRow, acres: e.target.value })}
-                                    className="h-7 text-xs px-1 w-16"
-                                  />
+                                    className="h-7 text-xs px-1 w-16" />
                                 </td>
                                 {labor?.unidad_extra && (
                                   <td className="px-1 py-1">
-                                    <Input
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      value={editRow.unidad_extra_valor}
+                                    <Input type="number" min="0" step="0.01" value={editRow.unidad_extra_valor}
                                       onChange={(e) => setEditRow({ ...editRow, unidad_extra_valor: e.target.value })}
-                                      className="h-7 text-xs px-1 w-16"
-                                    />
+                                      className="h-7 text-xs px-1 w-16" />
                                   </td>
                                 )}
                                 <td className="px-1 py-1">
@@ -529,7 +515,6 @@ export default function LaborDetalle() {
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
               {sinSecciones ? (
-                /* Tabla simplificada: solo totales por ciclo */
                 <table className="w-full border-collapse" style={{ fontSize: "11px" }}>
                   <thead>
                     <tr className="bg-green-900/20">
@@ -544,9 +529,7 @@ export default function LaborDetalle() {
                   </thead>
                   <tbody>
                     {CICLOS.map((c, idx) => {
-                      const total = registros
-                        .filter((r) => r.ciclo === c)
-                        .reduce((sum, r) => sum + (r.acres || 0), 0);
+                      const total = registros.filter((r) => r.ciclo === c).reduce((sum, r) => sum + (r.acres || 0), 0);
                       const totalExtra = labor?.unidad_extra
                         ? registros.filter((r) => r.ciclo === c).reduce((sum, r) => sum + (r.unidad_extra_valor || 0), 0)
                         : null;
@@ -584,7 +567,6 @@ export default function LaborDetalle() {
                   </tbody>
                 </table>
               ) : (
-                /* Tabla normal: secciones x ciclos */
                 <table className="w-full border-collapse" style={{ fontSize: "10px" }}>
                   <thead>
                     <tr className="bg-green-900/20">
