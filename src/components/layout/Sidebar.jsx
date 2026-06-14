@@ -8,9 +8,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 
 async function getFincaSettings() {
-  const { data: res } = await supabase.from("settings").select("*").eq("key", "finca_nombre");
-  const { data: res2 } = await supabase.from("settings").select("*").eq("key", "finca_logo");
-  return { nombre: res?.[0]?.value || null, logo: res2?.[0]?.value || null };
+  const { data } = await supabase.from("settings").select("finca_name").limit(1).single();
+  return { nombre: data?.finca_name || null, logo: null };
 }
 
 function useOnlineStatus() {
