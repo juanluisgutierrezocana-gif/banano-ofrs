@@ -16,5 +16,5 @@ export function useSettings() {
   const getRangoMax = () => parseInt(settings.rango_max || "35");
   const getLineas = () => parseInt(settings.lineas || "4");
 
-  return { settings, settingsRaw, isLoading, getRangoMin, getRangoMax, getLineas };
+  return { settings, isLoading, getRangoMin, getRangoMax, getLineas };
 }
