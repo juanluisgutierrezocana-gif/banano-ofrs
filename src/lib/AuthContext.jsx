@@ -24,7 +24,12 @@ export const AuthProvider = ({ children }) => {
       if (sessionError) throw sessionError;
       
       if (session?.user) {
-        setUser(session.user);
+        const { data: userRecord } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        setUser({ ...session.user, role: userRecord?.role ?? 'viewer' });
         setIsAuthenticated(true);
       } else {
         setUser(null);
@@ -43,9 +48,14 @@ export const AuthProvider = ({ children }) => {
 
   // Escuchar cambios de autenticación
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        setUser(session.user);
+        const { data: userRecord } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        setUser({ ...session.user, role: userRecord?.role ?? 'viewer' });
         setIsAuthenticated(true);
       } else {
         setUser(null);
