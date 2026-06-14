@@ -4,7 +4,11 @@ import { supabase, auth, users, trenadas, colors, sections, inventory, losses, l
 export function useSettings() {
   const { data: settingsRaw = [], isLoading } = useQuery({
     queryKey: ["settings"],
-    queryFn: () => supabase.from("settings").select("*")(),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("settings").select("*");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const settings = {};

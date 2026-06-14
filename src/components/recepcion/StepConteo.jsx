@@ -22,13 +22,21 @@ export default function StepConteo({ info, onSave, onBack }) {
   // Cargar botones configurados por el admin (solo activos)
   const { data: buttonConfigs = [] } = useQuery({
     queryKey: ["buttons-active"],
-    queryFn: () => supabase.from("button_config").select("*").eq("active", true).order("position"),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("button_config").select("*").eq("active", true).order("position");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   // Cargar embolses para obtener saldos actualizados
   const { data: embolses = [] } = useQuery({
     queryKey: ["embolses"],
-    queryFn: () => inventory.listEmbolse("semana"),
+    queryFn: async () => {
+      const { data, error } = await inventory.listEmbolse("semana");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   // Cruzar botones configurados con embolses: solo los activos que tienen saldo > 0

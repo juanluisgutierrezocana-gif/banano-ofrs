@@ -22,9 +22,13 @@ export default function PanelDiario() {
     queryClient.invalidateQueries({ queryKey: ["buttons"] });
   };
 
-  const { data: trenadas = [], isLoading, isFetching } = useQuery({
+  const { data: trenadaRecords = [], isLoading, isFetching } = useQuery({
     queryKey: ["trenadas", fecha],
-    queryFn: () => trenadas.filter({ fecha }),
+    queryFn: async () => {
+      const { data, error } = await trenadas.filter({ fecha });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   // Fetch buttons con manejo correcto de respuesta Supabase
@@ -34,8 +38,8 @@ export default function PanelDiario() {
       const { data, error } = await supabase
         .from("button_config")
         .select("*")
-        .eq("is_enabled", true)
-        .order("sort_order", { ascending: true });
+        .eq("active", true)
+        .order("position", { ascending: true });
       
       if (error) {
         console.error("Error fetching buttons:", error);
@@ -48,15 +52,15 @@ export default function PanelDiario() {
   // Garantizar que buttons es siempre un array
   const buttons = Array.isArray(buttonsResponse?.data) ? buttonsResponse.data : [];
 
-  const totalRacimos = useMemo(() => 
-    trenadas.reduce((sum, t) => sum + (t.total_racimos || 0), 0), 
-    [trenadas]
+  const totalRacimos = useMemo(() =>
+    trenadaRecords.reduce((sum, t) => sum + (t.total_racimos || 0), 0),
+    [trenadaRecords]
   );
 
   const colorTotals = useMemo(() => {
     // Acumular racimos recibidos por color
     const totals = {};
-    trenadas.forEach(t => {
+    trenadaRecords.forEach(t => {
       (t.racimos || []).forEach(r => {
         // Racimos tiene estructura: { color_name, color_hex, week_age, count }
         const key = `${r.color_name}-S${r.week_age}`;
@@ -81,7 +85,7 @@ export default function PanelDiario() {
     });
 
     return Object.values(totals).sort((a, b) => b.week_age - a.week_age);
-  }, [trenadas, buttons]);
+  }, [trenadaRecords, buttons]);
 
   if (isLoading) {
     return (
@@ -137,7 +141,7 @@ export default function PanelDiario() {
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Trenadas del Día</p>
-                <p className="text-2xl font-bold">{trenadas.length}</p>
+                <p className="text-2xl font-bold">{trenadaRecords.length}</p>
               </div>
             </div>
           </CardContent>
@@ -149,12 +153,12 @@ export default function PanelDiario() {
 
       {/* Crew table + pie chart */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <CrewTable trenadas={trenadas} buttons={buttons} />
-        <CrewPieChart trenadas={trenadas} />
+        <CrewTable trenadas={trenadaRecords} buttons={buttons} />
+        <CrewPieChart trenadas={trenadaRecords} />
       </div>
 
       {/* Hourly chart */}
-      <HourlyChart trenadas={trenadas} />
+      <HourlyChart trenadas={trenadaRecords} />
     </div>
   );
 }

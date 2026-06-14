@@ -25,13 +25,21 @@ export default function ConfigBotones() {
 
   const { data: buttons = [] } = useQuery({
     queryKey: ["buttons-all"],
-    queryFn: () => supabase.from("button_config").select("*")("position"),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("button_config").select("*").order("position");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   // Cargar embolses del inventario con saldo > 0
   const { data: embolses = [] } = useQuery({
     queryKey: ["embolses"],
-    queryFn: () => inventory.listEmbolse("semana"),
+    queryFn: async () => {
+      const { data, error } = await inventory.listEmbolse("semana");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const embolsesDisponibles = embolses.filter(e => {
@@ -66,7 +74,10 @@ export default function ConfigBotones() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => supabase.from("button_config").delete(id),
+    mutationFn: async (id) => {
+      const { error } = await supabase.from("button_config").delete().eq("id", id);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["buttons-all"] });
       queryClient.invalidateQueries({ queryKey: ["buttons-active"] });
@@ -75,7 +86,10 @@ export default function ConfigBotones() {
   });
 
   const toggleMutation = useMutation({
-    mutationFn: (b) => supabase.from("button_config").update(b.id, { active: !b.active }),
+    mutationFn: async (b) => {
+      const { error } = await supabase.from("button_config").update({ active: !b.active }).eq("id", b.id);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["buttons-all"] });
       queryClient.invalidateQueries({ queryKey: ["buttons-active"] });
