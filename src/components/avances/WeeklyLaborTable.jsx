@@ -5,12 +5,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 export default function WeeklyLaborTable() {
   const { data: labores = [] } = useQuery({
     queryKey: ["labores-agricolas"],
-    queryFn: () => laborAgricola.list("nombre"),
+    queryFn: async () => {
+      const { data, error } = await laborAgricola.list("nombre");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const { data: registros = [] } = useQuery({
     queryKey: ["registros-labor"],
-    queryFn: () => supabase.from("registro_labor").select("*")(),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("registro_labor").select("*");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const activeLaborIds = labores.filter((l) => l.activa !== false).map((l) => l.id);

@@ -37,7 +37,11 @@ export default function ReporteCuadrilla() {
 
   const { data: trenadas = [], isLoading } = useQuery({
     queryKey: ["trenadas-cuadrilla", desde, hasta],
-    queryFn: () => trenadas.filter({ fecha: { $gte: desde, $lte: hasta } }),
+    queryFn: async () => {
+  const { data, error } = await trenadas.filter({ fecha: { $gte: desde, $lte: hasta } });
+  if (error) throw error;
+  return data ?? [];
+},
   });
 
   const { crews, colorKeys, data } = useMemo(() => {

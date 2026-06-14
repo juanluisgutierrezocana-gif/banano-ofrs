@@ -15,17 +15,29 @@ export default function ReporteInventario() {
 
   const { data: embolses = [], isLoading } = useQuery({
     queryKey: ["embolses"],
-    queryFn: () => inventory.listEmbolse(),
+    queryFn: async () => {
+  const { data, error } = await inventory.listEmbolse();
+  if (error) throw error;
+  return data ?? [];
+},
   });
 
   const { data: sections = [] } = useQuery({
     queryKey: ["sections"],
-    queryFn: () => sections.filter({ active: true }),
+    queryFn: async () => {
+  const { data, error } = await sections.filter({ active: true });
+  if (error) throw error;
+  return data ?? [];
+},
   });
 
   const { data: colors = [] } = useQuery({
     queryKey: ["colors-active"],
-    queryFn: () => colors.filter({ active: true }),
+    queryFn: async () => {
+  const { data, error } = await colors.filter({ active: true });
+  if (error) throw error;
+  return data ?? [];
+},
   });
 
   const filtered = embolses.filter(e => {

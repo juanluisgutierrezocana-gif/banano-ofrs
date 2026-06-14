@@ -12,29 +12,37 @@ import { exportStyledExcel } from "@/utils/excelExport";
 export default function ReporteGeneral() {
   const [fecha, setFecha] = useState(format(new Date(), "yyyy-MM-dd"));
 
-  const { data: trenadas = [], isLoading } = useQuery({
-    queryKey: ["trenadas-report", fecha],
-    queryFn: () => trenadas.filter({ fecha }, "correlativo"),
-  });
+const { data: trenadaRecords = [], isLoading } = useQuery({
+  queryKey: ["trenadas-report", fecha],
+  queryFn: async () => {
+    const { data, error } = await trenadas.filter({ fecha }, "correlativo");
+    if (error) throw error;
+    return data ?? [];
+  },
+});
 
-  const { data: buttons = [] } = useQuery({
-    queryKey: ["buttons"],
-    queryFn: () => supabase.from("button_config").select("*").eq("active", true).order("position"),
-  });
+const { data: buttons = [] } = useQuery({
+  queryKey: ["buttons"],
+  queryFn: async () => {
+    const { data, error } = await supabase.from("button_config").select("*").eq("active", true).order("position");
+    if (error) throw error;
+    return data ?? [];
+  },
+});
 
   const colorKeys = useMemo(() => {
     const keys = new Set();
     // Primero incluir todos los botones activos
     buttons.forEach(btn => keys.add(`${btn.color_name} S${btn.week_age}`));
-    // Luego incluir los que vengan en trenadas (por si hay datos de botones ya eliminados)
-    trenadas.forEach(t => (t.racimos || []).forEach(r => keys.add(`${r.color_name} S${r.week_age}`)));
+    // Luego incluir los que vengan en trenadaRecords (por si hay datos de botones ya eliminados)
+    trenadaRecords.forEach(t => (t.racimos || []).forEach(r => keys.add(`${r.color_name} S${r.week_age}`)));
     return Array.from(keys);
-  }, [trenadas, buttons]);
+  }, [trenadaRecords, buttons]);
 
   const exportExcel = () => {
     const headers = ["No.", "Hora", "Cuadrilla", "Conchero", "Cortero", "Sección", "Línea", ...colorKeys, "Total", "Acumulado"];
     let acumulado = 0;
-    const rows = trenadas.map((t, idx) => {
+    const rows = trenadaRecords.map((t, idx) => {
       acumulado += t.total_racimos || 0;
       const colorCounts = {};
       (t.racimos || []).forEach(r => { colorCounts[`${r.color_name} S${r.week_age}`] = r.count; });
@@ -48,10 +56,10 @@ export default function ReporteGeneral() {
     const totalsRow = ["TOTAL", "", "", "", "", "", "",
       ...colorKeys.map(k => {
         let sum = 0;
-        trenadas.forEach(t => { const m = {}; (t.racimos||[]).forEach(r=>{m[`${r.color_name} S${r.week_age}`]=r.count;}); sum += m[k]||0; });
+        trenadaRecords.forEach(t => { const m = {}; (t.racimos||[]).forEach(r=>{m[`${r.color_name} S${r.week_age}`]=r.count;}); sum += m[k]||0; });
         return sum;
       }),
-      trenadas.reduce((s, t) => s + (t.total_racimos || 0), 0), ""
+      trenadaRecords.reduce((s, t) => s + (t.total_racimos || 0), 0), ""
     ];
     exportStyledExcel({
       title: `Reporte General Diario — ${fecha}`,
@@ -82,7 +90,7 @@ export default function ReporteGeneral() {
       <CardContent>
         {isLoading ? (
           <p className="text-center text-muted-foreground py-8">Cargando...</p>
-        ) : !trenadas.length && !colorKeys.length ? (
+        ) : !trenadaRecords.length && !colorKeys.length ? (
           <p className="text-center text-muted-foreground py-8">No hay trenadas para esta fecha</p>
         ) : (
           <div className="overflow-x-auto">
@@ -102,7 +110,7 @@ export default function ReporteGeneral() {
                 </tr>
               </thead>
               <tbody>
-                {trenadas.map((t, idx) => {
+                {trenadaRecords.map((t, idx) => {
                    runningTotal += t.total_racimos || 0;
                    const colorCounts = {};
                    (t.racimos || []).forEach(r => { colorCounts[`${r.color_name} S${r.week_age}`] = r.count; });

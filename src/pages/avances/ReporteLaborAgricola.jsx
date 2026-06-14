@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { supabase, auth, users, trenadas, colors, sections, seccionAgricola, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,17 +28,29 @@ export default function ReporteLaborAgricola() {
 
   const { data: registros = [], isLoading: loadingRegistros } = useQuery({
     queryKey: ["registros-labor-reporte"],
-    queryFn: () => supabase.from("registro_labor").select("*")("-fecha"),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("registros_labor").select("*").order("fecha", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const { data: labores = [], isLoading: loadingLabores } = useQuery({
     queryKey: ["labores-agricolas-reporte"],
-    queryFn: () => laborAgricola.list("nombre"),
+    queryFn: async () => {
+      const { data, error } = await laborAgricola.list("nombre");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const { data: secciones = [], isLoading: loadingSecciones } = useQuery({
     queryKey: ["secciones-agricolas-reporte"],
-    queryFn: () => sections.list("nombre"),
+    queryFn: async () => {
+      const { data, error } = await seccionAgricola.list("nombre");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   // Para la sección de Tablas

@@ -17,7 +17,11 @@ export default function ReporteOrdenCalibre() {
 
   const { data: registros = [], isLoading } = useQuery({
     queryKey: ["orden-calibre-reporte", desde, hasta],
-    queryFn: () => supabase.from("orden_calibre").select("*")(),
+    queryFn: async () => {
+  const { data, error } = await supabase.from("orden_calibre").select("*").gte("fecha", desde).lte("fecha", hasta);
+  if (error) throw error;
+  return data ?? [];
+},
   });
 
   // Filtrar por rango de fechas

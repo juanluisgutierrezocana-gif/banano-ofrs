@@ -35,14 +35,19 @@ export default function ReporteSeccion() {
   const { data: trenadas = [], isLoading: loadingTrenadas } = useQuery({
     queryKey: ["trenadas-seccion", desde, hasta],
     queryFn: async () => {
-      const all = await trenadas.filter({ fecha: { $gte: desde, $lte: hasta } });
-      return all;
-    },
+  const { data, error } = await trenadas.filter({ fecha: { $gte: desde, $lte: hasta } });
+  if (error) throw error;
+  return data ?? [];
+},
   });
 
   const { data: activeSections = [], isLoading: loadingSections } = useQuery({
     queryKey: ["sections-active"],
-    queryFn: () => sections.filter({ active: true }),
+    queryFn: async () => {
+  const { data, error } = await sections.filter({ active: true });
+  if (error) throw error;
+  return data ?? [];
+},
   });
 
   const isLoading = loadingTrenadas || loadingSections;

@@ -24,7 +24,11 @@ export default function Perdidas() {
 
   const { data: embolses = [], isLoading } = useQuery({
     queryKey: ["embolses"],
-    queryFn: () => inventory.listEmbolse("-semana"),
+    queryFn: async () => {
+      const { data, error } = await inventory.listEmbolse("-semana");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const sorted = useMemo(() =>

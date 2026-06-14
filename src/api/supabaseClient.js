@@ -1,620 +1,208 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Variables de entorno
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Validar que existan las variables
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error('❌ ERROR: Variables de entorno SUPABASE no configuradas');
-  console.error('Asegúrate de tener VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en .env.local');
 }
 
-/**
- * Cliente Supabase - Reemplaza @base44/sdk
- * 
- * Uso:
- * import { supabase } from '@/api/supabaseClient';
- * const { data, error } = await supabase.from('trenadas').select('*');
- */
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/**
- * Funciones helper para operaciones comunes
- */
-
-// ============================================
-// TRENADAS (Cortes/Producciones)
-// ============================================
-
-export const trenadas = {
-  // Obtener todas las trenadas de una fecha
-  async getByDate(fecha) {
-    return supabase
-      .from('trenadas')
-      .select('*')
-      .eq('fecha', fecha)
-      .order('hora', { ascending: true });
-  },
-
-  // Obtener trenada por ID
-  async getById(id) {
-    return supabase
-      .from('trenadas')
-      .select('*')
-      .eq('id', id)
-      .single();
-  },
-
-  // Crear nueva trenada
-  async create(data) {
-    return supabase
-      .from('trenadas')
-      .insert([data])
-      .select()
-      .single();
-  },
-
-  // Actualizar trenada
-  async update(id, data) {
-    return supabase
-      .from('trenadas')
-      .update(data)
-      .eq('id', id)
-      .select()
-      .single();
-  },
-
-  // Eliminar trenada
-  async delete(id) {
-    return supabase
-      .from('trenadas')
-      .delete()
-      .eq('id', id);
-  },
-
-  // Obtener resumen diario
-  async getSummaryByDate(fecha) {
-    return supabase
-      .from('v_resumen_diario')
-      .select('*')
-      .eq('fecha', fecha)
-      .single();
-  },
-
-  // Obtener trending por hora
-  async getTrendingByHour(fecha) {
-    return supabase
-      .from('trenadas')
-      .select('hora, total_racimos')
-      .eq('fecha', fecha)
-      .order('hora', { ascending: true });
-  },
-
-  // Obtener trenadas por cuadrilla
-  async getByCrew(cuadrilla, startDate, endDate) {
-    return supabase
-      .from('trenadas')
-      .select('*')
-      .eq('cuadrilla', cuadrilla)
-      .gte('fecha', startDate)
-      .lte('fecha', endDate)
-      .order('fecha', { ascending: false });
-  }
-};
-
-// ============================================
-// EMBOLSE (Recepción de Fruta)
-// ============================================
-
-export const embolse = {
-  async create(data) {
-    return supabase
-      .from('embolse')
-      .insert([data])
-      .select()
-      .single();
-  },
-
-  async getByDate(fecha) {
-    return supabase
-      .from('embolse')
-      .select('*')
-      .eq('fecha', fecha)
-      .order('hora', { ascending: true });
-  },
-
-  async getById(id) {
-    return supabase
-      .from('embolse')
-      .select('*')
-      .eq('id', id)
-      .single();
-  },
-
-  async update(id, data) {
-    return supabase
-      .from('embolse')
-      .update(data)
-      .eq('id', id)
-      .select()
-      .single();
-  }
-};
-
-// ============================================
-// COLORES (Color Config)
-// ============================================
-
-export const colors = {
-  async getAll() {
-    return supabase
-      .from('color_configs')
-      .select('*')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true });
-  },
-
-  async getById(id) {
-    return supabase
-      .from('color_configs')
-      .select('*')
-      .eq('id', id)
-      .single();
-  },
-
-  async create(data) {
-    return supabase
-      .from('color_configs')
-      .insert([data])
-      .select()
-      .single();
-  },
-
-  async update(id, data) {
-    return supabase
-      .from('color_configs')
-      .update(data)
-      .eq('id', id)
-      .select()
-      .single();
-  }
-};
-
-// ============================================
-// SECCIONES (Seccion Agricola)
-// ============================================
-
-export const sections = {
-  async getAll() {
-    return supabase
-      .from('seccion_agricola')
-      .select('*')
-      .eq('is_active', true)
-      .order('nombre', { ascending: true });
-  },
-
-  async getById(id) {
-    return supabase
-      .from('seccion_agricola')
-      .select('*')
-      .eq('id', id)
-      .single();
-  },
-
-  async create(data) {
-    return supabase
-      .from('seccion_agricola')
-      .insert([data])
-      .select()
-      .single();
-  },
-
-  async update(id, data) {
-    return supabase
-      .from('seccion_agricola')
-      .update(data)
-      .eq('id', id)
-      .select()
-      .single();
-  }
-};
-
-// ============================================
-// INVENTARIO (Inventario Embolse)
-// ============================================
-
-export const inventory = {
-  async getByWeek(semana) {
-    return supabase
-      .from('v_inventario_actual')
-      .select('*')
-      .eq('semana', semana);
-  },
-
-  async create(data) {
-    return supabase
-      .from('inventario_embolse')
-      .insert([data])
-      .select()
-      .single();
-  },
-
-  async update(id, data) {
-    return supabase
-      .from('inventario_embolse')
-      .update(data)
-      .eq('id', id)
-      .select()
-      .single();
-  },
-
-  async getSaldo(semana, colorId) {
-    return supabase
-      .from('inventario_embolse')
-      .select('saldo, total_embolse, cosechado, perdidas')
-      .eq('semana', semana)
-      .eq('color_id', colorId)
-      .single();
-  }
-};
-
-// ============================================
-// PÉRDIDAS
-// ============================================
-
-export const losses = {
-  async create(data) {
-    return supabase
-      .from('perdidas')
-      .insert([data])
-      .select()
-      .single();
-  },
-
-  async getByWeek(semana) {
-    return supabase
-      .from('perdidas')
-      .select('*, color_configs(color_name, color_hex)')
-      .eq('semana', semana)
-      .order('created_at', { ascending: false });
-  },
-
-  async getByWeekAndColor(semana, colorId) {
-    return supabase
-      .from('perdidas')
-      .select('*')
-      .eq('semana', semana)
-      .eq('color_id', colorId)
-      .single();
-  },
-
-  async update(id, data) {
-    return supabase
-      .from('perdidas')
-      .update(data)
-      .eq('id', id)
-      .select()
-      .single();
-  }
-};
-
-// ============================================
-// LABOR AGRÍCOLA
-// ============================================
-
-export const laborAgricola = {
-  async create(data) {
-    return supabase
-      .from('labor_agricola')
-      .insert([data])
-      .select()
-      .single();
-  },
-
-  async getBySection(seccionId, startDate, endDate) {
-    return supabase
-      .from('v_labor_por_seccion')
-      .select('*')
-      .eq('seccion_id', seccionId)
-      .gte('fecha', startDate)
-      .lte('fecha', endDate);
-  },
-
-  async getById(id) {
-    return supabase
-      .from('labor_agricola')
-      .select('*, registro_labor(*)')
-      .eq('id', id)
-      .single();
-  },
-
-  async update(id, data) {
-    return supabase
-      .from('labor_agricola')
-      .update(data)
-      .eq('id', id)
-      .select()
-      .single();
-  },
-
-  // Labor Details
-  detalle: {
-    async create(laborId, data) {
-      return supabase
-        .from('registro_labor')
-        .insert([{ ...data, labor_id: laborId }])
-        .select()
-        .single();
-    },
-
-    async getByLabor(laborId) {
-      return supabase
-        .from('registro_labor')
-        .select('*')
-        .eq('labor_id', laborId);
-    },
-
-    async update(id, data) {
-      return supabase
-        .from('registro_labor')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single();
-    },
-
-    async delete(id) {
-      return supabase
-        .from('registro_labor')
-        .delete()
-        .eq('id', id);
+// ============================================================
+// HELPER: Convierte filtros Base44 a queries de Supabase
+// Soporta: { campo: valor }, { campo: { $gte, $lte, $gt, $lt, $ne, $in } }
+// ============================================================
+const applyFilters = (query, filters = {}) => {
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      if (value.$gte !== undefined) query = query.gte(key, value.$gte);
+      if (value.$lte !== undefined) query = query.lte(key, value.$lte);
+      if (value.$gt  !== undefined) query = query.gt(key,  value.$gt);
+      if (value.$lt  !== undefined) query = query.lt(key,  value.$lt);
+      if (value.$ne  !== undefined) query = query.neq(key, value.$ne);
+      if (value.$in  !== undefined) query = query.in(key,  value.$in);
+    } else {
+      query = query.eq(key, value);
     }
   }
+  return query;
 };
 
-// ============================================
-// USUARIOS
-// ============================================
-
-export const users = {
-  // Obtener perfil actual
-  async getCurrentUser() {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) return null;
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
-
-    return profile;
+// ============================================================
+// FACTORY: Genera cliente Base44-compatible para cada tabla
+// Todos retornan { data, error } (Supabase style)
+// ============================================================
+const createEntity = (tableName) => ({
+  async list(orderBy = null) {
+    let query = supabase.from(tableName).select('*');
+    if (orderBy) {
+      const desc = orderBy.startsWith('-');
+      query = query.order(desc ? orderBy.slice(1) : orderBy, { ascending: !desc });
+    }
+    return await query;
   },
 
-  // Obtener todos los usuarios (solo admin)
-  async getAll() {
-    return supabase
-      .from('users')
-      .select('*')
-      .eq('is_active', true)
-      .order('full_name', { ascending: true });
+  async filter(filters = {}, orderBy = null) {
+    let query = supabase.from(tableName).select('*');
+    query = applyFilters(query, filters);
+    if (orderBy) {
+      const desc = orderBy.startsWith('-');
+      query = query.order(desc ? orderBy.slice(1) : orderBy, { ascending: !desc });
+    }
+    return await query;
   },
 
-  // Crear usuario
-  async create(email, password, userData) {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password
-    });
-
-    if (authError) return { error: authError };
-
-    const { data, error } = await supabase
-      .from('users')
-      .insert([{
-        id: authData.user.id,
-        email,
-        ...userData
-      }])
-      .select()
-      .single();
-
-    return { data, error };
+  async get(id) {
+    return await supabase.from(tableName).select('*').eq('id', id).single();
   },
 
-  // Actualizar usuario
-  async update(userId, data) {
-    return supabase
-      .from('users')
-      .update(data)
-      .eq('id', userId)
-      .select()
-      .single();
+  async create(record) {
+    return await supabase.from(tableName).insert([record]).select().single();
   },
 
-  // Cambiar rol
-  async changeRole(userId, newRole) {
-    return supabase
-      .from('users')
-      .update({ role: newRole })
-      .eq('id', userId)
-      .select()
-      .single();
+  async update(id, updates) {
+    return await supabase.from(tableName).update(updates).eq('id', id).select().single();
   },
 
-  // Desactivar usuario
-  async deactivate(userId) {
-    return supabase
-      .from('users')
-      .update({ is_active: false })
-      .eq('id', userId)
-      .select()
-      .single();
-  }
+  async delete(id) {
+    return await supabase.from(tableName).delete().eq('id', id);
+  },
+
+  async deleteMany(filters = {}) {
+    let query = supabase.from(tableName).delete();
+    query = applyFilters(query, filters);
+    return await query;
+  },
+
+  async bulkCreate(records) {
+    return await supabase.from(tableName).insert(records).select();
+  },
+});
+
+// ============================================================
+// ENTIDADES (nombre Base44 → tabla Supabase)
+// ============================================================
+
+/** Trenada → trenadas */
+export const trenadas = createEntity('trenadas');
+
+/** Section (nombre, active) → sections
+ *  OJO: distinto de SeccionAgricola (con acres/minifinca) */
+export const sections = createEntity('sections');
+
+/** ColorConfig (name, hex, active) → color_configs */
+export const colors = createEntity('color_configs');
+
+/** LaborAgricola (nombre, num_ciclos, activa) → tipos_labor */
+export const laborAgricola = createEntity('tipos_labor');
+
+/** RegistroLabor → registros_labor */
+export const reports = createEntity('registros_labor');
+
+/** SeccionAgricola (nombre, acres, minifinca, activa) → seccion_agricola */
+export const seccionAgricola = createEntity('seccion_agricola');
+
+/** OrdenCalibre → orden_calibre */
+export const ordenCalibre = createEntity('orden_calibre');
+
+/** Perdida → perdidas */
+export const losses = createEntity('perdidas');
+
+// ============================================================
+// INVENTARIO / EMBOLSE
+// Con aliases para compatibilidad (createEmbolse, updateEmbolse, etc.)
+// ============================================================
+const embolseBase = createEntity('inventario_embolse');
+export const inventory = {
+  ...embolseBase,
+  async listEmbolse(orderBy = null) {
+    return embolseBase.list(orderBy);
+  },
+  async createEmbolse(data) {
+    return embolseBase.create(data);
+  },
+  async updateEmbolse(id, data) {
+    return embolseBase.update(id, data);
+  },
+  async deleteEmbolse(id) {
+    return embolseBase.delete(id);
+  },
 };
 
-// ============================================
-// CONFIGURACIONES
-// ============================================
-
+// ============================================================
+// SETTINGS (clave-valor)
+// ============================================================
+const settingsBase = createEntity('settings');
 export const settings = {
-  async get() {
-    return supabase
-      .from('settings')
-      .select('*')
-      .limit(1)
-      .single();
+  ...settingsBase,
+  async getByKey(key) {
+    return await supabase.from('settings').select('*').eq('key', key).single();
   },
-
-  async update(data) {
-    return supabase
+  async setByKey(key, value) {
+    return await supabase
       .from('settings')
-      .update(data)
-      .eq('id', data.id)
+      .upsert({ key, value }, { onConflict: 'key' })
       .select()
       .single();
-  }
+  },
 };
 
-// ============================================
-// BOTONES
-// ============================================
-
-export const buttons = {
-  async getAll() {
-    return supabase
-      .from('button_config')
-      .select('*')
-      .eq('is_enabled', true)
-      .order('sort_order', { ascending: true });
-  }
+// ============================================================
+// USERS
+// ============================================================
+const usersBase = createEntity('users');
+export const users = {
+  ...usersBase,
+  async getCurrentUser() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { data: null, error: null };
+    return await supabase.from('users').select('*').eq('id', user.id).single();
+  },
 };
 
-// ============================================
-// AUTENTICACIÓN
-// ============================================
-
+// ============================================================
+// AUTH
+// ============================================================
 export const auth = {
-  // Login
   async signIn(email, password) {
-    return supabase.auth.signInWithPassword({ email, password });
+    return await supabase.auth.signInWithPassword({ email, password });
   },
-
-  // Signup
   async signUp(email, password) {
-    return supabase.auth.signUp({ email, password });
+    return await supabase.auth.signUp({ email, password });
   },
-
-  // Logout
   async signOut() {
-    return supabase.auth.signOut();
+    return await supabase.auth.signOut();
   },
-
-  // Reset password
   async resetPassword(email) {
-    return supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`
+    return await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
     });
   },
-
-  // Update password
   async updatePassword(newPassword) {
-    return supabase.auth.updateUser({ password: newPassword });
+    return await supabase.auth.updateUser({ password: newPassword });
   },
-
-  // Get session
   async getSession() {
-    return supabase.auth.getSession();
+    return await supabase.auth.getSession();
   },
-
-  // Subscribe to auth changes
   onAuthStateChange(callback) {
     return supabase.auth.onAuthStateChange(callback);
-  }
+  },
 };
 
-// ============================================
-// REPORTES & ANALYTICS
-// ============================================
-
-export const reports = {
-  // Resumen diario
-  async getDailySummary(fecha) {
-    return supabase
-      .from('v_resumen_diario')
-      .select('*')
-      .eq('fecha', fecha)
-      .single();
-  },
-
-  // Inventario actual
-  async getCurrentInventory() {
-    return supabase
-      .from('v_inventario_actual')
-      .select('*');
-  },
-
-  // Labor por sección
-  async getLaborBySectionRange(startDate, endDate) {
-    return supabase
-      .from('v_labor_por_seccion')
-      .select('*')
-      .gte('fecha', startDate)
-      .lte('fecha', endDate);
-  },
-
-  // Exportar datos a CSV
-  async exportTrendas(startDate, endDate) {
-    const { data } = await supabase
-      .from('trenadas')
-      .select('*')
-      .gte('fecha', startDate)
-      .lte('fecha', endDate);
-    return data;
-  },
-
-  // Auditoria
-  async getAuditLog(tableFilter = null) {
-    let query = supabase
-      .from('audit_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1000);
-
-    if (tableFilter) {
-      query = query.eq('table_name', tableFilter);
-    }
-
-    return query;
-  }
-};
-
-// ============================================
-// REALTIME SUBSCRIPTIONS
-// ============================================
-
+// ============================================================
+// REALTIME
+// ============================================================
 export const realtime = {
-  // Escuchar cambios en trenadas
-  subscribeTrendas(callback) {
+  subscribeTrenadas(callback) {
     return supabase
       .channel('trenadas_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trenadas' }, callback)
       .subscribe();
   },
-
-  // Escuchar cambios en inventario
-  subscribeInventory(callback) {
-    return supabase
-      .channel('inventory_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventario_embolse' }, callback)
-      .subscribe();
-  },
-
-  // Dejar de escuchar
   unsubscribe(channel) {
     return supabase.removeChannel(channel);
-  }
+  },
 };
 
 export default supabase;

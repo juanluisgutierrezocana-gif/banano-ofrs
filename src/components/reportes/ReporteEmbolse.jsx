@@ -271,7 +271,11 @@ function GraficaPerdidas({ loading }) {
 
   const { data: perdidas = [], isLoading: loadingP } = useQuery({
     queryKey: ["perdidas-reporte"],
-    queryFn: () => losses.list(),
+    queryFn: async () => {
+  const { data, error } = await losses.list();
+  if (error) throw error;
+  return data ?? [];
+},
   });
 
   const data = useMemo(() => {
@@ -340,12 +344,20 @@ function GraficaPerdidas({ loading }) {
 export default function ReporteEmbolse() {
   const { data: embolses = [], isLoading: loadingEmbolses } = useQuery({
     queryKey: ["embolses-reporte"],
-    queryFn: () => inventory.listEmbolse(),
+    queryFn: async () => {
+  const { data, error } = await inventory.listEmbolse();
+  if (error) throw error;
+  return data ?? [];
+},
   });
 
   const { data: trenadas = [], isLoading: loadingTrenadas } = useQuery({
     queryKey: ["trenadas-reporte"],
-    queryFn: () => trenadas.list(),
+    queryFn: async () => {
+  const { data, error } = await trenadas.list();
+  if (error) throw error;
+  return data ?? [];
+},
   });
 
   return (

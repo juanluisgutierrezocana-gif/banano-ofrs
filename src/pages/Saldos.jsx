@@ -21,7 +21,11 @@ function pct(num, total) {
 export default function Saldos() {
   const { data: embolses = [], isLoading } = useQuery({
     queryKey: ["embolses"],
-    queryFn: () => inventory.listEmbolse("semana"),
+    queryFn: async () => {
+      const { data, error } = await inventory.listEmbolse("semana");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const sorted = useMemo(() =>

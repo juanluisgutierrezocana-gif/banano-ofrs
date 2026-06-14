@@ -16,7 +16,11 @@ export default function AvancesLayout() {
 
   const { data: labores = [] } = useQuery({
     queryKey: ["labores-agricolas"],
-    queryFn: () => laborAgricola.list("nombre"),
+    queryFn: async () => {
+      const { data, error } = await laborAgricola.list("nombre");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const laborNavItems = labores.filter((l) => l.activa !== false).map((l) => ({

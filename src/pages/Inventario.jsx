@@ -24,21 +24,29 @@ export default function Inventario() {
   const [editingId, setEditingId] = useState(null);
   const [editValues, setEditValues] = useState({});
 
-  const { data: colors = [] } = useQuery({
+  const { data: activeColors = [] } = useQuery({
     queryKey: ["colors-active"],
-    queryFn: () => colors.filter({ active: true }),
+    queryFn: async () => {
+      const { data, error } = await colors.filter({ active: true });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const { data: embolses = [], isLoading } = useQuery({
     queryKey: ["embolses"],
-    queryFn: () => inventory.listEmbolse("-semana"),
+    queryFn: async () => {
+      const { data, error } = await inventory.listEmbolse("-semana");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
-  const selectedColor = colors.find(c => c.name === colorName);
+  const selectedColor = activeColors.find(c => c.name === colorName);
 
   const addMutation = useMutation({
-    mutationFn: () => {
-      return inventory.createEmbolse({
+    mutationFn: async () => {
+      const { data, error } = await inventory.createEmbolse({
         semana: parseInt(semana),
         color_name: colorName,
         color_hex: selectedColor?.hex || "#000",
@@ -47,6 +55,8 @@ export default function Inventario() {
         perdidas: 0,
         saldo: parseInt(total),
       });
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["embolses"] });
@@ -60,7 +70,10 @@ export default function Inventario() {
   const canAdd = semana && colorName && total;
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => inventory.deleteEmbolse(id),
+    mutationFn: async (id) => {
+      const { error } = await inventory.deleteEmbolse(id);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["embolses"] });
       toast.success("Embolse eliminado");
@@ -68,7 +81,11 @@ export default function Inventario() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => inventory.updateEmbolse(id, data),
+    mutationFn: async ({ id, data }) => {
+      const { data: result, error } = await inventory.updateEmbolse(id, data);
+      if (error) throw error;
+      return result;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["embolses"] });
       setEditingId(null);
@@ -120,7 +137,7 @@ export default function Inventario() {
                 <Select value={colorName} onValueChange={setColorName}>
                   <SelectTrigger><SelectValue placeholder="Seleccionar color" /></SelectTrigger>
                   <SelectContent>
-                    {colors.map(c => (
+                    {activeColors.map(c => (
                       <SelectItem key={c.id} value={c.name}>
                         <div className="flex items-center gap-2">
                           <div className="w-4 h-4 rounded-full border" style={{ backgroundColor: c.hex }} />

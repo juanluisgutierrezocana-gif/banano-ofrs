@@ -1,22 +1,34 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { supabase, auth, users, trenadas, colors, sections, seccionAgricola, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function CycleProgressCharts() {
   const { data: labores = [] } = useQuery({
     queryKey: ["labores-agricolas"],
-    queryFn: () => laborAgricola.list("nombre"),
+    queryFn: async () => {
+      const { data, error } = await laborAgricola.list("nombre");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const { data: registros = [] } = useQuery({
     queryKey: ["registros-labor"],
-    queryFn: () => supabase.from("registro_labor").select("*")(),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("registro_labor").select("*");
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const { data: secciones = [] } = useQuery({
     queryKey: ["secciones-agricolas"],
-    queryFn: () => sections.list(),
+    queryFn: async () => {
+      const { data, error } = await seccionAgricola.list();
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const totalAcresFinca = useMemo(
