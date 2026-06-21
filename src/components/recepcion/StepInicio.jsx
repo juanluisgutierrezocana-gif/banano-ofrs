@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports, seccionAgricola } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,10 +22,13 @@ export default function StepInicio({ onNext }) {
     linea: "",
   });
 
+  // FIXED: igual que en ConfigSecciones — la tabla real es "seccion_agricola"
+  // (entity seccionAgricola), no "sections" (vacía). Reusa la misma queryKey
+  // que ConfigSecciones para compartir caché.
   const { data: sectionList = [] } = useQuery({
-    queryKey: ["sections"],
+    queryKey: ["seccion-agricola-list"],
     queryFn: async () => {
-      const { data, error } = await sections.filter({ active: true });
+      const { data, error } = await seccionAgricola.filter({ activa: true });
       if (error) throw error;
       return data ?? [];
     },
@@ -101,8 +104,9 @@ export default function StepInicio({ onNext }) {
               <SelectValue placeholder="Seleccionar sección" />
             </SelectTrigger>
             <SelectContent>
+              {/* FIXED: columna real es nombre (no name) */}
               {sectionList.map(s => (
-                <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                <SelectItem key={s.id} value={s.nombre}>{s.nombre}</SelectItem>
               ))}
             </SelectContent>
           </Select>
