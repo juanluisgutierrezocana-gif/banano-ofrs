@@ -165,7 +165,6 @@ export default function LaborDetalle() {
       acres: valorIngresado,
       minifinca: sinSecciones ? "" : (sec?.minifinca || ""),
       ciclo: parseInt(entry.ciclo),
-      hectareas: isEmbolse ? 0 : parseFloat((valorIngresado * ACRES_TO_HA).toFixed(4)),
     };
     if (labor?.unidad_extra && entry.unidad_extra_valor) {
       payload.unidad_extra_valor = parseFloat(entry.unidad_extra_valor);
@@ -228,7 +227,6 @@ export default function LaborDetalle() {
       minifinca: sec.minifinca || "",
       acres: acresVal,
       ciclo: parseInt(editRow.ciclo),
-      hectareas: parseFloat((acresVal * ACRES_TO_HA).toFixed(4)),
     };
     if (labor?.unidad_extra) {
       payload.unidad_extra_valor = editRow.unidad_extra_valor ? parseFloat(editRow.unidad_extra_valor) : null;
