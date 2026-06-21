@@ -23,6 +23,35 @@ function calcularHectareas(r) {
   return (r.acres || 0) * ACRES_TO_HA;
 }
 
+// Orden fijo solicitado para las tarjetas de labor en Reportería (pestaña
+// "Registros" y el Excel descargable). Las labores que no estén en esta
+// lista se muestran al final, en el orden en que aparezcan los datos.
+// Comparación case-insensitive porque "resiembra" está en minúsculas en la
+// base de datos mientras el resto de labores están en mayúsculas.
+const ORDEN_LABORES = [
+  "EMBOLSE",
+  "PODA",
+  "FERTILIZACION",
+  "FERTILIZACION-2026",
+  "SIGATOKA-2026",
+  "RESIEMBRA-2026",
+  "EMBOLSE-2026",
+  "RESIEMBRA",
+  "REP. LLUVIA",
+  "EMBOLSE 2026",
+  "PODA-DESHIJE-2026",
+];
+
+function ordenarPorLabor(entries) {
+  return [...entries].sort((a, b) => {
+    const idxA = ORDEN_LABORES.indexOf(a[0].toUpperCase());
+    const idxB = ORDEN_LABORES.indexOf(b[0].toUpperCase());
+    const posA = idxA === -1 ? ORDEN_LABORES.length : idxA;
+    const posB = idxB === -1 ? ORDEN_LABORES.length : idxB;
+    return posA - posB;
+  });
+}
+
 function getWeek(dateStr) {
   const d = new Date(dateStr);
   const jan1 = new Date(d.getFullYear(), 0, 1);
@@ -237,8 +266,8 @@ export default function ReporteLaborAgricola() {
   const handleDescargarExcel = async () => {
     setDescargando(true);
     
-    // Crear hoja con registros filtrados por labor
-    Object.entries(registrosPorLabor).forEach(([laborId, { nombre, registros: regs }]) => {
+    // Crear hoja con registros filtrados por labor (orden fijo, ver ORDEN_LABORES)
+    ordenarPorLabor(Object.entries(registrosPorLabor)).forEach(([laborId, { nombre, registros: regs }]) => {
       const headers = ["Fecha", "Semana", "Sección", "Minifinca", "Ciclo", "Acres", "Hectáreas"];
       const rows = regs.map((r) => [
         r.fecha,
@@ -415,7 +444,7 @@ export default function ReporteLaborAgricola() {
         <p className="text-xs text-muted-foreground text-center py-8">Sin registros para los filtros seleccionados.</p>
       ) : (
         <div className="space-y-6">
-          {Object.entries(registrosPorLabor).map(([laborId, { nombre, registros: regs }]) => {
+          {ordenarPorLabor(Object.entries(registrosPorLabor)).map(([laborId, { nombre, registros: regs }]) => {
             const totalAcres = regs.reduce((sum, r) => sum + (r.acres || 0), 0);
             // hectareas se calcula desde acres porque registros_labor no tiene columna "hectareas"
             // (excepto EMBOLSE/EMBOLSE-2026, ver calcularHectareas)
