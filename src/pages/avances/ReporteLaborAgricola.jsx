@@ -11,6 +11,18 @@ import { exportStyledExcel } from "@/utils/excelExport";
 
 const ACRES_TO_HA = 0.404686;
 
+// Labores cuyo campo "acres" en realidad representa un conteo de racimos
+// (no acreaje real) — confirmado contra el export de la app original, donde
+// estas dos labores siempre guardaron hectareas = 0 aunque "acres" tuviera
+// valor. Para mantener consistencia con el dato original, se fuerza 0 aquí
+// en vez de calcular acres * ACRES_TO_HA.
+const LABORES_SIN_HECTAREAS = new Set(["EMBOLSE", "EMBOLSE-2026"]);
+
+function calcularHectareas(r) {
+  if (LABORES_SIN_HECTAREAS.has(r.labor_nombre)) return 0;
+  return (r.acres || 0) * ACRES_TO_HA;
+}
+
 function getWeek(dateStr) {
   const d = new Date(dateStr);
   const jan1 = new Date(d.getFullYear(), 0, 1);
@@ -75,10 +87,16 @@ export default function ReporteLaborAgricola() {
   const registrosPorLabor = useMemo(() => {
     const agrupad = {};
     registrosFiltrados.forEach((r) => {
-      if (!agrupad[r.labor_id]) {
-        agrupad[r.labor_id] = { nombre: r.labor_nombre, registros: [] };
+      // Se agrupa por labor_nombre (no por labor_id) porque varios registros
+      // importados de la app original tienen labor_id NULL. Si se agrupara por
+      // labor_id, todos los NULL colapsan en una sola clave "null" y mezclan
+      // labores distintas (ej: PODA, FERTILIZACION, resiembra, etc. aparecían
+      // juntas bajo una sola tarjeta). labor_nombre siempre viene poblado.
+      const clave = r.labor_nombre;
+      if (!agrupad[clave]) {
+        agrupad[clave] = { nombre: r.labor_nombre, registros: [] };
       }
-      agrupad[r.labor_id].registros.push(r);
+      agrupad[clave].registros.push(r);
     });
     return agrupad;
   }, [registrosFiltrados]);
@@ -229,7 +247,7 @@ export default function ReporteLaborAgricola() {
         r.minifinca || "—",
         r.ciclo,
         r.acres,
-        ((r.acres || 0) * ACRES_TO_HA).toFixed(4),
+        calcularHectareas(r).toFixed(4),
       ]);
       const totalsRow = [
         "TOTAL",
@@ -238,7 +256,7 @@ export default function ReporteLaborAgricola() {
         "",
         "",
         regs.reduce((sum, r) => sum + (r.acres || 0), 0).toFixed(2),
-        regs.reduce((sum, r) => sum + (r.acres || 0) * ACRES_TO_HA, 0).toFixed(4),
+        regs.reduce((sum, r) => sum + calcularHectareas(r), 0).toFixed(4),
       ];
 
       exportStyledExcel({
@@ -400,7 +418,8 @@ export default function ReporteLaborAgricola() {
           {Object.entries(registrosPorLabor).map(([laborId, { nombre, registros: regs }]) => {
             const totalAcres = regs.reduce((sum, r) => sum + (r.acres || 0), 0);
             // hectareas se calcula desde acres porque registros_labor no tiene columna "hectareas"
-            const totalHectareas = regs.reduce((sum, r) => sum + (r.acres || 0) * ACRES_TO_HA, 0);
+            // (excepto EMBOLSE/EMBOLSE-2026, ver calcularHectareas)
+            const totalHectareas = regs.reduce((sum, r) => sum + calcularHectareas(r), 0);
             
             return (
               <Card key={laborId} className="overflow-hidden">
@@ -430,8 +449,8 @@ export default function ReporteLaborAgricola() {
                           <td className="px-4 py-2.5 border border-gray-300 text-center">{r.ciclo}</td>
                           <td className="px-4 py-2.5 border border-gray-300 text-center font-semibold">{r.acres}</td>
                           {/* registros_labor no tiene columna "hectareas" — se calcula desde acres
-                              usando el factor de conversión ACRES_TO_HA (1 acre = 0.404686 ha). */}
-                          <td className="px-4 py-2.5 border border-gray-300 text-center">{((r.acres || 0) * ACRES_TO_HA).toFixed(4)}</td>
+                              usando ACRES_TO_HA, excepto EMBOLSE/EMBOLSE-2026 (ver calcularHectareas). */}
+                          <td className="px-4 py-2.5 border border-gray-300 text-center">{calcularHectareas(r).toFixed(4)}</td>
                         </tr>
                       ))}
                     </tbody>
