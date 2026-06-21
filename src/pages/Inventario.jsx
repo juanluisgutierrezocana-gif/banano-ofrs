@@ -36,20 +36,23 @@ export default function Inventario() {
   const { data: embolses = [], isLoading } = useQuery({
     queryKey: ["embolses"],
     queryFn: async () => {
-      const { data, error } = await inventory.listEmbolse("-semana");
+      // FIXED: listEmbolse() no existe → list() estándar de createEntity
+      const { data, error } = await inventory.list("-semana");
       if (error) throw error;
       return data ?? [];
     },
   });
 
-  const selectedColor = activeColors.find(c => c.name === colorName);
+  // FIXED: columnas reales son color_name y color_hex
+  const selectedColor = activeColors.find(c => c.color_name === colorName);
 
   const addMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await inventory.createEmbolse({
-        semana: parseInt(semana),
+      // FIXED: createEmbolse() no existe → create() estándar de createEntity
+      const { data, error } = await inventory.create({
+        semana: String(semana), // columna TEXT en Supabase
         color_name: colorName,
-        color_hex: selectedColor?.hex || "#000",
+        color_hex: selectedColor?.color_hex || "#000",
         total: parseInt(total),
         cosechado: 0,
         perdidas: 0,
@@ -71,7 +74,8 @@ export default function Inventario() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
-      const { error } = await inventory.deleteEmbolse(id);
+      // FIXED: deleteEmbolse() no existe → delete() estándar de createEntity
+      const { error } = await inventory.delete(id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -82,7 +86,8 @@ export default function Inventario() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }) => {
-      const { data: result, error } = await inventory.updateEmbolse(id, data);
+      // FIXED: updateEmbolse() no existe → update() estándar de createEntity
+      const { data: result, error } = await inventory.update(id, data);
       if (error) throw error;
       return result;
     },
@@ -100,7 +105,8 @@ export default function Inventario() {
 
   const confirmEdit = (e) => {
     const newTotal = parseInt(editValues.total);
-    const newSemana = parseInt(editValues.semana);
+    // FIXED: semana es columna TEXT en Supabase, no usar parseInt
+    const newSemana = String(editValues.semana);
     const newSaldo = newTotal - (e.cosechado || 0) - (e.perdidas || 0);
     updateMutation.mutate({ id: e.id, data: { semana: newSemana, total: newTotal, saldo: newSaldo } });
   };
@@ -138,10 +144,11 @@ export default function Inventario() {
                   <SelectTrigger><SelectValue placeholder="Seleccionar color" /></SelectTrigger>
                   <SelectContent>
                     {activeColors.map(c => (
-                      <SelectItem key={c.id} value={c.name}>
+                      // FIXED: columnas reales son color_name y color_hex (no name/hex)
+                      <SelectItem key={c.id} value={c.color_name}>
                         <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 rounded-full border" style={{ backgroundColor: c.hex }} />
-                          {c.name}
+                          <div className="w-4 h-4 rounded-full border" style={{ backgroundColor: c.color_hex }} />
+                          {c.color_name}
                         </div>
                       </SelectItem>
                     ))}

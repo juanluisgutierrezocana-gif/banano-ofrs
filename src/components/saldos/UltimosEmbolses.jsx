@@ -42,7 +42,9 @@ export default function UltimosEmbolses({ embolses = [] }) {
     const num = parseInt(val);
     if (isNaN(num) || !firstId) return;
     setSaving(true);
-    await inventory.updateEmbolse(firstId, { week_age: num });
+    // FIXED: updateEmbolse() no existe → update() estándar de createEntity
+    const { error } = await inventory.update(firstId, { week_age: num });
+    if (error) console.error("Error actualizando week_age:", error);
     queryClient.invalidateQueries({ queryKey: ["embolses"] });
     setSaving(false);
   };

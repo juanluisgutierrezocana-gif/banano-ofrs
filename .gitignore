@@ -29,3 +29,6 @@ dist-ssr
 
 .env
 .vite
+
+# Migration files (datos históricos, no deben estar en repo público)
+migration_*.sql

@@ -21,7 +21,6 @@ function getWeek(dateStr) {
 }
 
 const emptyEntry = { fecha: "", seccion_id: "", ciclo: "", acres_realizados: "", unidad_extra_valor: "" };
-const SIN_SECCION_ID = "__sin_seccion__";
 
 const playSuccessSound = () => {
   const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -159,7 +158,8 @@ export default function LaborDetalle() {
       labor_nombre: labor?.nombre || "",
       fecha: entry.fecha,
       semana: getWeek(entry.fecha),
-      seccion_id: sinSecciones ? SIN_SECCION_ID : entry.seccion_id,
+      // FIXED: seccion_id es columna UUID en Supabase — usar null (no un string literal) cuando no hay secciones
+      seccion_id: sinSecciones ? null : entry.seccion_id,
       seccion_nombre: sinSecciones ? "" : (sec?.nombre || ""),
       acres: valorIngresado,
       minifinca: sinSecciones ? "" : (sec?.minifinca || ""),

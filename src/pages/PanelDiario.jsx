@@ -70,15 +70,15 @@ export default function PanelDiario() {
     });
 
     // Asegurar que todos los botones activos aparezcan aunque tengan 0 racimos
+    // button_config columnas reales: button_name, color_name (puede ser NULL), color_hex, week_age
     buttons.forEach(btn => {
-      // button_config real tiene: id, button_name, button_label, button_color, button_icon, action_type, is_enabled, sort_order
-      // Usamos button_color como color_name para mantener compatibilidad
-      const key = `${btn.button_color}-S0`; // Asumir week_age 0 para botones base
+      const colorLabel = btn.color_name ?? btn.button_name; // fallback si color_name es NULL
+      const key = `${colorLabel}-S${btn.week_age ?? 0}`;
       if (!totals[key]) {
         totals[key] = {
-          color_name: btn.button_color,
-          color_hex: btn.button_color, // Usar el mismo valor como hex
-          week_age: 0,
+          color_name: colorLabel,
+          color_hex: btn.color_hex,
+          week_age: btn.week_age ?? 0,
           count: 0,
         };
       }
