@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, Trash2, ClipboardList, Pencil, Check, X, XCircle } from "lucide-react";
 import { useRole } from "@/hooks/useRole";
 import AdminOnlyMessage from "@/components/avances/AdminOnlyMessage";
+import { toast } from "sonner";
 
 const ACRES_TO_HA = 0.404686;
 
@@ -170,8 +171,15 @@ export default function LaborDetalle() {
       payload.unidad_extra_valor = parseFloat(entry.unidad_extra_valor);
       payload.unidad_extra_tipo = labor.unidad_extra;
     }
-    // FIXED: usar supabase.from("registros_labor") (nombre correcto de tabla) en lugar de "registro_labor"
-    await supabase.from("registros_labor").insert(payload);
+    // FIXED: usar reports.create (insert + .select()) y SIEMPRE destructurar { error } —
+    // antes el insert no comprobaba error, así que si Supabase/RLS rechazaba el
+    // registro, el formulario igual se limpiaba y sonaba "éxito" sin haber guardado nada.
+    const { error } = await reports.create(payload);
+    if (error) {
+      toast.error(`Error al guardar: ${error.message}`);
+      setSaving(false);
+      return;
+    }
     queryClient.invalidateQueries({ queryKey: ["registros-labor", laborId] });
     playSuccessSound();
     setEntry({ fecha: entry.fecha, seccion_id: "", ciclo: "", acres_realizados: "", unidad_extra_valor: "" });
@@ -181,8 +189,13 @@ export default function LaborDetalle() {
 
   const handleDelete = async (id) => {
     setDeletingId(id);
-    // FIXED: usar reports.delete (tabla: registros_labor) con .eq("id", id) correcto
-    await reports.delete(id);
+    // FIXED: comprobar { error } de reports.delete antes de invalidar la query
+    const { error } = await reports.delete(id);
+    if (error) {
+      toast.error(`Error al eliminar: ${error.message}`);
+      setDeletingId(null);
+      return;
+    }
     queryClient.invalidateQueries({ queryKey: ["registros-labor", laborId] });
     setDeletingId(null);
   };
@@ -221,8 +234,13 @@ export default function LaborDetalle() {
       payload.unidad_extra_valor = editRow.unidad_extra_valor ? parseFloat(editRow.unidad_extra_valor) : null;
       payload.unidad_extra_tipo = labor.unidad_extra;
     }
-    // FIXED: usar reports.update(id, payload) que llama .update(payload).eq("id", id) correctamente
-    await reports.update(r.id, payload);
+    // FIXED: comprobar { error } de reports.update antes de invalidar la query
+    const { error } = await reports.update(r.id, payload);
+    if (error) {
+      toast.error(`Error al actualizar: ${error.message}`);
+      setUpdatingId(null);
+      return;
+    }
     queryClient.invalidateQueries({ queryKey: ["registros-labor", laborId] });
     setEditingId(null);
     setEditRow({});

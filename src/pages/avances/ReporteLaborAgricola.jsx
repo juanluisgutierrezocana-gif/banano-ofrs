@@ -229,7 +229,7 @@ export default function ReporteLaborAgricola() {
         r.minifinca || "—",
         r.ciclo,
         r.acres,
-        r.hectareas.toFixed(4),
+        (r.hectareas || 0).toFixed(4),
       ]);
       const totalsRow = [
         "TOTAL",
@@ -428,7 +428,10 @@ export default function ReporteLaborAgricola() {
                           <td className="px-4 py-2.5 border border-gray-300 text-muted-foreground">{r.minifinca || "—"}</td>
                           <td className="px-4 py-2.5 border border-gray-300 text-center">{r.ciclo}</td>
                           <td className="px-4 py-2.5 border border-gray-300 text-center font-semibold">{r.acres}</td>
-                          <td className="px-4 py-2.5 border border-gray-300 text-center">{r.hectareas.toFixed(4)}</td>
+                          {/* FIXED: r.hectareas puede venir null en registros antiguos/importados —
+                              llamar .toFixed() directo sobre undefined rompía el render (pantalla en
+                              blanco). Se usa (r.hectareas || 0) igual que en el resto del archivo. */}
+                          <td className="px-4 py-2.5 border border-gray-300 text-center">{(r.hectareas || 0).toFixed(4)}</td>
                         </tr>
                       ))}
                     </tbody>

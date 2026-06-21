@@ -24,27 +24,49 @@ export default function ConfigSecciones() {
     },
   });
 
+  // FIXED: las 3 mutationFn devolvían la promesa de create/update/delete sin
+  // destructurar { error } — esos métodos SIEMPRE resuelven (nunca rechazan),
+  // así que aunque Supabase/RLS rechazara la escritura, onSuccess se disparaba
+  // igual (toast de "éxito" + limpiar el input) sin haberse guardado nada.
   const addMutation = useMutation({
-    mutationFn: (name) => seccionAgricola.create({ nombre: name, activa: true, acres: 0 }),
+    mutationFn: async (name) => {
+      const { error } = await seccionAgricola.create({ nombre: name, activa: true, acres: 0 });
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["seccion-agricola-list"] });
       setNewName("");
       toast.success("Sección agregada");
     },
+    onError: (error) => {
+      toast.error(`Error al agregar sección: ${error.message}`);
+    },
   });
 
   const toggleMutation = useMutation({
-    mutationFn: (s) => seccionAgricola.update(s.id, { activa: !s.activa }),
+    mutationFn: async (s) => {
+      const { error } = await seccionAgricola.update(s.id, { activa: !s.activa });
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["seccion-agricola-list"] });
+    },
+    onError: (error) => {
+      toast.error(`Error al actualizar sección: ${error.message}`);
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => seccionAgricola.delete(id),
+    mutationFn: async (id) => {
+      const { error } = await seccionAgricola.delete(id);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["seccion-agricola-list"] });
       toast.success("Sección eliminada");
+    },
+    onError: (error) => {
+      toast.error(`Error al eliminar sección: ${error.message}`);
     },
   });
 
