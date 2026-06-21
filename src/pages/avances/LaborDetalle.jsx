@@ -611,7 +611,8 @@ export default function LaborDetalle() {
                         </td>
                         {CICLOS.map((c) => {
                           const val = matrizAcres[`${s.id}_${c}`] || 0;
-                          const isOverLimit = !isEmbolse && val > s.acres;
+                          // Tolerancia para evitar falsos positivos por precisión de punto flotante al sumar decimales (ej. 6.7+4.9=11.600000000000001)
+                          const isOverLimit = !isEmbolse && val > s.acres + 0.01;
                           if (isEmbolse) {
                             return (
                               <td key={c}
