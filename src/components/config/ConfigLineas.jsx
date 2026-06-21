@@ -29,12 +29,24 @@ export default function ConfigLineas() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const s = settings.find(s => s.key === "lineas");
-      if (s) await supabase.from("settings").update({ value: lineas }).eq("id", s.id);
-      else await supabase.from("settings").insert({ key: "lineas", value: lineas });
+      // FIXED: destructurar { error } y lanzar — antes el mutationFn nunca
+      // fallaba aunque Supabase devolviera error (ej. RLS bloqueando el
+      // INSERT/UPDATE), por lo que onSuccess se disparaba igual con un falso
+      // toast de "éxito" mientras el cambio no se guardaba realmente.
+      if (s) {
+        const { error } = await supabase.from("settings").update({ value: lineas }).eq("id", s.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("settings").insert({ key: "lineas", value: lineas });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings"] });
       toast.success("Líneas actualizadas");
+    },
+    onError: (error) => {
+      toast.error(`Error al guardar: ${error.message}`);
     },
   });
 

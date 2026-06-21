@@ -22,7 +22,13 @@ const { data: trenadaRecords = [], isLoading } = useQuery({
 });
 
 const { data: buttons = [] } = useQuery({
-  queryKey: ["buttons"],
+  // FIXED: la queryKey ["buttons"] colisionaba con la de PanelDiario.jsx, que
+  // cachea bajo la MISMA key un objeto { data: [...] } en vez de un array.
+  // Al navegar a Reportería después de Panel Diario, React Query devolvía
+  // primero ese valor cacheado con forma distinta, y buttons.forEach()
+  // tronaba con TypeError (sin ErrorBoundary, esto deja toda la app en blanco
+  // hasta que se hace refresh, que limpia el cache en memoria).
+  queryKey: ["buttons-reporte-general"],
   queryFn: async () => {
     const { data, error } = await supabase.from("button_config").select("*").eq("active", true).order("position");
     if (error) throw error;

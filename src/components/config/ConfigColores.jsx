@@ -23,7 +23,8 @@ export default function ConfigColores() {
   });
 
   const addMutation = useMutation({
-    mutationFn: () => colors.create({ name: newName, hex: newHex, active: true }),
+    // FIXED: columnas reales son color_name / color_hex (no name/hex)
+    mutationFn: () => colors.create({ color_name: newName, color_hex: newHex, active: true }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["colors-all"] });
       setNewName("");
@@ -65,8 +66,9 @@ export default function ConfigColores() {
           {colorList.map(c => (
             <div key={c.id} className="flex items-center justify-between p-3 rounded-lg border">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: c.hex }} />
-                <span className="font-medium text-sm">{c.name}</span>
+                {/* FIXED: columnas reales son color_name / color_hex (no name/hex) */}
+                <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: c.color_hex }} />
+                <span className="font-medium text-sm">{c.color_name}</span>
                 {!c.active && <Badge variant="secondary" className="text-xs">Inactivo</Badge>}
               </div>
               <div className="flex gap-1">
