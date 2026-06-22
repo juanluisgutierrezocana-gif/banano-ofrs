@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Save } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 const SEMANAS = [14, 13, 12, 11, 10];
 
@@ -42,25 +43,40 @@ export default function OrdenCalibre() {
 
   const handleSave = async () => {
     setSaving(true);
+    // FIXED: no se destructuraba { error } en ningún update/create — un
+    // fallo (ej. RLS o columna inválida) se ignoraba en silencio y el botón
+    // mostraba "Guardado" sin haber escrito nada en Supabase.
+    let hadError = false;
     for (const semana of SEMANAS) {
       const sub_basal = parseFloat(values[`${semana}_sub_basal`] ?? dataMap[semana]?.sub_basal ?? "");
       const apical = parseFloat(values[`${semana}_apical`] ?? dataMap[semana]?.apical ?? "");
       const existing = dataMap[semana];
+      // FIXED: "semana" es columna TEXT en orden_calibre — se castea a String
+      // para evitar un posible error de tipo en el insert/update.
       const payload = {
         fecha,
-        semana,
+        semana: String(semana),
         sub_basal: isNaN(sub_basal) ? null : sub_basal,
         apical: isNaN(apical) ? null : apical,
       };
       if (existing) {
-        await ordenCalibre.update(existing.id, payload);
+        const { error } = await ordenCalibre.update(existing.id, payload);
+        if (error) {
+          hadError = true;
+          toast.error(`Error al guardar Sem ${semana}: ${error.message}`);
+        }
       } else if (!isNaN(sub_basal) || !isNaN(apical)) {
-        await ordenCalibre.create(payload);
+        const { error } = await ordenCalibre.create(payload);
+        if (error) {
+          hadError = true;
+          toast.error(`Error al guardar Sem ${semana}: ${error.message}`);
+        }
       }
     }
     setValues({});
     queryClient.invalidateQueries({ queryKey: ["orden-calibre", fecha] });
     setSaving(false);
+    if (!hadError) toast.success("Orden de calibre guardado");
   };
 
   return (

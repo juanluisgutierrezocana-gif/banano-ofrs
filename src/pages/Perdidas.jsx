@@ -43,17 +43,31 @@ export default function Perdidas() {
     if (!cant || cant <= 0) return;
     setSaving(s => ({ ...s, [emb.id]: true }));
 
-    await losses.create({
-      embolse_id: emb.id,
+    // FIXED: la columna real en la tabla "perdidas" es "embolso_id" (no
+    // "embolse_id" como estaba). Ese typo hacía que Supabase rechazara el
+    // insert (columna inexistente) y, como no se destructuraba { error },
+    // el fallo se ignoraba en silencio y el toast de éxito se disparaba igual.
+    const { error: lossError } = await losses.create({
+      embolso_id: emb.id,
       semana: emb.semana,
       color_name: emb.color_name,
       cantidad: cant,
       fecha: format(new Date(), "yyyy-MM-dd"),
     });
+    if (lossError) {
+      setSaving(s => ({ ...s, [emb.id]: false }));
+      toast.error(`Error al registrar pérdida: ${lossError.message}`);
+      return;
+    }
 
     const newPerdidas = (emb.perdidas || 0) + cant;
     const newSaldo = emb.total - (emb.cosechado || 0) - newPerdidas;
-    await inventory.updateEmbolse(emb.id, { perdidas: newPerdidas, saldo: newSaldo });
+    const { error: updateError } = await inventory.updateEmbolse(emb.id, { perdidas: newPerdidas, saldo: newSaldo });
+    if (updateError) {
+      setSaving(s => ({ ...s, [emb.id]: false }));
+      toast.error(`Error al actualizar inventario: ${updateError.message}`);
+      return;
+    }
 
     queryClient.invalidateQueries({ queryKey: ["embolses"] });
     setInputs(s => ({ ...s, [emb.id]: "" }));
@@ -75,7 +89,13 @@ export default function Perdidas() {
     const newPerdidas = parseInt(editVal);
     if (isNaN(newPerdidas) || newPerdidas < 0) { cancelEdit(); return; }
     const newSaldo = emb.total - (emb.cosechado || 0) - newPerdidas;
-    await inventory.updateEmbolse(emb.id, { perdidas: newPerdidas, saldo: newSaldo });
+    // FIXED: no destructuraba { error } — un fallo (ej. RLS) se ignoraba en
+    // silencio y el toast de éxito se disparaba igual sin haber guardado nada.
+    const { error } = await inventory.updateEmbolse(emb.id, { perdidas: newPerdidas, saldo: newSaldo });
+    if (error) {
+      toast.error(`Error al actualizar pérdidas: ${error.message}`);
+      return;
+    }
     queryClient.invalidateQueries({ queryKey: ["embolses"] });
     toast.success(`Total pérdidas actualizado a ${newPerdidas} para S${emb.semana} - ${emb.color_name}`);
     cancelEdit();
