@@ -49,8 +49,10 @@ export default function Inventario() {
   const addMutation = useMutation({
     mutationFn: async () => {
       // FIXED: createEmbolse() no existe → create() estándar de createEntity
+      // FIXED: color_id es NOT NULL (FK a color_configs.id) y nunca se enviaba → violación de constraint (400)
       const { data, error } = await inventory.create({
         semana: String(semana), // columna TEXT en Supabase
+        color_id: selectedColor?.id,
         color_name: colorName,
         color_hex: selectedColor?.color_hex || "#000",
         total: parseInt(total),
@@ -68,6 +70,10 @@ export default function Inventario() {
       setTotal("");
       toast.success("Embolse agregado exitosamente");
     },
+    // FIXED: faltaba onError → los fallos de Supabase quedaban completamente silenciosos
+    onError: (error) => {
+      toast.error(`Error al agregar embolse: ${error.message || "Error desconocido"}`);
+    },
   });
 
   const canAdd = semana && colorName && total;
@@ -82,6 +88,10 @@ export default function Inventario() {
       queryClient.invalidateQueries({ queryKey: ["embolses"] });
       toast.success("Embolse eliminado");
     },
+    // FIXED: faltaba onError → fallos silenciosos
+    onError: (error) => {
+      toast.error(`Error al eliminar embolse: ${error.message || "Error desconocido"}`);
+    },
   });
 
   const updateMutation = useMutation({
@@ -95,6 +105,10 @@ export default function Inventario() {
       queryClient.invalidateQueries({ queryKey: ["embolses"] });
       setEditingId(null);
       toast.success("Embolse actualizado");
+    },
+    // FIXED: faltaba onError → fallos silenciosos
+    onError: (error) => {
+      toast.error(`Error al actualizar embolse: ${error.message || "Error desconocido"}`);
     },
   });
 
