@@ -101,7 +101,7 @@ export default function ReporteInventario() {
                 <Select value={filterColor} onValueChange={setFilterColor}>
                   <SelectTrigger className="w-36"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
-                    {colorList.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                    {colorList.map(c => <SelectItem key={c.id} value={c.color_name}>{c.color_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
