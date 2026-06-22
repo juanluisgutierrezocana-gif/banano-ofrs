@@ -43,28 +43,49 @@ export const AuthProvider = ({ children }) => {
   };
 
   const checkAuthState = async () => {
+    // Guard contra cuelgues: si el navegador tiene guardada una sesión vieja
+    // (token de un usuario huérfano, o un lock interno de supabase-js que no
+    // se liberó), getSession()/buildUserWithFinca pueden no resolver NUNCA,
+    // dejando "Cargando..." para siempre sin ningún error en consola.
+    // Verificado en producción: limpiar localStorage destrababa la carga al
+    // instante, confirmando que el cuelgue viene de ahí y no de un error real.
+    let timeoutId;
     try {
       setAuthError(null);
 
-      // Obtener sesión actual
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const work = (async () => {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
 
-      if (sessionError) throw sessionError;
+        if (session?.user) {
+          setUser(await buildUserWithFinca(session.user));
+          setIsAuthenticated(true);
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+      })();
 
-      if (session?.user) {
-        setUser(await buildUserWithFinca(session.user));
-        setIsAuthenticated(true);
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
-      }
+      const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error('Tiempo de espera agotado al verificar la sesión')),
+          8000
+        );
+      });
 
+      await Promise.race([work, timeout]);
       setAuthChecked(true);
     } catch (err) {
       console.error('Auth check failed:', err);
       setAuthError(err.message);
+      // Si quedamos en un estado dudoso (timeout o sesión corrupta), no
+      // dejamos al usuario autenticado a medias: tratamos como sesión inválida
+      // para que pueda volver a iniciar sesión en vez de quedar atascado.
+      setUser(null);
+      setIsAuthenticated(false);
       setAuthChecked(true);
     } finally {
+      clearTimeout(timeoutId);
       setIsLoadingAuth(false);
     }
   };
