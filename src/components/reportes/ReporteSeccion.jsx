@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports, seccionAgricola } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,10 +40,16 @@ export default function ReporteSeccion() {
     },
   });
 
+  // FIXED: la tabla "sections" no tiene columna "active" (tiene "is_active")
+  // ni "name" (tiene "nombre") y no es donde viven las secciones reales de la
+  // finca — eso causaba un 400 silencioso (activeSections quedaba en []),
+  // por lo que secciones sin trenadas en el rango de fechas no se
+  // pre-sembraban en la tabla. Las secciones reales están en "seccion_agricola"
+  // (entity seccionAgricola), mismo fix que ConfigSecciones.jsx/StepInicio.jsx.
   const { data: activeSections = [], isLoading: loadingSections } = useQuery({
-    queryKey: ["sections-active"],
+    queryKey: ["seccion-agricola-list"],
     queryFn: async () => {
-      const { data, error } = await sections.filter({ active: true });
+      const { data, error } = await seccionAgricola.filter({ activa: true });
       if (error) throw error;
       return data ?? [];
     },
@@ -53,7 +59,7 @@ export default function ReporteSeccion() {
 
   const { sections: sectionNames, colorKeys, data: sectionData } = useMemo(() => {
     const secs = {};
-    activeSections.forEach(s => { secs[s.name] = {}; });
+    activeSections.forEach(s => { secs[s.nombre] = {}; });
     const colKeys = new Set();
     trenadaList.forEach(t => {
       if (!secs[t.seccion]) secs[t.seccion] = {};

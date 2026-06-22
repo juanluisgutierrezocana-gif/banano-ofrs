@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports, seccionAgricola } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -31,10 +31,15 @@ export default function ReporteInventario() {
     [embolsesRaw]
   );
 
+  // FIXED: la tabla "sections" no tiene columna "active" (tiene "is_active")
+  // ni "name" (tiene "nombre") y no es donde viven las secciones reales de la
+  // finca — eso causaba un 400 silencioso. Las secciones reales están en
+  // "seccion_agricola" (entity seccionAgricola), mismo fix que ya tienen
+  // ConfigSecciones.jsx y StepInicio.jsx.
   const { data: sectionList = [] } = useQuery({
-    queryKey: ["sections"],
+    queryKey: ["seccion-agricola-list"],
     queryFn: async () => {
-      const { data, error } = await sections.filter({ active: true });
+      const { data, error } = await seccionAgricola.filter({ activa: true });
       if (error) throw error;
       return data ?? [];
     },
@@ -99,7 +104,7 @@ export default function ReporteInventario() {
                 <Select value={filterSeccion} onValueChange={setFilterSeccion}>
                   <SelectTrigger className="w-36"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
-                    {sectionList.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                    {sectionList.map(s => <SelectItem key={s.id} value={s.nombre}>{s.nombre}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
