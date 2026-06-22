@@ -43,12 +43,16 @@ export default function Perdidas() {
     if (!cant || cant <= 0) return;
     setSaving(s => ({ ...s, [emb.id]: true }));
 
-    // FIXED: la columna real en la tabla "perdidas" es "embolso_id" (no
-    // "embolse_id" como estaba). Ese typo hacía que Supabase rechazara el
-    // insert (columna inexistente) y, como no se destructuraba { error },
-    // el fallo se ignoraba en silencio y el toast de éxito se disparaba igual.
+    // FIXED: la columna real en la tabla "perdidas" es "embolse_id"
+    // (confirmado en vivo vía information_schema.columns: id, semana,
+    // color_id, total_embolse, cantidad_perdida, porcentaje_perdida,
+    // razon_perdida, observaciones, created_at, updated_at, created_by,
+    // fecha, color_name, cantidad, notas, embolse_id). Un fix anterior la
+    // había cambiado por error a "embolso_id", columna que no existe, lo
+    // que provocaba un 400 en el insert. Con { error } ya destructurado
+    // ahora sí se ve el fallo en vez de quedar silencioso.
     const { error: lossError } = await losses.create({
-      embolso_id: emb.id,
+      embolse_id: emb.id,
       semana: emb.semana,
       color_name: emb.color_name,
       cantidad: cant,
