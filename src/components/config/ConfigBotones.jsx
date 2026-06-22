@@ -51,19 +51,28 @@ export default function ConfigBotones() {
   const selectedEmbolse = embolsesDisponibles.find(e => e.id === embolseId);
 
   // Verificar si ya existe ese embolse como botón
-  const yaExiste = (emb) => buttons.some(b => b.color_name === emb.color_name && b.week_age === emb.semana);
+  // FIXED: emb.semana es texto en inventario_embolse pero week_age es integer
+  // en button_config → la comparación estricta nunca coincidía y "ya agregado"
+  // jamás se detectaba. Se castea semana a número antes de comparar.
+  const yaExiste = (emb) => buttons.some(b => b.color_name === emb.color_name && b.week_age === parseInt(emb.semana));
 
   const addMutation = useMutation({
     // FIXED: no destructuraba { error } — un fallo (ej. RLS) se ignoraba
     // en silencio y onSuccess se disparaba igual.
     mutationFn: async () => {
       if (!selectedEmbolse) return;
+      // FIXED: faltaban button_name/button_label (columnas NOT NULL en la tabla
+      // real button_config) → Supabase devolvía 400 y el insert nunca se creaba.
+      // Además color_id apuntaba al id de inventario_embolse en vez del id real
+      // del color (selectedEmbolse.color_id), igual que en los botones existentes.
       const { error } = await supabase.from("button_config").insert({
+        button_name: selectedEmbolse.color_name,
+        button_label: selectedEmbolse.color_name,
         position: buttons.length + 1,
-        color_id: selectedEmbolse.id,
+        color_id: selectedEmbolse.color_id,
         color_name: selectedEmbolse.color_name,
         color_hex: selectedEmbolse.color_hex,
-        week_age: weekAge ? parseInt(weekAge) : selectedEmbolse.semana,
+        week_age: weekAge ? parseInt(weekAge) : parseInt(selectedEmbolse.semana),
         active: true,
       });
       if (error) throw error;
