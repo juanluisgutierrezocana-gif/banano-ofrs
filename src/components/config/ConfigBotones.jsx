@@ -54,9 +54,11 @@ export default function ConfigBotones() {
   const yaExiste = (emb) => buttons.some(b => b.color_name === emb.color_name && b.week_age === emb.semana);
 
   const addMutation = useMutation({
-    mutationFn: () => {
+    // FIXED: no destructuraba { error } — un fallo (ej. RLS) se ignoraba
+    // en silencio y onSuccess se disparaba igual.
+    mutationFn: async () => {
       if (!selectedEmbolse) return;
-      return supabase.from("button_config").insert({
+      const { error } = await supabase.from("button_config").insert({
         position: buttons.length + 1,
         color_id: selectedEmbolse.id,
         color_name: selectedEmbolse.color_name,
@@ -64,6 +66,7 @@ export default function ConfigBotones() {
         week_age: weekAge ? parseInt(weekAge) : selectedEmbolse.semana,
         active: true,
       });
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["buttons-all"] });
@@ -71,6 +74,9 @@ export default function ConfigBotones() {
       setEmbolseId("");
       setWeekAge("");
       toast.success("Botón agregado");
+    },
+    onError: (error) => {
+      toast.error(`Error al agregar botón: ${error.message}`);
     },
   });
 

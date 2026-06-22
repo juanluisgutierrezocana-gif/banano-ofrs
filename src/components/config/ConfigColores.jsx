@@ -24,25 +24,45 @@ export default function ConfigColores() {
 
   const addMutation = useMutation({
     // FIXED: columnas reales son color_name / color_hex (no name/hex)
-    mutationFn: () => colors.create({ color_name: newName, color_hex: newHex, active: true }),
+    // FIXED: faltaba destructurar { error } y lanzarlo — colors.create()
+    // siempre resuelve, así que un fallo (ej. RLS) se ignoraba en silencio.
+    mutationFn: async () => {
+      const { error } = await colors.create({ color_name: newName, color_hex: newHex, active: true });
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["colors-all"] });
       setNewName("");
       setNewHex("#000000");
       toast.success("Color agregado");
     },
+    onError: (error) => {
+      toast.error(`Error al agregar color: ${error.message}`);
+    },
   });
 
   const toggleMutation = useMutation({
-    mutationFn: (c) => colors.update(c.id, { active: !c.active }),
+    mutationFn: async (c) => {
+      const { error } = await colors.update(c.id, { active: !c.active });
+      if (error) throw error;
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["colors-all"] }),
+    onError: (error) => {
+      toast.error(`Error al actualizar color: ${error.message}`);
+    },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => colors.delete(id),
+    mutationFn: async (id) => {
+      const { error } = await colors.delete(id);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["colors-all"] });
       toast.success("Color eliminado");
+    },
+    onError: (error) => {
+      toast.error(`Error al eliminar color: ${error.message}`);
     },
   });
 

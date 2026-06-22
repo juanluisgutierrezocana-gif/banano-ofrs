@@ -30,17 +30,28 @@ export default function ConfigRango() {
   }, [settings]);
 
   const saveMutation = useMutation({
+    // FIXED: ninguna de las 4 llamadas destructuraba { error } — un fallo
+    // (ej. RLS) se ignoraba en silencio y onSuccess se disparaba igual.
     mutationFn: async () => {
       const sMin = settings.find(s => s.key === "rango_min");
       const sMax = settings.find(s => s.key === "rango_max");
-      if (sMin) await supabase.from("settings").update({ value: min }).eq("id", sMin.id);
-      else await supabase.from("settings").insert({ key: "rango_min", value: min });
-      if (sMax) await supabase.from("settings").update({ value: max }).eq("id", sMax.id);
-      else await supabase.from("settings").insert({ key: "rango_max", value: max });
+
+      const r1 = sMin
+        ? await supabase.from("settings").update({ value: min }).eq("id", sMin.id)
+        : await supabase.from("settings").insert({ key: "rango_min", value: min });
+      if (r1.error) throw r1.error;
+
+      const r2 = sMax
+        ? await supabase.from("settings").update({ value: max }).eq("id", sMax.id)
+        : await supabase.from("settings").insert({ key: "rango_max", value: max });
+      if (r2.error) throw r2.error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings"] });
       toast.success("Rango actualizado");
+    },
+    onError: (error) => {
+      toast.error(`Error al actualizar rango: ${error.message}`);
     },
   });
 

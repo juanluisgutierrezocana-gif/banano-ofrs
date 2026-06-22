@@ -11,15 +11,22 @@ import { toast } from "sonner";
 const KEYS = { nombre: "finca_nombre", logo: "finca_logo" };
 
 async function getSetting(key) {
-  const { data } = await supabase.from("settings").select("*").eq("key", key);
+  // FIXED: no destructuraba { error } — un fallo (ej. RLS) se ignoraba
+  // en silencio y la consulta devolvía null como si simplemente no existiera.
+  const { data, error } = await supabase.from("settings").select("*").eq("key", key);
+  if (error) throw error;
   return data?.[0] || null;
 }
 
 async function upsertSetting(key, value, existing) {
+  // FIXED: no destructuraba { error } ni lo lanzaba — un fallo (ej. RLS)
+  // se ignoraba en silencio y saveMutation disparaba onSuccess igual.
   if (existing?.id) {
-    await supabase.from("settings").update({ key, value }).eq("id", existing.id);
+    const { error } = await supabase.from("settings").update({ key, value }).eq("id", existing.id);
+    if (error) throw error;
   } else {
-    await supabase.from("settings").insert({ key, value });
+    const { error } = await supabase.from("settings").insert({ key, value });
+    if (error) throw error;
   }
 }
 
@@ -72,9 +79,9 @@ export default function ConfigFinca() {
       queryClient.invalidateQueries({ queryKey: ["finca-settings"] });
       toast.success("Configuración de finca guardada");
     },
-    onError: () => {
+    onError: (error) => {
       setUploading(false);
-      toast.error("Error al guardar");
+      toast.error(`Error al guardar: ${error.message}`);
     }
   });
 

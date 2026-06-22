@@ -37,7 +37,11 @@ export default function EditarTrenadas() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }) => {
-      await trenadas.update(id, data);
+      // FIXED: no destructuraba { error } de Supabase — trenadas.update()
+      // siempre resuelve (nunca rechaza), así que un fallo (ej. RLS) se
+      // ignoraba y onSuccess se disparaba igual mostrando "éxito" en falso.
+      const { error } = await trenadas.update(id, data);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trenadas-edit", fecha] });
@@ -52,6 +56,9 @@ export default function EditarTrenadas() {
       setEditingId(null);
       setEditData({});
       toast.success("Trenada actualizada correctamente");
+    },
+    onError: (error) => {
+      toast.error(`Error al actualizar trenada: ${error.message}`);
     },
   });
 
@@ -86,11 +93,18 @@ export default function EditarTrenadas() {
   };
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => trenadas.delete(id),
+    mutationFn: async (id) => {
+      // FIXED: igual que updateMutation, faltaba destructurar { error } y lanzarlo.
+      const { error } = await trenadas.delete(id);
+      if (error) throw error;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trenadas-edit", fecha] });
       queryClient.invalidateQueries({ queryKey: ["trenadas", fecha] });
       toast.success("Trenada eliminada");
+    },
+    onError: (error) => {
+      toast.error(`Error al eliminar trenada: ${error.message}`);
     },
   });
 
