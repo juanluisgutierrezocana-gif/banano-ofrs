@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +33,7 @@ export default function Inventario() {
     },
   });
 
-  const { data: embolses = [], isLoading } = useQuery({
+  const { data: embolsesRaw = [], isLoading } = useQuery({
     queryKey: ["embolses"],
     queryFn: async () => {
       // FIXED: listEmbolse() no existe → list() estándar de createEntity
@@ -42,6 +42,14 @@ export default function Inventario() {
       return data ?? [];
     },
   });
+
+  // FIXED: "semana" es columna TEXT en Supabase → el .order("-semana") del
+  // query hace orden alfabético ("10" antes de "2"), no numérico. Mismo fix
+  // que ya tenían Perdidas.jsx y Saldos.jsx: re-ordenar en cliente como número.
+  const embolses = useMemo(
+    () => [...embolsesRaw].sort((a, b) => Number(b.semana) - Number(a.semana)),
+    [embolsesRaw]
+  );
 
   // FIXED: columnas reales son color_name y color_hex
   const selectedColor = activeColors.find(c => c.color_name === colorName);
