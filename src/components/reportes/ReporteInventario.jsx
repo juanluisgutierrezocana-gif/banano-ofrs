@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,7 @@ export default function ReporteInventario() {
   const [filterSeccion, setFilterSeccion] = useState("");
   const [filterColor, setFilterColor] = useState("");
 
-  const { data: embolses = [], isLoading } = useQuery({
+  const { data: embolsesRaw = [], isLoading } = useQuery({
     queryKey: ["embolses"],
     queryFn: async () => {
       const { data, error } = await inventory.listEmbolse();
@@ -21,6 +21,15 @@ export default function ReporteInventario() {
       return data ?? [];
     },
   });
+
+  // FIXED: "semana" es columna TEXT en Supabase → sin .order() explícito,
+  // Postgrest devuelve las filas en orden de inserción (no por semana).
+  // Mismo fix que Inventario.jsx/Perdidas.jsx/Saldos.jsx: ordenar en cliente
+  // como número descendente (semana más reciente primero).
+  const embolses = useMemo(
+    () => [...embolsesRaw].sort((a, b) => Number(b.semana) - Number(a.semana)),
+    [embolsesRaw]
+  );
 
   const { data: sectionList = [] } = useQuery({
     queryKey: ["sections"],
