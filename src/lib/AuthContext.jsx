@@ -14,28 +14,51 @@ export const AuthProvider = ({ children }) => {
     checkAuthState();
   }, []);
 
+  // Combina el usuario de Supabase Auth con su rol, finca_id y los datos
+  // de la finca (estado de cuenta, plan y fecha de vencimiento). Estos datos
+  // son los que usará el gating de acceso (pantalla de pendiente/vencida).
+  const buildUserWithFinca = async (authUser) => {
+    const { data: userRecord } = await supabase
+      .from('users')
+      .select('role, finca_id')
+      .eq('id', authUser.id)
+      .maybeSingle();
+
+    let finca = null;
+    if (userRecord?.finca_id) {
+      const { data: fincaRecord } = await supabase
+        .from('fincas')
+        .select('nombre, estado, plan, fecha_vencimiento')
+        .eq('id', userRecord.finca_id)
+        .maybeSingle();
+      finca = fincaRecord ?? null;
+    }
+
+    return {
+      ...authUser,
+      role: userRecord?.role ?? 'viewer',
+      finca_id: userRecord?.finca_id ?? null,
+      finca,
+    };
+  };
+
   const checkAuthState = async () => {
     try {
       setAuthError(null);
-      
+
       // Obtener sesión actual
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
+
       if (sessionError) throw sessionError;
-      
+
       if (session?.user) {
-        const { data: userRecord } = await supabase
-          .from('users')
-          .select('role')
-          .eq('id', session.user.id)
-          .maybeSingle();
-        setUser({ ...session.user, role: userRecord?.role ?? 'viewer' });
+        setUser(await buildUserWithFinca(session.user));
         setIsAuthenticated(true);
       } else {
         setUser(null);
         setIsAuthenticated(false);
       }
-      
+
       setAuthChecked(true);
     } catch (err) {
       console.error('Auth check failed:', err);
@@ -50,12 +73,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        const { data: userRecord } = await supabase
-          .from('users')
-          .select('role')
-          .eq('id', session.user.id)
-          .maybeSingle();
-        setUser({ ...session.user, role: userRecord?.role ?? 'viewer' });
+        setUser(await buildUserWithFinca(session.user));
         setIsAuthenticated(true);
       } else {
         setUser(null);
