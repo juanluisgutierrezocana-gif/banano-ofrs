@@ -49,9 +49,21 @@ export default function RegisterComplete() {
             authUser.user_metadata?.full_name?.trim() ||
             "Mi Finca";
 
+          // estado/fecha_activacion/fecha_vencimiento se fijan explícitamente
+          // aquí (igual que en Register.jsx) para que el trial de 24h sí
+          // expire sin depender de un default de columna en Supabase.
+          const ahora = new Date();
+          const vencimiento = new Date(ahora.getTime() + 24 * 60 * 60 * 1000);
           const { error: fincaError } = await supabase
             .from("fincas")
-            .insert([{ id: fincaId, nombre: nombreFinca, email_contacto: authUser.email }]);
+            .insert([{
+              id: fincaId,
+              nombre: nombreFinca,
+              email_contacto: authUser.email,
+              estado: "trial",
+              fecha_activacion: ahora.toISOString(),
+              fecha_vencimiento: vencimiento.toISOString(),
+            }]);
           if (fincaError) throw fincaError;
 
           const { error: userError } = await supabase

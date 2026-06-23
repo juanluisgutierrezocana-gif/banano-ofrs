@@ -52,10 +52,23 @@ export default function Register() {
       const authUser = signInData.user;
 
       // 3. Crear la finca + el usuario admin.
+      // estado/fecha_activacion/fecha_vencimiento se fijan explícitamente
+      // aquí (en vez de confiar en un default de la columna en Supabase)
+      // para garantizar que el trial de 24h sí expire y AccountStatusGate
+      // pueda bloquear el acceso cuando corresponda.
       const fincaId = crypto.randomUUID();
+      const ahora = new Date();
+      const vencimiento = new Date(ahora.getTime() + 24 * 60 * 60 * 1000);
       const { error: fincaError } = await supabase
         .from("fincas")
-        .insert([{ id: fincaId, nombre: nombreFinca.trim(), email_contacto: authUser.email }]);
+        .insert([{
+          id: fincaId,
+          nombre: nombreFinca.trim(),
+          email_contacto: authUser.email,
+          estado: "trial",
+          fecha_activacion: ahora.toISOString(),
+          fecha_vencimiento: vencimiento.toISOString(),
+        }]);
       if (fincaError) throw fincaError;
 
       const { error: userError } = await supabase
