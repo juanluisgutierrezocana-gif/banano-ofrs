@@ -36,9 +36,11 @@ export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthe
 
   // Gating de cuenta: si la finca está en trial vencido, pendiente de pago,
   // suspendida o cancelada, bloquea el acceso y muestra el link de Recurrente
-  // en vez de las rutas protegidas.
+  // en vez de las rutas protegidas. El dueño ("owner") nunca se bloquea por
+  // esto: tiene control total y debe poder entrar siempre, sin importar el
+  // estado de su propia finca de origen.
   return (
-    <AccountStatusGate finca={user?.finca}>
+    <AccountStatusGate finca={user?.role === "owner" ? null : user?.finca}>
       <Outlet />
     </AccountStatusGate>
   );
