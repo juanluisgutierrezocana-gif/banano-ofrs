@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 
+// Mismo link de checkout que usa AccountStatusGate: permite pagar antes
+// de que el trial expire, sin tener que esperar a quedar bloqueado.
+const RECURRENTE_LINK = import.meta.env.VITE_RECURRENTE_PAYMENT_LINK;
+
 // Si quedan menos de 2 horas, el banner cambia a un tono de advertencia.
 const UMBRAL_URGENTE_MS = 2 * 60 * 60 * 1000;
 
@@ -39,6 +43,16 @@ export default function TrialCountdownBanner({ finca }) {
     >
       <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
       Prueba gratuita: quedan {formatRestante(restanteMs)}
+      {RECURRENTE_LINK && (
+        <a
+          href={RECURRENTE_LINK}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline font-semibold hover:opacity-80"
+        >
+          Activar plan ahora
+        </a>
+      )}
     </div>
   );
 }
