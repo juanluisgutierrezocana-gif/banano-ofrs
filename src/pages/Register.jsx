@@ -63,7 +63,10 @@ export default function Register() {
         .insert([{ id: authUser.id, email: authUser.email, role: "admin", finca_id: fincaId }]);
       if (userError) throw userError;
 
-      window.location.href = "/";
+      // Misma pantalla de bienvenida que el flujo de Google: la finca y el
+      // usuario ya quedaron creados arriba, así que RegisterComplete detecta
+      // que ya existen y solo muestra el aviso de 24h (no duplica nada).
+      window.location.href = "/registro-completado";
     } catch (err) {
       setError(err.message || "No se pudo completar el registro");
     } finally {
