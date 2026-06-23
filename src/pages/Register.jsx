@@ -29,33 +29,20 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      // 1. Crear el usuario. Si el proyecto exige confirmación por correo,
-      // esto NO devuelve sesión todavía, pero sí devuelve data.user.id.
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { finca_nombre: nombreFinca.trim() },
-        },
-      });
-      if (signUpError) throw signUpError;
-
-      const newUserId = signUpData?.user?.id;
-      if (!newUserId) throw new Error("No se pudo crear el usuario");
-
-      // 2. Confirmar el correo desde el servidor (Service Role Key), sin
-      // depender de ningún toggle del dashboard de Supabase.
-      const confirmRes = await fetch("/api/auth/auto-confirm", {
+      // 1. Crear el usuario desde el servidor (Admin API, email_confirm:
+      // true). Esto NO pasa por supabase.auth.signUp(), así que no dispara
+      // ningún correo ni choca con el rate limit del SMTP de Supabase.
+      const registerRes = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: newUserId }),
+        body: JSON.stringify({ email, password, fincaNombre: nombreFinca.trim() }),
       });
-      if (!confirmRes.ok) {
-        const body = await confirmRes.json().catch(() => ({}));
-        throw new Error(body.error || "No se pudo confirmar la cuenta automáticamente");
+      if (!registerRes.ok) {
+        const body = await registerRes.json().catch(() => ({}));
+        throw new Error(body.error || "No se pudo crear la cuenta");
       }
 
-      // 3. Ahora sí, iniciar sesión real (ya con el correo confirmado).
+      // 2. Iniciar sesión normal (la cuenta ya quedó confirmada).
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -64,7 +51,7 @@ export default function Register() {
 
       const authUser = signInData.user;
 
-      // 4. Crear la finca + el usuario admin.
+      // 3. Crear la finca + el usuario admin.
       const fincaId = crypto.randomUUID();
       const { error: fincaError } = await supabase
         .from("fincas")
