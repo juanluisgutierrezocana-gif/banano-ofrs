@@ -106,6 +106,9 @@ export const seccionAgricola = createEntity('seccion_agricola');
 /** OrdenCalibre → orden_calibre */
 export const ordenCalibre = createEntity('orden_calibre');
 
+/** Acres → orden_acres (mismo patrón que OrdenCalibre, tabla independiente) */
+export const ordenAcres = createEntity('orden_acres');
+
 /** Perdida → perdidas */
 export const losses = createEntity('perdidas');
 

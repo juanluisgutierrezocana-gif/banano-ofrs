@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import BananoAnimation from "@/components/layout/BananoAnimation";
-import { LayoutDashboard, Truck, FileBarChart, Settings, Package, AlertTriangle, Menu, X, Banana, FilePenLine, BarChart3, Ruler, LogOut } from "lucide-react";
+import { LayoutDashboard, Truck, FileBarChart, Settings, Package, AlertTriangle, Menu, X, Banana, FilePenLine, BarChart3, Ruler, LandPlot, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole";
 import { useQuery } from "@tanstack/react-query";
@@ -35,6 +35,7 @@ const allNavItems = [
 { path: "/saldos", label: "Saldos", icon: BarChart3, adminOnly: false },
 { path: "/editar-trenadas", label: "Editar Trenadas", icon: FilePenLine, adminOnly: true },
 { path: "/orden-calibre", label: "Orden de Calibre", icon: Ruler, adminOnly: true },
+{ path: "/acres", label: "Acres", icon: LandPlot, adminOnly: true },
 { path: "/configuraciones", label: "Configuraciones", icon: Settings, adminOnly: true }];
 
 

@@ -6,6 +6,7 @@ import ReporteCuadrilla from "@/components/reportes/ReporteCuadrilla";
 import ReporteInventario from "@/components/reportes/ReporteInventario";
 import ReporteEmbolse from "@/components/reportes/ReporteEmbolse";
 import ReporteOrdenCalibre from "@/components/reportes/ReporteOrdenCalibre";
+import ReporteAcres from "@/components/reportes/ReporteAcres";
 
 export default function Reporteria() {
   return (
@@ -20,6 +21,7 @@ export default function Reporteria() {
           <TabsTrigger value="inventario">Inventario</TabsTrigger>
           <TabsTrigger value="embolse">Embolse & Cosecha</TabsTrigger>
           <TabsTrigger value="calibre">Orden de Calibre</TabsTrigger>
+          <TabsTrigger value="acres">Acres</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general"><ReporteGeneral /></TabsContent>
@@ -28,6 +30,7 @@ export default function Reporteria() {
         <TabsContent value="inventario"><ReporteInventario /></TabsContent>
         <TabsContent value="embolse"><ReporteEmbolse /></TabsContent>
         <TabsContent value="calibre"><ReporteOrdenCalibre /></TabsContent>
+        <TabsContent value="acres"><ReporteAcres /></TabsContent>
       </Tabs>
     </div>
   );

@@ -19,6 +19,7 @@ import Perdidas from "@/pages/Perdidas";
 import EditarTrenadas from "@/pages/EditarTrenadas";
 import Saldos from "@/pages/Saldos";
 import OrdenCalibre from "@/pages/OrdenCalibre";
+import Acres from "@/pages/Acres";
 import Landing from "@/pages/Landing";
 import AvancesLayout from "@/components/layout/AvancesLayout";
 import AvancesHome from "@/pages/avances/AvancesHome";
@@ -66,6 +67,7 @@ const AuthenticatedApp = () => {
           <Route path="/perdidas" element={<Perdidas />} />
           <Route path="/editar-trenadas" element={<EditarTrenadas />} />
           <Route path="/orden-calibre" element={<OrdenCalibre />} />
+          <Route path="/acres" element={<Acres />} />
           <Route path="/saldos" element={<Saldos />} />
         </Route>
       </Route>
