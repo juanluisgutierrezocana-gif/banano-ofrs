@@ -38,7 +38,10 @@ export default function Login() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/`
+          // Mismo destino que Register.jsx: ahí se crea la finca + el usuario
+          // admin si todavía no existen (RegisterComplete ya es idempotente,
+          // así que también sirve para logins de Google repetidos).
+          redirectTo: `${window.location.origin}/registro-completado`
         }
       });
       if (error) throw error;
