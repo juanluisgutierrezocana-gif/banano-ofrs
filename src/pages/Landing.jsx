@@ -14,7 +14,7 @@ export default function Landing() {
   });
 
   const handleLogout = () => {
-    auth.logout();
+    auth.signOut();
   };
 
   return (
