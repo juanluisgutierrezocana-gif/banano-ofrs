@@ -165,6 +165,33 @@ export const users = {
 };
 
 // ============================================================
+// FINCAS (tenants) — solo el rol 'owner' puede ver/editar TODAS
+// (RLS: fincas_select_own / fincas_update_owner con OR is_owner()).
+// Para un admin normal, RLS limita esto a su propia finca.
+// ============================================================
+export const fincas = createEntity('fincas');
+
+// ============================================================
+// OWNER_ACTIVE_FINCA — en qué finca está "operando" el dueño en
+// este momento. PK es user_id (no id), por eso no usa createEntity.
+// ============================================================
+export const ownerActiveFinca = {
+  async get(userId) {
+    return await supabase.from('owner_active_finca').select('*').eq('user_id', userId).maybeSingle();
+  },
+  async set(userId, activeFincaId) {
+    return await supabase
+      .from('owner_active_finca')
+      .upsert(
+        { user_id: userId, active_finca_id: activeFincaId, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      )
+      .select()
+      .single();
+  },
+};
+
+// ============================================================
 // AUTH
 // ============================================================
 export const auth = {

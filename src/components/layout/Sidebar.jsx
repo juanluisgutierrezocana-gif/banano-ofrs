@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import BananoAnimation from "@/components/layout/BananoAnimation";
-import { LayoutDashboard, Truck, FileBarChart, Settings, Package, AlertTriangle, Menu, X, Banana, FilePenLine, BarChart3, Ruler, LandPlot, LogOut } from "lucide-react";
+import { LayoutDashboard, Truck, FileBarChart, Settings, Package, AlertTriangle, Menu, X, Banana, FilePenLine, BarChart3, Ruler, LandPlot, LogOut, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole";
 import { useQuery } from "@tanstack/react-query";
@@ -36,16 +36,17 @@ const allNavItems = [
 { path: "/editar-trenadas", label: "Editar Trenadas", icon: FilePenLine, adminOnly: true },
 { path: "/orden-calibre", label: "Orden de Calibre", icon: Ruler, adminOnly: true },
 { path: "/acres", label: "Acres", icon: LandPlot, adminOnly: true },
-{ path: "/configuraciones", label: "Configuraciones", icon: Settings, adminOnly: true }];
+{ path: "/configuraciones", label: "Configuraciones", icon: Settings, adminOnly: true },
+{ path: "/panel-dueno", label: "Panel del Dueño", icon: Crown, ownerOnly: true }];
 
 
 export default function Sidebar() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
-  const { isAdmin } = useRole();
+  const { isAdmin, isOwner } = useRole();
   const online = useOnlineStatus();
   const { data: finca } = useQuery({ queryKey: ["finca-settings"], queryFn: getFincaSettings, staleTime: 60000 });
-  const navItems = allNavItems.filter((item) => !item.adminOnly || isAdmin);
+  const navItems = allNavItems.filter((item) => (!item.adminOnly || isAdmin) && (!item.ownerOnly || isOwner));
 
   return (
     <>

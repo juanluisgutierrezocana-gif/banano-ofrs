@@ -20,6 +20,7 @@ import EditarTrenadas from "@/pages/EditarTrenadas";
 import Saldos from "@/pages/Saldos";
 import OrdenCalibre from "@/pages/OrdenCalibre";
 import Acres from "@/pages/Acres";
+import PanelDueno from "@/pages/PanelDueno";
 import Landing from "@/pages/Landing";
 import AvancesLayout from "@/components/layout/AvancesLayout";
 import AvancesHome from "@/pages/avances/AvancesHome";
@@ -69,6 +70,7 @@ const AuthenticatedApp = () => {
           <Route path="/orden-calibre" element={<OrdenCalibre />} />
           <Route path="/acres" element={<Acres />} />
           <Route path="/saldos" element={<Saldos />} />
+          <Route path="/panel-dueno" element={<PanelDueno />} />
         </Route>
       </Route>
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/welcome" replace />} />}>
