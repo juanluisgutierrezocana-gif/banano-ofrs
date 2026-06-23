@@ -4,7 +4,7 @@ import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { UserPlus, Mail, Lock, Loader2, Building2, MailCheck } from "lucide-react";
+import { UserPlus, Mail, Lock, Loader2, Building2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 
@@ -15,7 +15,6 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [registered, setRegistered] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,18 +29,54 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      // El nombre de la finca viaja en user_metadata: RegisterComplete.jsx lo
-      // lee desde ahí para crear la fila en `fincas` una vez confirmado el correo.
-      const { error: signUpError } = await supabase.auth.signUp({
+      // 1. Crear el usuario. Si el proyecto exige confirmación por correo,
+      // esto NO devuelve sesión todavía, pero sí devuelve data.user.id.
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: { finca_nombre: nombreFinca.trim() },
-          emailRedirectTo: `${window.location.origin}/registro-completado`,
         },
       });
       if (signUpError) throw signUpError;
-      setRegistered(true);
+
+      const newUserId = signUpData?.user?.id;
+      if (!newUserId) throw new Error("No se pudo crear el usuario");
+
+      // 2. Confirmar el correo desde el servidor (Service Role Key), sin
+      // depender de ningún toggle del dashboard de Supabase.
+      const confirmRes = await fetch("/api/auth/auto-confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: newUserId }),
+      });
+      if (!confirmRes.ok) {
+        const body = await confirmRes.json().catch(() => ({}));
+        throw new Error(body.error || "No se pudo confirmar la cuenta automáticamente");
+      }
+
+      // 3. Ahora sí, iniciar sesión real (ya con el correo confirmado).
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (signInError) throw signInError;
+
+      const authUser = signInData.user;
+
+      // 4. Crear la finca + el usuario admin.
+      const fincaId = crypto.randomUUID();
+      const { error: fincaError } = await supabase
+        .from("fincas")
+        .insert([{ id: fincaId, nombre: nombreFinca.trim(), email_contacto: authUser.email }]);
+      if (fincaError) throw fincaError;
+
+      const { error: userError } = await supabase
+        .from("users")
+        .insert([{ id: authUser.id, email: authUser.email, role: "admin", finca_id: fincaId }]);
+      if (userError) throw userError;
+
+      window.location.href = "/";
     } catch (err) {
       setError(err.message || "No se pudo completar el registro");
     } finally {
@@ -64,27 +99,6 @@ export default function Register() {
       setError(err.message || 'Error al conectar con Google');
     }
   };
-
-  if (registered) {
-    return (
-      <AuthLayout
-        icon={MailCheck}
-        title="Revisa tu correo"
-        subtitle={`Enviamos un enlace de confirmación a ${email}`}
-      >
-        <p className="text-sm text-muted-foreground text-center">
-          Haz clic en el enlace del correo para activar tu cuenta y comenzar tu
-          prueba gratuita de 24 horas. Si no lo encuentras, revisa la carpeta de spam.
-        </p>
-        <p className="text-center text-sm text-muted-foreground mt-6">
-          ¿Ya confirmaste?{" "}
-          <Link to="/login" className="text-primary font-medium hover:underline">
-            Iniciar sesión
-          </Link>
-        </p>
-      </AuthLayout>
-    );
-  }
 
   return (
     <AuthLayout

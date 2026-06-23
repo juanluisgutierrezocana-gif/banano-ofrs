@@ -9,8 +9,6 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import RegisterComplete from "@/pages/RegisterComplete";
-import ForgotPassword from "@/pages/ForgotPassword";
-import ResetPassword from "@/pages/ResetPassword";
 import AppLayout from "@/components/layout/AppLayout";
 import PanelDiario from "@/pages/PanelDiario";
 import RecepcionFruta from "@/pages/RecepcionFruta";
@@ -57,8 +55,6 @@ const AuthenticatedApp = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/registro-completado" element={<RegisterComplete />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/welcome" replace />} />}>
         <Route path="/landing" element={<Landing />} />
         <Route element={<AppLayout />}>
