@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import BananoAnimation from "@/components/layout/BananoAnimation";
-import { LayoutDashboard, Truck, FileBarChart, Settings, Package, AlertTriangle, Menu, X, Banana, FilePenLine, BarChart3, Ruler, LandPlot, LogOut, Crown, Sprout } from "lucide-react";
+import { LayoutDashboard, Truck, FileBarChart, Settings, Package, AlertTriangle, Menu, X, Banana, FilePenLine, BarChart3, Ruler, LandPlot, LogOut, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole";
 import { useQuery } from "@tanstack/react-query";
@@ -45,10 +45,6 @@ const allNavItems = [
 { path: "/orden-calibre", label: "Orden de Calibre", icon: Ruler, minRole: "editor" },
 { path: "/acres", label: "Acres", icon: LandPlot, minRole: "editor" },
 { path: "/configuraciones", label: "Configuraciones", icon: Settings, minRole: "admin" },
-// "Avances Agrícolas": el minRole aquí no se evalúa (ver navItems filter más
-// abajo, que resuelve este ítem por permiso antes de llegar al chequeo de
-// minRole) — visible solo si isAdmin || hasPermiso('avances_agricolas').
-{ path: "/avances-agricolas", label: "Avances Agrícolas", icon: Sprout, minRole: "admin" },
 { path: "/panel-dueno", label: "Panel del Dueño", icon: Crown, minRole: "owner" }];
 
 
@@ -67,9 +63,8 @@ export default function Sidebar() {
   const hasAnyConfigPermiso = CONFIG_PERMISOS.some(hasPermiso);
 
   const navItems = allNavItems.filter((item) => {
-    // Casos especiales resueltos por permiso granular (no por minRole):
+    // Caso especial resuelto por permiso granular (no por minRole):
     if (item.path === "/configuraciones") return isAdmin || hasAnyConfigPermiso;
-    if (item.path === "/avances-agricolas") return isAdmin || hasPermiso("avances_agricolas");
     if (item.minRole === "owner") return isOwner;
     if (item.minRole === "admin") return isAdmin;
     if (item.minRole === "editor") return isEditor;
@@ -147,19 +142,17 @@ export default function Sidebar() {
 
           })}
 
-          {/* Botón salir a pantalla inicial: gateado por permiso granular.
-              Admin/Dueño siempre lo ven; un Editor (role==='user') solo si
-              el admin le activó 'salir_pantalla_inicial' desde
-              Configuraciones->Usuarios. */}
-          {(isAdmin || hasPermiso("salir_pantalla_inicial")) && (
-            <button
-              onClick={() => { window.location.href = "/landing"; }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200 mt-2"
-            >
-              <LogOut className="w-5 h-5" />
-              Salir a Pantalla Inicial
-            </button>
-          )}
+          {/* Botón salir a pantalla inicial: visible siempre para cualquier
+              usuario autenticado (no se gatea por permiso). El control de
+              acceso a Avances Agrícolas vive en el botón del menú de
+              Pantalla Inicial, no aquí. */}
+          <button
+            onClick={() => { window.location.href = "/landing"; }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200 mt-2"
+          >
+            <LogOut className="w-5 h-5" />
+            Salir a Pantalla Inicial
+          </button>
         </nav>
 
         <BananoAnimation />
