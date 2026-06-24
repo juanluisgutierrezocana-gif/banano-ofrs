@@ -1,11 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, ShieldCheck, Eye, Crown, Pencil, Trash2 } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger
+} from "@/components/ui/dialog";
+import { Users, ShieldCheck, Eye, Crown, Pencil, Trash2, UserPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 const ROLES = {
@@ -49,23 +55,125 @@ export default function ConfigUsuarios() {
     },
   });
 
+  // --- Invitar colaborador a ESTA finca (vía /api/admin/create-user) ---
+  // El endpoint, cuando quien llama es 'admin', ignora cualquier finca_id
+  // recibido y usa la propia del caller; cuando es 'owner', exige finca_id
+  // explícito. Por eso siempre mandamos currentUser.finca_id: funciona
+  // igual para ambos roles y nunca permite invitar a otra finca desde aquí.
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [newUser, setNewUser] = useState({ email: "", password: "", full_name: "", role: "user" });
+
+  const inviteMutation = useMutation({
+    mutationFn: async (payload) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sesión no encontrada, vuelve a iniciar sesión");
+
+      const res = await fetch("/api/admin/create-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ ...payload, finca_id: currentUser.finca_id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Error al invitar colaborador");
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users-list", currentUser?.finca_id] });
+      toast.success("Colaborador agregado correctamente");
+      setInviteOpen(false);
+      setNewUser({ email: "", password: "", full_name: "", role: "user" });
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
   return (
     <Card className="mt-4">
-      <CardHeader>
-        <CardTitle className="font-heading flex items-center gap-2">
-          <Users className="w-5 h-5" />
-          Gestión de Usuarios
-          {!isLoading && (
-            <Badge variant="secondary" className="ml-2 text-xs">
-              {userList.length} {userList.length === 1 ? "usuario" : "usuarios"}
-            </Badge>
-          )}
-        </CardTitle>
-        <p className="text-sm text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 mt-1">
-          <span><ShieldCheck className="w-3.5 h-3.5 inline mr-1 text-primary" /><strong>Administrador</strong>: acceso total</span>
-          <span><Pencil className="w-3.5 h-3.5 inline mr-1 text-blue-600" /><strong>Editor</strong>: puede registrar y editar</span>
-          <span><Eye className="w-3.5 h-3.5 inline mr-1 text-muted-foreground" /><strong>Lector</strong>: solo puede ver</span>
-        </p>
+      <CardHeader className="flex flex-row items-start justify-between flex-wrap gap-3">
+        <div>
+          <CardTitle className="font-heading flex items-center gap-2">
+            <Users className="w-5 h-5" />
+            Gestión de Usuarios
+            {!isLoading && (
+              <Badge variant="secondary" className="ml-2 text-xs">
+                {userList.length} {userList.length === 1 ? "usuario" : "usuarios"}
+              </Badge>
+            )}
+          </CardTitle>
+          <p className="text-sm text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 mt-1">
+            <span><ShieldCheck className="w-3.5 h-3.5 inline mr-1 text-primary" /><strong>Administrador</strong>: acceso total</span>
+            <span><Pencil className="w-3.5 h-3.5 inline mr-1 text-blue-600" /><strong>Editor</strong>: puede registrar y editar</span>
+            <span><Eye className="w-3.5 h-3.5 inline mr-1 text-muted-foreground" /><strong>Lector</strong>: solo puede ver</span>
+          </p>
+        </div>
+
+        {(currentUser?.role === "admin" || currentUser?.role === "owner") && (
+          <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <UserPlus className="w-4 h-4 mr-1" /> Invitar colaborador
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Invitar colaborador a la finca</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label>Correo</Label>
+                  <Input
+                    type="email"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser((u) => ({ ...u, email: e.target.value }))}
+                    placeholder="correo@ejemplo.com"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Contraseña</Label>
+                  <Input
+                    type="password"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser((u) => ({ ...u, password: e.target.value }))}
+                    placeholder="Mínimo 6 caracteres"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Nombre (opcional)</Label>
+                  <Input
+                    value={newUser.full_name}
+                    onChange={(e) => setNewUser((u) => ({ ...u, full_name: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Rol</Label>
+                  <Select
+                    value={newUser.role}
+                    onValueChange={(role) => setNewUser((u) => ({ ...u, role }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">Administrador</SelectItem>
+                      <SelectItem value="user">Editor</SelectItem>
+                      <SelectItem value="viewer">Lector</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  disabled={inviteMutation.isPending || !newUser.email || !newUser.password}
+                  onClick={() => inviteMutation.mutate(newUser)}
+                >
+                  {inviteMutation.isPending
+                    ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Invitando...</>
+                    : "Invitar"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </CardHeader>
       <CardContent>
         {isLoading ? (
