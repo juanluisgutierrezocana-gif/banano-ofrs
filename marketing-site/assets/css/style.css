@@ -1,0 +1,24 @@
+
+:root {
+  --verde-oscuro: #0d2b1a;
+  --verde-medio: #15803d;
+  --verde-claro: #16a34a;
+  --verde-brillante: #4ade80;
+  --crema: #fafaf7;
+}
+html { scroll-behavior: smooth; }
+body { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #1a2e22; background: var(--crema); }
+.font-heading { font-family: 'Poppins', system-ui, sans-serif; }
+.gradient-hero {
+  background: linear-gradient(135deg, #0d2b1a 0%, #1a4a2e 50%, #0f3520 100%);
+}
+.gradient-btn {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+}
+.gradient-btn:hover { filter: brightness(1.08); }
+.card-hover { transition: transform .2s ease, box-shadow .2s ease; }
+.card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 28px -8px rgba(13,43,26,.25); }
+.prose-banano h2 { font-family: 'Poppins', system-ui, sans-serif; font-weight: 700; font-size: 1.5rem; margin-top: 2rem; margin-bottom: .75rem; color: #0d2b1a; }
+.prose-banano p { margin-bottom: 1rem; line-height: 1.75; color: #374151; }
+.prose-banano ul { margin-bottom: 1rem; padding-left: 1.25rem; list-style: disc; color: #374151; }
+.prose-banano li { margin-bottom: .4rem; line-height: 1.6; }

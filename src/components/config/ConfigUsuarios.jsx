@@ -19,9 +19,15 @@ export default function ConfigUsuarios() {
   const queryClient = useQueryClient();
 
   const { data: userList = [], isLoading } = useQuery({
-    queryKey: ["users-list"],
+    // Scoped a la finca actual: esta pantalla es "Configuraciones->Usuarios"
+    // de UNA finca, no el panel global del dueño (ese es PanelDueno.jsx).
+    // users.list() sin filtro devuelve TODO globalmente cuando RLS detecta
+    // is_owner() (bypass de finca_id) — por eso el owner veía los 14
+    // usuarios de todas las fincas en vez de solo los de la suya.
+    queryKey: ["users-list", currentUser?.finca_id],
+    enabled: !!currentUser?.finca_id,
     queryFn: async () => {
-      const { data, error } = await users.list();
+      const { data, error } = await users.filter({ finca_id: currentUser.finca_id });
       if (error) throw error;
       return data ?? [];
     },
