@@ -70,7 +70,10 @@ export default function ConfigUsuarios() {
           <div className="space-y-3">
             {userList.map(u => {
               const isMe = u.id === currentUser?.id;
-              const roleInfo = ROLES[u.role] || ROLES.user;
+              const isOwnerRow = u.role === "owner";
+              const roleInfo = isOwnerRow
+                ? { label: "Dueño", icon: Crown, color: "text-secondary" }
+                : (ROLES[u.role] || ROLES.user);
               const RoleIcon = roleInfo.icon;
               return (
                 <div key={u.id} className="flex items-center justify-between p-3 rounded-xl border bg-card hover:bg-muted/30 transition-colors">
@@ -93,7 +96,7 @@ export default function ConfigUsuarios() {
                       {roleInfo.label}
                     </Badge>
 
-                    {!isMe && (
+                    {!isMe && !isOwnerRow && (
                       <button
                         onClick={() => {
                           if (confirm(`¿Eliminar a ${u.full_name || u.email}?`)) {
@@ -106,7 +109,11 @@ export default function ConfigUsuarios() {
                         <Trash2 className="w-4 h-4" />
                       </button>
                     )}
-                    {!isMe ? (
+                    {isOwnerRow ? (
+                      <Badge variant="default" className="flex items-center gap-1">
+                        <Crown className="w-3.5 h-3.5" /> Dueño
+                      </Badge>
+                    ) : !isMe ? (
                       <Select
                         value={u.role || "user"}
                         onValueChange={role => updateMutation.mutate({ id: u.id, role })}
