@@ -14,7 +14,7 @@ import AdminOnlyMessage from "@/components/avances/AdminOnlyMessage";
 
 const emptySeccion = { nombre: "", acres: "", minifinca: "" };
 const emptyLabor = { nombre: "", num_ciclos: "9", unidad_extra: "", secciones_excluidas: [] };
-const UNIDADES = ["litros", "galones", "sacos", "matas", "racimos"];
+const UNIDADES = ["litros", "galones", "sacos", "matas", "racimos", "pulgadas", "milimetros"];
 
 export default function AvancesConfiguraciones() {
   const { isAdmin } = useRole();

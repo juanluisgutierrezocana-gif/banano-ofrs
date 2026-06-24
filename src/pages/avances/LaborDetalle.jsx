@@ -136,6 +136,13 @@ export default function LaborDetalle() {
   const totalAcresFinca = seccionesActivas.reduce((s, sec) => s + (sec.acres || 0), 0);
   const seccionesTabla = seccionesActivas;
 
+  // Total general de racimos (todos los ciclos). Solo se usa para Embolse,
+  // como equivalente del "TOTAL (acres)" que ya muestran las demás labores.
+  const totalRacimosGeneral = useMemo(
+    () => Object.values(totalPorCiclo).reduce((sum, v) => sum + v, 0),
+    [totalPorCiclo]
+  );
+
   const minifincaStats = useMemo(() => {
     const mf = {};
     secciones.forEach((s) => {
@@ -166,7 +173,7 @@ export default function LaborDetalle() {
       minifinca: sinSecciones ? "" : (sec?.minifinca || ""),
       ciclo: parseInt(entry.ciclo),
     };
-    if (labor?.unidad_extra && entry.unidad_extra_valor) {
+    if ((labor?.unidad_extra && !isEmbolse) && entry.unidad_extra_valor) {
       payload.unidad_extra_valor = parseFloat(entry.unidad_extra_valor);
       payload.unidad_extra_tipo = labor.unidad_extra;
     }
@@ -228,7 +235,7 @@ export default function LaborDetalle() {
       acres: acresVal,
       ciclo: parseInt(editRow.ciclo),
     };
-    if (labor?.unidad_extra) {
+    if ((labor?.unidad_extra && !isEmbolse)) {
       payload.unidad_extra_valor = editRow.unidad_extra_valor ? parseFloat(editRow.unidad_extra_valor) : null;
       payload.unidad_extra_tipo = labor.unidad_extra;
     }
@@ -334,7 +341,7 @@ export default function LaborDetalle() {
                   onChange={(e) => setEntry({ ...entry, acres_realizados: e.target.value })}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
-                      if (labor?.unidad_extra) {
+                      if ((labor?.unidad_extra && !isEmbolse)) {
                         setTimeout(() => document.querySelector('input[placeholder="Ej: 10"]')?.focus(), 50);
                       } else {
                         focusNext(cicloRef);
@@ -344,7 +351,7 @@ export default function LaborDetalle() {
                 />
               </div>
 
-              {labor?.unidad_extra && (
+              {(labor?.unidad_extra && !isEmbolse) && (
                 <div className="space-y-1">
                   <Label className="text-xs capitalize">{labor.unidad_extra}</Label>
                   <Input
@@ -408,7 +415,7 @@ export default function LaborDetalle() {
                         <th className="px-2 py-1.5 text-left font-semibold">Minifinca</th>
                         <th className="px-2 py-1.5 text-center font-semibold">C.</th>
                         <th className="px-2 py-1.5 text-center font-semibold">{isEmbolse ? "Racimos" : "Acres"}</th>
-                        {labor?.unidad_extra && (
+                        {(labor?.unidad_extra && !isEmbolse) && (
                           <th className="px-2 py-1.5 text-center font-semibold capitalize">{labor.unidad_extra}</th>
                         )}
                         <th className="px-1 py-1.5"></th>
@@ -456,7 +463,7 @@ export default function LaborDetalle() {
                                     onChange={(e) => setEditRow({ ...editRow, acres: e.target.value })}
                                     className="h-7 text-xs px-1 w-16" />
                                 </td>
-                                {labor?.unidad_extra && (
+                                {(labor?.unidad_extra && !isEmbolse) && (
                                   <td className="px-1 py-1">
                                     <Input type="number" min="0" step="0.01" value={editRow.unidad_extra_valor}
                                       onChange={(e) => setEditRow({ ...editRow, unidad_extra_valor: e.target.value })}
@@ -486,7 +493,7 @@ export default function LaborDetalle() {
                                 <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{r.minifinca || "—"}</td>
                                 <td className="px-2 py-1.5 text-center">{r.ciclo}</td>
                                 <td className="px-2 py-1.5 text-center">{isEmbolse ? Math.round(r.acres).toLocaleString() : r.acres}</td>
-                                {labor?.unidad_extra && (
+                                {(labor?.unidad_extra && !isEmbolse) && (
                                   <td className="px-2 py-1.5 text-center">
                                     {r.unidad_extra_valor != null ? r.unidad_extra_valor : <span className="text-muted-foreground/40">—</span>}
                                   </td>
@@ -538,7 +545,7 @@ export default function LaborDetalle() {
                       <th className="border border-border px-2 py-1.5 text-center font-semibold">
                         {isEmbolse ? "Racimos" : "Acres"}
                       </th>
-                      {labor?.unidad_extra && (
+                      {(labor?.unidad_extra && !isEmbolse) && (
                         <th className="border border-border px-2 py-1.5 text-center font-semibold capitalize">{labor.unidad_extra}</th>
                       )}
                     </tr>
@@ -546,7 +553,7 @@ export default function LaborDetalle() {
                   <tbody>
                     {CICLOS.map((c, idx) => {
                       const total = registros.filter((r) => r.ciclo === c).reduce((sum, r) => sum + (r.acres || 0), 0);
-                      const totalExtra = labor?.unidad_extra
+                      const totalExtra = (labor?.unidad_extra && !isEmbolse)
                         ? registros.filter((r) => r.ciclo === c).reduce((sum, r) => sum + (r.unidad_extra_valor || 0), 0)
                         : null;
                       return (
@@ -555,7 +562,7 @@ export default function LaborDetalle() {
                           <td className={`border border-border px-2 py-1 text-center ${total > 0 ? "bg-green-500/15 font-semibold text-green-700" : "text-muted-foreground/30"}`}>
                             {total > 0 ? (isEmbolse ? Math.round(total).toLocaleString() : total.toFixed(2)) : "—"}
                           </td>
-                          {labor?.unidad_extra && (
+                          {(labor?.unidad_extra && !isEmbolse) && (
                             <td className={`border border-border px-2 py-1 text-center ${totalExtra > 0 ? "font-semibold text-primary" : "text-muted-foreground/30"}`}>
                               {totalExtra > 0 ? totalExtra.toFixed(2) : "—"}
                             </td>
@@ -571,7 +578,7 @@ export default function LaborDetalle() {
                           return t > 0 ? (isEmbolse ? Math.round(t).toLocaleString() : t.toFixed(2)) : "—";
                         })()}
                       </td>
-                      {labor?.unidad_extra && (
+                      {(labor?.unidad_extra && !isEmbolse) && (
                         <td className="border border-border px-2 py-1 text-center text-primary">
                           {(() => {
                             const t = registros.reduce((sum, r) => sum + (r.unidad_extra_valor || 0), 0);
@@ -634,7 +641,9 @@ export default function LaborDetalle() {
                     ))}
                     <tr className="bg-primary/10 font-bold">
                       <td className="border border-border px-1 py-0.5 font-bold">
-                        {isEmbolse ? "TOTAL" : `TOTAL (${totalAcresFinca.toFixed(1)})`}
+                        {isEmbolse
+                          ? `TOTAL (${Math.round(totalRacimosGeneral).toLocaleString()})`
+                          : `TOTAL (${totalAcresFinca.toFixed(1)})`}
                       </td>
                       {CICLOS.map((c) => (
                         <td key={c} className="border border-border px-0.5 py-0.5 text-center text-primary">
@@ -646,29 +655,65 @@ export default function LaborDetalle() {
                         </td>
                       ))}
                     </tr>
-                    {!isEmbolse && Object.entries(minifincaStats).map(([mfNombre, { totalAcres, seccionIds }]) => (
-                      <tr key={mfNombre} className="bg-secondary/10">
-                        <td className="border border-border px-0.5 py-0.5 text-xs font-medium text-muted-foreground leading-tight">
-                          <div className="truncate">{mfNombre}</div>
-                          <div className="text-xs text-muted-foreground/60">{totalAcres.toFixed(1)} ac</div>
-                        </td>
-                        {CICLOS.map((c) => {
-                          const acresEjecutados = seccionIds.reduce((sum, sid) => sum + (matrizAcres[`${sid}_${c}`] || 0), 0);
-                          const pct = totalAcres > 0 ? (acresEjecutados / totalAcres) * 100 : 0;
-                          return (
-                            <td key={c} className="border border-border px-0.5 py-0.5 text-center text-xs">
-                              {pct > 0 ? (
-                                <span className={`font-semibold ${pct >= 100 ? "text-red-600" : pct >= 50 ? "text-primary" : "text-muted-foreground"}`}>
-                                  {pct.toFixed(0)}%
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground/30">—</span>
-                              )}
+                    {/* Desglose por minifinca: antes solo se mostraba para labores
+                        que avanzan por acres (% sobre acres de la minifinca). Para
+                        Embolse esa tabla quedaba "incompleta" (sin estas filas) por
+                        el guard !isEmbolse; ahora se muestra también, pero con el
+                        total de racimos de cada minifinca en vez de un porcentaje,
+                        ya que racimos no tiene un acres-objetivo contra qué medirse. */}
+                    {Object.entries(minifincaStats).map(([mfNombre, { totalAcres, seccionIds }]) => {
+                      if (isEmbolse) {
+                        const totalRacimosMf = CICLOS.reduce(
+                          (sum, c) => sum + seccionIds.reduce((s2, sid) => s2 + (matrizAcres[`${sid}_${c}`] || 0), 0),
+                          0
+                        );
+                        return (
+                          <tr key={mfNombre} className="bg-secondary/10">
+                            <td className="border border-border px-0.5 py-0.5 text-xs font-medium text-muted-foreground leading-tight">
+                              <div className="truncate">{mfNombre}</div>
+                              <div className="text-xs text-muted-foreground/60">
+                                {Math.round(totalRacimosMf).toLocaleString()} rac.
+                              </div>
                             </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
+                            {CICLOS.map((c) => {
+                              const racimosMf = seccionIds.reduce((sum, sid) => sum + (matrizAcres[`${sid}_${c}`] || 0), 0);
+                              return (
+                                <td key={c} className="border border-border px-0.5 py-0.5 text-center text-xs">
+                                  {racimosMf > 0 ? (
+                                    <span className="font-semibold text-blue-700">{Math.round(racimosMf).toLocaleString()}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground/30">—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      }
+                      return (
+                        <tr key={mfNombre} className="bg-secondary/10">
+                          <td className="border border-border px-0.5 py-0.5 text-xs font-medium text-muted-foreground leading-tight">
+                            <div className="truncate">{mfNombre}</div>
+                            <div className="text-xs text-muted-foreground/60">{totalAcres.toFixed(1)} ac</div>
+                          </td>
+                          {CICLOS.map((c) => {
+                            const acresEjecutados = seccionIds.reduce((sum, sid) => sum + (matrizAcres[`${sid}_${c}`] || 0), 0);
+                            const pct = totalAcres > 0 ? (acresEjecutados / totalAcres) * 100 : 0;
+                            return (
+                              <td key={c} className="border border-border px-0.5 py-0.5 text-center text-xs">
+                                {pct > 0 ? (
+                                  <span className={`font-semibold ${pct >= 100 ? "text-red-600" : pct >= 50 ? "text-primary" : "text-muted-foreground"}`}>
+                                    {pct.toFixed(0)}%
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground/30">—</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
@@ -701,7 +746,7 @@ export default function LaborDetalle() {
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             <strong>{r.acres}</strong> acres
-                            {labor?.unidad_extra && r.unidad_extra_valor && (
+                            {(labor?.unidad_extra && !isEmbolse) && r.unidad_extra_valor && (
                               <span> • {r.unidad_extra_valor} {labor.unidad_extra}</span>
                             )}
                           </p>
