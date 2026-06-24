@@ -69,23 +69,13 @@ export default function PanelDiario() {
       });
     });
 
-    // Asegurar que todos los botones activos aparezcan aunque tengan 0 racimos
-    // button_config columnas reales: button_name, color_name (puede ser NULL), color_hex, week_age
-    buttons.forEach(btn => {
-      const colorLabel = btn.color_name ?? btn.button_name; // fallback si color_name es NULL
-      const key = `${colorLabel}-S${btn.week_age ?? 0}`;
-      if (!totals[key]) {
-        totals[key] = {
-          color_name: colorLabel,
-          color_hex: btn.color_hex,
-          week_age: btn.week_age ?? 0,
-          count: 0,
-        };
-      }
-    });
-
-    return Object.values(totals).sort((a, b) => b.week_age - a.week_age);
-  }, [trenadaRecords, buttons]);
+    // Solo se muestran colores con racimos realmente cargados (count > 0).
+    // Antes se agregaba una entrada en 0 por cada botón activo de button_config,
+    // lo que generaba cards duplicadas/fantasma del mismo color en 0.
+    return Object.values(totals)
+      .filter(t => t.count > 0)
+      .sort((a, b) => b.week_age - a.week_age);
+  }, [trenadaRecords]);
 
   if (isLoading) {
     return (
