@@ -677,10 +677,18 @@ export default function LaborDetalle() {
                             </td>
                             {CICLOS.map((c) => {
                               const racimosMf = seccionIds.reduce((sum, sid) => sum + (matrizAcres[`${sid}_${c}`] || 0), 0);
+                              // Mismo patrón que las labores no-Embolse (ej. PODA-DESHIJE-2026):
+                              // el % es la porción del total de ESA minifinca que se completó
+                              // en este ciclo (racimos del ciclo ÷ racimos totales de la MF).
+                              // Racimos no tiene un "acres-objetivo" como las demás labores,
+                              // así que usamos el total de la propia minifinca como base del 100%.
+                              const pct = totalRacimosMf > 0 ? (racimosMf / totalRacimosMf) * 100 : 0;
                               return (
                                 <td key={c} className="border border-border px-0.5 py-0.5 text-center text-xs">
-                                  {racimosMf > 0 ? (
-                                    <span className="font-semibold text-blue-700">{Math.round(racimosMf).toLocaleString()}</span>
+                                  {pct > 0 ? (
+                                    <span className={`font-semibold ${pct >= 100 ? "text-red-600" : pct >= 50 ? "text-primary" : "text-muted-foreground"}`}>
+                                      {pct.toFixed(0)}%
+                                    </span>
                                   ) : (
                                     <span className="text-muted-foreground/30">—</span>
                                   )}
