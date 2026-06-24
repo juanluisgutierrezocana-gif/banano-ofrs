@@ -147,14 +147,19 @@ export default function Sidebar() {
 
           })}
 
-          {/* Botón salir a pantalla inicial */}
-          <button
-            onClick={() => { window.location.href = "/landing"; }}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200 mt-2"
-          >
-            <LogOut className="w-5 h-5" />
-            Salir a Pantalla Inicial
-          </button>
+          {/* Botón salir a pantalla inicial: gateado por permiso granular.
+              Admin/Dueño siempre lo ven; un Editor (role==='user') solo si
+              el admin le activó 'salir_pantalla_inicial' desde
+              Configuraciones->Usuarios. */}
+          {(isAdmin || hasPermiso("salir_pantalla_inicial")) && (
+            <button
+              onClick={() => { window.location.href = "/landing"; }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200 mt-2"
+            >
+              <LogOut className="w-5 h-5" />
+              Salir a Pantalla Inicial
+            </button>
+          )}
         </nav>
 
         <BananoAnimation />

@@ -36,6 +36,7 @@ const PERMISOS = [
   { key: "config_sonido", label: "Sonido" },
   { key: "config_finca", label: "Finca" },
   { key: "avances_agricolas", label: "Avances Agrícolas" },
+  { key: "salir_pantalla_inicial", label: "Salir a Pantalla Inicial" },
 ];
 
 export default function ConfigUsuarios() {
