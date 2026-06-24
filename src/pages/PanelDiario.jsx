@@ -69,13 +69,29 @@ export default function PanelDiario() {
       });
     });
 
+    // El filtro On/Off de botones solo debe afectar el día de HOY.
+    // En fechas pasadas, un botón apagado hoy no debe borrar cards
+    // con datos ya cargados en ese día histórico.
+    const esHoy = fecha === format(new Date(), "yyyy-MM-dd");
+
+    // Set de claves "color-Ssemana" de botones actualmente activos (On) en button_config.
+    // No existe un button_id guardado en el racimo (solo color_name/week_age sueltos),
+    // así que el único cruce posible es por texto color_name+week_age.
+    const activeKeys = new Set(
+      buttons.map(btn => `${btn.color_name ?? btn.button_name}-S${btn.week_age ?? 0}`)
+    );
+
     // Solo se muestran colores con racimos realmente cargados (count > 0).
-    // Antes se agregaba una entrada en 0 por cada botón activo de button_config,
-    // lo que generaba cards duplicadas/fantasma del mismo color en 0.
+    // Si la fecha consultada es hoy, además el botón debe seguir activo (On).
     return Object.values(totals)
-      .filter(t => t.count > 0)
+      .filter(t => {
+        if (t.count <= 0) return false;
+        if (!esHoy) return true;
+        const key = `${t.color_name}-S${t.week_age}`;
+        return activeKeys.has(key);
+      })
       .sort((a, b) => b.week_age - a.week_age);
-  }, [trenadaRecords]);
+  }, [trenadaRecords, buttons, fecha]);
 
   if (isLoading) {
     return (
