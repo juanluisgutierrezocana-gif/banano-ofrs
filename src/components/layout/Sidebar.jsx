@@ -26,27 +26,40 @@ function useOnlineStatus() {
   return online;
 }
 
+// minRole controla qué tan restringida está cada sección:
+// "viewer" -> cualquier usuario autenticado (incluye Lector)
+// "editor" -> Editor y superiores (antes estas 4 quedaban ocultas para
+//             Editor por error: un Editor "puede registrar y editar" pero
+//             Recepción Fruta, Editar Trenadas, Orden de Calibre y Acres
+//             estaban marcadas adminOnly, bloqueándole justo eso)
+// "admin"  -> solo Administrador/Dueño (Configuraciones: gestiona usuarios)
+// "owner"  -> solo Dueño (Panel Global)
 const allNavItems = [
-{ path: "/", label: "Panel Diario", icon: LayoutDashboard, adminOnly: false },
-{ path: "/recepcion", label: "Recepción Fruta", icon: Truck, adminOnly: true },
-{ path: "/reporteria", label: "Reportería", icon: FileBarChart, adminOnly: false },
-{ path: "/inventario", label: "Inventario", icon: Package, adminOnly: false },
-{ path: "/perdidas", label: "Pérdidas", icon: AlertTriangle, adminOnly: false },
-{ path: "/saldos", label: "Saldos", icon: BarChart3, adminOnly: false },
-{ path: "/editar-trenadas", label: "Editar Trenadas", icon: FilePenLine, adminOnly: true },
-{ path: "/orden-calibre", label: "Orden de Calibre", icon: Ruler, adminOnly: true },
-{ path: "/acres", label: "Acres", icon: LandPlot, adminOnly: true },
-{ path: "/configuraciones", label: "Configuraciones", icon: Settings, adminOnly: true },
-{ path: "/panel-dueno", label: "Panel del Dueño", icon: Crown, ownerOnly: true }];
+{ path: "/", label: "Panel Diario", icon: LayoutDashboard, minRole: "viewer" },
+{ path: "/recepcion", label: "Recepción Fruta", icon: Truck, minRole: "editor" },
+{ path: "/reporteria", label: "Reportería", icon: FileBarChart, minRole: "viewer" },
+{ path: "/inventario", label: "Inventario", icon: Package, minRole: "viewer" },
+{ path: "/perdidas", label: "Pérdidas", icon: AlertTriangle, minRole: "viewer" },
+{ path: "/saldos", label: "Saldos", icon: BarChart3, minRole: "viewer" },
+{ path: "/editar-trenadas", label: "Editar Trenadas", icon: FilePenLine, minRole: "editor" },
+{ path: "/orden-calibre", label: "Orden de Calibre", icon: Ruler, minRole: "editor" },
+{ path: "/acres", label: "Acres", icon: LandPlot, minRole: "editor" },
+{ path: "/configuraciones", label: "Configuraciones", icon: Settings, minRole: "admin" },
+{ path: "/panel-dueno", label: "Panel del Dueño", icon: Crown, minRole: "owner" }];
 
 
 export default function Sidebar() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
-  const { isAdmin, isOwner } = useRole();
+  const { isAdmin, isOwner, isEditor } = useRole();
   const online = useOnlineStatus();
   const { data: finca } = useQuery({ queryKey: ["finca-settings"], queryFn: getFincaSettings, staleTime: 60000 });
-  const navItems = allNavItems.filter((item) => (!item.adminOnly || isAdmin) && (!item.ownerOnly || isOwner));
+  const navItems = allNavItems.filter((item) => {
+    if (item.minRole === "owner") return isOwner;
+    if (item.minRole === "admin") return isAdmin;
+    if (item.minRole === "editor") return isEditor;
+    return true; // "viewer": visible para cualquier usuario autenticado
+  });
 
   return (
     <>

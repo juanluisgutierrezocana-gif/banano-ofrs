@@ -65,6 +65,25 @@ export default function PanelDueno() {
     [fincasList]
   );
 
+  // Agrupa usersList por finca_id para que el Panel del Dueño los muestre
+  // categorizados (antes salían en una sola lista plana y mezclados).
+  // Las fincas se ordenan alfabéticamente; "sin-finca" siempre al final.
+  const usersByFinca = useMemo(() => {
+    const groups = {};
+    usersList.forEach((u) => {
+      const key = u.finca_id || "sin-finca";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(u);
+    });
+    return Object.entries(groups).sort(([keyA], [keyB]) => {
+      if (keyA === "sin-finca") return 1;
+      if (keyB === "sin-finca") return -1;
+      const nameA = nombrePorFincaId[keyA] || "";
+      const nameB = nombrePorFincaId[keyB] || "";
+      return nameA.localeCompare(nameB);
+    });
+  }, [usersList, nombrePorFincaId]);
+
   // --- Mutaciones: fincas ---
   const updateFincaMutation = useMutation({
     mutationFn: ({ id, updates }) => fincas.update(id, updates),
@@ -283,81 +302,92 @@ export default function PanelDueno() {
               ) : !usersList.length ? (
                 <p className="text-center text-muted-foreground py-8">No hay usuarios registrados</p>
               ) : (
-                <div className="space-y-3">
-                  {usersList.map((u) => {
-                    const isMe = u.id === currentUser?.id;
-                    const isOwnerRow = u.role === "owner";
-                    const roleInfo = ROLES[u.role] || ROLES.user;
-                    const RoleIcon = roleInfo.icon;
-                    return (
-                      <div key={u.id} className="flex items-center justify-between p-3 rounded-xl border bg-card hover:bg-muted/30 transition-colors flex-wrap gap-2">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm shrink-0">
-                            {(u.full_name || u.email || "?")[0].toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm flex items-center gap-1">
-                              {u.full_name || u.email}
-                              {isMe && <Crown className="w-3.5 h-3.5 text-secondary ml-1" />}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {u.email} · {nombrePorFincaId[u.finca_id] || "sin finca"}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          {isOwnerRow ? (
-                            <Badge variant="default" className="flex items-center gap-1">
-                              <Crown className="w-3.5 h-3.5" /> Dueño
-                            </Badge>
-                          ) : (
-                            <>
-                              {!isMe && (
-                                <button
-                                  onClick={() => {
-                                    if (confirm(`¿Eliminar a ${u.full_name || u.email}?`)) {
-                                      deleteUserMutation.mutate(u.id);
-                                    }
-                                  }}
-                                  className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
-                                  title="Eliminar usuario"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                              <Select
-                                value={u.role || "user"}
-                                onValueChange={(role) => updateRoleMutation.mutate({ id: u.id, role })}
-                                disabled={updateRoleMutation.isPending}
-                              >
-                                <SelectTrigger className="w-36 h-8 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="admin">
-                                    <div className="flex items-center gap-2">
-                                      <ShieldCheck className="w-4 h-4 text-primary" /> Administrador
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="user">
-                                    <div className="flex items-center gap-2">
-                                      <Pencil className="w-4 h-4 text-blue-600" /> Editor
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="viewer">
-                                    <div className="flex items-center gap-2">
-                                      <Eye className="w-4 h-4 text-muted-foreground" /> Lector
-                                    </div>
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </>
-                          )}
-                        </div>
+                <div className="space-y-6">
+                  {usersByFinca.map(([fincaId, usersInFinca]) => (
+                    <div key={fincaId}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Building2 className="w-4 h-4 text-muted-foreground" />
+                        <h3 className="text-sm font-semibold text-muted-foreground">
+                          {fincaId === "sin-finca" ? "Sin finca asignada" : (nombrePorFincaId[fincaId] || "Finca desconocida")}
+                        </h3>
+                        <Badge variant="outline" className="text-xs">{usersInFinca.length}</Badge>
                       </div>
-                    );
-                  })}
+                      <div className="space-y-3">
+                        {usersInFinca.map((u) => {
+                          const isMe = u.id === currentUser?.id;
+                          const isOwnerRow = u.role === "owner";
+                          const roleInfo = ROLES[u.role] || ROLES.user;
+                          const RoleIcon = roleInfo.icon;
+                          return (
+                            <div key={u.id} className="flex items-center justify-between p-3 rounded-xl border bg-card hover:bg-muted/30 transition-colors flex-wrap gap-2">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm shrink-0">
+                                  {(u.full_name || u.email || "?")[0].toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-sm flex items-center gap-1">
+                                    {u.full_name || u.email}
+                                    {isMe && <Crown className="w-3.5 h-3.5 text-secondary ml-1" />}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">{u.email}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                {isOwnerRow ? (
+                                  <Badge variant="default" className="flex items-center gap-1">
+                                    <Crown className="w-3.5 h-3.5" /> Dueño
+                                  </Badge>
+                                ) : (
+                                  <>
+                                    {!isMe && (
+                                      <button
+                                        onClick={() => {
+                                          if (confirm(`¿Eliminar a ${u.full_name || u.email}?`)) {
+                                            deleteUserMutation.mutate(u.id);
+                                          }
+                                        }}
+                                        className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
+                                        title="Eliminar usuario"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                    <Select
+                                      value={u.role || "user"}
+                                      onValueChange={(role) => updateRoleMutation.mutate({ id: u.id, role })}
+                                      disabled={updateRoleMutation.isPending}
+                                    >
+                                      <SelectTrigger className="w-36 h-8 text-xs">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="admin">
+                                          <div className="flex items-center gap-2">
+                                            <ShieldCheck className="w-4 h-4 text-primary" /> Administrador
+                                          </div>
+                                        </SelectItem>
+                                        <SelectItem value="user">
+                                          <div className="flex items-center gap-2">
+                                            <Pencil className="w-4 h-4 text-blue-600" /> Editor
+                                          </div>
+                                        </SelectItem>
+                                        <SelectItem value="viewer">
+                                          <div className="flex items-center gap-2">
+                                            <Eye className="w-4 h-4 text-muted-foreground" /> Lector
+                                          </div>
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>
