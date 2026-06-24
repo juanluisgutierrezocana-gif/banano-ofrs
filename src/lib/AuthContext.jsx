@@ -24,12 +24,34 @@ export const AuthProvider = ({ children }) => {
       .eq('id', authUser.id)
       .maybeSingle();
 
+    // El dueño puede "entrar" a operar dentro de cualquier finca (ver
+    // PanelDueno.jsx -> enterFincaMutation), pero eso SOLO actualiza
+    // owner_active_finca — nunca el finca_id propio del dueño en `users`.
+    // Si no resolvemos aquí la finca activa, currentUser.finca_id se queda
+    // fijo en la finca de origen del dueño, y cualquier pantalla que
+    // filtre por currentUser.finca_id (ej. Configuraciones->Usuarios)
+    // sigue mostrando datos de esa finca de origen en vez de la finca a
+    // la que el dueño realmente entró. Confirmado en producción: el dueño
+    // entraba a "Finca Prueba" y Configuraciones->Usuarios seguía
+    // mostrando a los colaboradores de su propia finca.
+    let effectiveFincaId = userRecord?.finca_id ?? null;
+    if (userRecord?.role === 'owner') {
+      const { data: activeFinca } = await supabase
+        .from('owner_active_finca')
+        .select('active_finca_id')
+        .eq('user_id', authUser.id)
+        .maybeSingle();
+      if (activeFinca?.active_finca_id) {
+        effectiveFincaId = activeFinca.active_finca_id;
+      }
+    }
+
     let finca = null;
-    if (userRecord?.finca_id) {
+    if (effectiveFincaId) {
       const { data: fincaRecord } = await supabase
         .from('fincas')
         .select('nombre, estado, plan, fecha_vencimiento')
-        .eq('id', userRecord.finca_id)
+        .eq('id', effectiveFincaId)
         .maybeSingle();
       finca = fincaRecord ?? null;
     }
@@ -37,7 +59,7 @@ export const AuthProvider = ({ children }) => {
     return {
       ...authUser,
       role: userRecord?.role ?? 'viewer',
-      finca_id: userRecord?.finca_id ?? null,
+      finca_id: effectiveFincaId,
       finca,
     };
   };
