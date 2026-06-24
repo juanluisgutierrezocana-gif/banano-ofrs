@@ -15,5 +15,12 @@ export function useRole() {
   const isAdmin = role === "admin" || isOwner;
   const isEditor = role === "user" || isAdmin;
   const isViewer = role === "viewer";
-  return { isAdmin, isEditor, isViewer, isOwner };
+  const permisos = user?.permisos || {};
+
+  // Permiso granular asignado por un admin a un Editor (role==="user") desde
+  // Configuraciones->Usuarios. Admin/Dueño siempre pasan (acceso total);
+  // Lector nunca pasa (esta función solo aplica a editores, ver useRole.js).
+  const hasPermiso = (key) => isAdmin || permisos[key] === true;
+
+  return { isAdmin, isEditor, isViewer, isOwner, permisos, hasPermiso };
 }

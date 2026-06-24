@@ -17,7 +17,7 @@ const emptyLabor = { nombre: "", num_ciclos: "9", unidad_extra: "", secciones_ex
 const UNIDADES = ["litros", "galones", "sacos", "matas", "racimos", "pulgadas", "milimetros"];
 
 export default function AvancesConfiguraciones() {
-  const { isAdmin } = useRole();
+  const { isAdmin, hasPermiso } = useRole();
   const queryClient = useQueryClient();
 
   const [formSeccion, setFormSeccion] = useState(emptySeccion);
@@ -142,7 +142,10 @@ export default function AvancesConfiguraciones() {
     setSavingEditLabor(false);
   };
 
-  if (!isAdmin) {
+  // Un Editor con el permiso 'avances_agricolas' edita igual que un admin
+  // (AvancesLayout ya bloqueó por completo a quien no tenga el permiso;
+  // este chequeo es solo una segunda barrera por si se entra directo a la URL).
+  if (!isAdmin && !hasPermiso("avances_agricolas")) {
     return <AdminOnlyMessage />;
   }
 

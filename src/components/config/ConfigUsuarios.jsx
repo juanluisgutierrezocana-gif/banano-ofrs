@@ -11,8 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger
 } from "@/components/ui/dialog";
-import { Users, ShieldCheck, Eye, Crown, Pencil, Trash2, UserPlus, Loader2 } from "lucide-react";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { Switch } from "@/components/ui/switch";
+import { Users, ShieldCheck, Eye, Crown, Pencil, Trash2, UserPlus, Loader2, Shield, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { useRole } from "@/hooks/useRole";
 
 const ROLES = {
   admin:  { label: "Administrador", icon: ShieldCheck, color: "text-primary" },
@@ -20,9 +23,30 @@ const ROLES = {
   viewer: { label: "Lector",        icon: Eye,         color: "text-muted-foreground" },
 };
 
+// Permisos granulares que un admin/dueño puede activar por Editor
+// (role==='user'): una entrada por cada pestaña de Configuraciones más el
+// acceso a Avances Agrícolas. Ver useRole.hasPermiso para cómo se consumen.
+const PERMISOS = [
+  { key: "config_rango", label: "Rango Racimos" },
+  { key: "config_lineas", label: "Líneas" },
+  { key: "config_secciones", label: "Secciones" },
+  { key: "config_colores", label: "Colores" },
+  { key: "config_botones", label: "Botones" },
+  { key: "config_usuarios", label: "Usuarios" },
+  { key: "config_sonido", label: "Sonido" },
+  { key: "config_finca", label: "Finca" },
+  { key: "avances_agricolas", label: "Avances Agrícolas" },
+];
+
 export default function ConfigUsuarios() {
   const { user: currentUser } = useAuth();
+  const { hasPermiso } = useRole();
   const queryClient = useQueryClient();
+  // isTrueAdmin = rol real admin/dueño (no por permiso). El panel de
+  // permisos solo lo ve/controla un admin/dueño real, para que un Editor
+  // con el permiso config_usuarios no pueda auto-otorgarse más permisos.
+  const isTrueAdmin = currentUser?.role === "admin" || currentUser?.role === "owner";
+  const [expandedId, setExpandedId] = useState(null);
 
   const { data: userList = [], isLoading } = useQuery({
     // Scoped a la finca actual: esta pantalla es "Configuraciones->Usuarios"
@@ -53,6 +77,14 @@ export default function ConfigUsuarios() {
       queryClient.invalidateQueries({ queryKey: ["users-list"] });
       toast.success("Usuario eliminado");
     },
+  });
+
+  const permisosMutation = useMutation({
+    mutationFn: ({ id, permisos }) => users.update(id, { permisos }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users-list"] });
+    },
+    onError: (error) => toast.error(`Error al actualizar permisos: ${error.message}`),
   });
 
   // --- Invitar colaborador a ESTA finca (vía /api/admin/create-user) ---
@@ -109,7 +141,7 @@ export default function ConfigUsuarios() {
           </p>
         </div>
 
-        {(currentUser?.role === "admin" || currentUser?.role === "owner") && (
+        {(isTrueAdmin || hasPermiso("config_usuarios")) && (
           <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
             <DialogTrigger asChild>
               <Button size="sm">
@@ -189,75 +221,120 @@ export default function ConfigUsuarios() {
                 ? { label: "Dueño", icon: Crown, color: "text-secondary" }
                 : (ROLES[u.role] || ROLES.user);
               const RoleIcon = roleInfo.icon;
+              const mostrarPermisos = isTrueAdmin && u.role === "user";
+              const expanded = expandedId === u.id;
               return (
-                <div key={u.id} className="flex items-center justify-between p-3 rounded-xl border bg-card hover:bg-muted/30 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm shrink-0">
-                      {(u.full_name || u.email || "?")[0].toUpperCase()}
+                <div key={u.id}>
+                  <div className="flex items-center justify-between p-3 rounded-xl border bg-card hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm shrink-0">
+                        {(u.full_name || u.email || "?")[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm flex items-center gap-1">
+                          {u.full_name || u.email}
+                          {isMe && <Crown className="w-3.5 h-3.5 text-secondary ml-1" />}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-sm flex items-center gap-1">
-                        {u.full_name || u.email}
-                        {isMe && <Crown className="w-3.5 h-3.5 text-secondary ml-1" />}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{u.email}</p>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-3">
-                    <Badge variant={u.role === "admin" ? "default" : "secondary"} className="flex items-center gap-1 hidden sm:flex">
-                      <RoleIcon className={`w-3.5 h-3.5 ${roleInfo.color}`} />
-                      {roleInfo.label}
-                    </Badge>
-
-                    {!isMe && !isOwnerRow && (
-                      <button
-                        onClick={() => {
-                          if (confirm(`¿Eliminar a ${u.full_name || u.email}?`)) {
-                            deleteMutation.mutate(u.id);
-                          }
-                        }}
-                        className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
-                        title="Eliminar usuario"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                    {isOwnerRow ? (
-                      <Badge variant="default" className="flex items-center gap-1">
-                        <Crown className="w-3.5 h-3.5" /> Dueño
+                    <div className="flex items-center gap-3">
+                      <Badge variant={u.role === "admin" ? "default" : "secondary"} className="flex items-center gap-1 hidden sm:flex">
+                        <RoleIcon className={`w-3.5 h-3.5 ${roleInfo.color}`} />
+                        {roleInfo.label}
                       </Badge>
-                    ) : !isMe ? (
-                      <Select
-                        value={u.role || "user"}
-                        onValueChange={role => updateMutation.mutate({ id: u.id, role })}
-                        disabled={updateMutation.isPending}
-                      >
-                        <SelectTrigger className="w-36 h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">
-                            <div className="flex items-center gap-2">
-                              <ShieldCheck className="w-4 h-4 text-primary" /> Administrador
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="user">
-                            <div className="flex items-center gap-2">
-                              <Pencil className="w-4 h-4 text-blue-600" /> Editor
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="viewer">
-                            <div className="flex items-center gap-2">
-                              <Eye className="w-4 h-4 text-muted-foreground" /> Lector
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <span className="text-xs text-muted-foreground italic">Tú</span>
-                    )}
+
+                      {mostrarPermisos && (
+                        <button
+                          onClick={() => setExpandedId(expanded ? null : u.id)}
+                          className="flex items-center gap-0.5 p-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+                          title="Permisos de este editor"
+                        >
+                          <Shield className="w-4 h-4" />
+                          <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                        </button>
+                      )}
+
+                      {!isMe && !isOwnerRow && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`¿Eliminar a ${u.full_name || u.email}?`)) {
+                              deleteMutation.mutate(u.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
+                          title="Eliminar usuario"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {isOwnerRow ? (
+                        <Badge variant="default" className="flex items-center gap-1">
+                          <Crown className="w-3.5 h-3.5" /> Dueño
+                        </Badge>
+                      ) : !isMe ? (
+                        <Select
+                          value={u.role || "user"}
+                          onValueChange={role => updateMutation.mutate({ id: u.id, role })}
+                          disabled={updateMutation.isPending}
+                        >
+                          <SelectTrigger className="w-36 h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck className="w-4 h-4 text-primary" /> Administrador
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="user">
+                              <div className="flex items-center gap-2">
+                                <Pencil className="w-4 h-4 text-blue-600" /> Editor
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="viewer">
+                              <div className="flex items-center gap-2">
+                                <Eye className="w-4 h-4 text-muted-foreground" /> Lector
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">Tú</span>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Panel deslizable de permisos: solo admin/dueño real lo ve,
+                      para que un Editor con permiso config_usuarios no pueda
+                      auto-otorgarse más permisos a sí mismo o a otros. */}
+                  {mostrarPermisos && (
+                    <Collapsible open={expanded}>
+                      <CollapsibleContent>
+                        <div className="mt-2 mb-1 p-4 rounded-xl border border-dashed bg-muted/20 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {PERMISOS.map((p) => (
+                            <div key={p.key} className="flex items-center justify-between gap-2">
+                              <Label htmlFor={`perm-${u.id}-${p.key}`} className="text-xs font-normal cursor-pointer">
+                                {p.label}
+                              </Label>
+                              <Switch
+                                id={`perm-${u.id}-${p.key}`}
+                                checked={u.permisos?.[p.key] === true}
+                                disabled={permisosMutation.isPending}
+                                onCheckedChange={(checked) =>
+                                  permisosMutation.mutate({
+                                    id: u.id,
+                                    permisos: { ...(u.permisos || {}), [p.key]: checked },
+                                  })
+                                }
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
                 </div>
               );
             })}

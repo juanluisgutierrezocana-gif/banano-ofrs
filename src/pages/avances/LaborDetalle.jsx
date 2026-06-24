@@ -39,7 +39,7 @@ const playSuccessSound = () => {
 export default function LaborDetalle() {
   const { laborId } = useParams();
   const queryClient = useQueryClient();
-  const { isAdmin } = useRole();
+  const { isAdmin, hasPermiso } = useRole();
   const [entry, setEntry] = useState(emptyEntry);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -263,7 +263,9 @@ export default function LaborDetalle() {
     return registros.filter((r) => r.seccion_id === modalSeccionId && r.ciclo === modalCiclo);
   }, [registros, modalSeccionId, modalCiclo]);
 
-  if (!isAdmin) {
+  // Mismo criterio que AvancesConfiguraciones.jsx: un Editor con el permiso
+  // 'avances_agricolas' edita igual que un admin.
+  if (!isAdmin && !hasPermiso("avances_agricolas")) {
     return <AdminOnlyMessage />;
   }
 

@@ -20,7 +20,7 @@ export const AuthProvider = ({ children }) => {
   const buildUserWithFinca = async (authUser) => {
     const { data: userRecord } = await supabase
       .from('users')
-      .select('role, finca_id')
+      .select('role, finca_id, permisos')
       .eq('id', authUser.id)
       .maybeSingle();
 
@@ -61,6 +61,10 @@ export const AuthProvider = ({ children }) => {
       role: userRecord?.role ?? 'viewer',
       finca_id: effectiveFincaId,
       finca,
+      // Permisos granulares para role==='user' (Editor): qué pestañas de
+      // Configuraciones y si tiene acceso a Avances Agrícolas. Admin/owner
+      // ignoran esto (siempre tienen acceso total) — ver useRole.hasPermiso.
+      permisos: userRecord?.permisos ?? {},
     };
   };
 

@@ -5,6 +5,8 @@ import { Sprout, BarChart2, Settings, Menu, X, LogOut, ClipboardList, BarChart3 
 import { cn } from "@/lib/utils";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
+import { useRole } from "@/hooks/useRole";
+import AdminOnlyMessage from "@/components/avances/AdminOnlyMessage";
 
 const staticNavItems = [
   { path: "/avances-agricolas", label: "Resumen de Avances Agrícolas", icon: BarChart2, exact: true },
@@ -13,6 +15,12 @@ const staticNavItems = [
 export default function AvancesLayout() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  // Bloqueo total (no solo de edición) para un Editor (role==='user') sin el
+  // permiso 'avances_agricolas'. Admin/Dueño siempre pasan. Lector queda
+  // igual que antes (este layout nunca lo bloqueaba) — fuera del alcance
+  // de este cambio, solo se restringe a role==='user'.
+  const { isAdmin, isEditor, hasPermiso } = useRole();
+  const bloqueado = isEditor && !isAdmin && !hasPermiso("avances_agricolas");
 
   const { data: labores = [] } = useQuery({
     queryKey: ["labores-agricolas"],
@@ -34,6 +42,12 @@ export default function AvancesLayout() {
   const configItem = { path: "/avances-agricolas/configuraciones", label: "Configuraciones", icon: Settings };
 
   const allNavItems = [...staticNavItems, ...laborNavItems, reporteItem, configItem];
+
+  // Bloqueo completo: ni el sidebar de Avances Agrícolas ni el <Outlet/>
+  // (Resumen, Labores, Reportería, Configuraciones) se renderizan.
+  if (bloqueado) {
+    return <AdminOnlyMessage />;
+  }
 
   return (
     <div className="min-h-screen bg-background">
