@@ -249,7 +249,6 @@ export default function ProduccionIngresar() {
   const totalPorDia = (diaKey) =>
     CODIGOS_SEMANA.reduce((suma, codigo) => suma + numeroSemana(valoresGrid[codigo]?.[diaKey]), 0);
 
-  const totalMetas = CODIGOS_SEMANA.reduce((suma, codigo) => suma + numeroSemana(valoresGrid[codigo]?.meta), 0);
   const granTotalSemana = CODIGOS_SEMANA.reduce((suma, codigo) => suma + totalPorCodigo(codigo), 0);
 
   const inputClaseSemana =
@@ -356,14 +355,13 @@ export default function ProduccionIngresar() {
       sheets.push({
         sheetName: "Produccion Semanal",
         title: `Producción Semanal por Código — semana del ${semana}`,
-        headers: ["Código", diaActualLabel, "Total Semana", "Meta"],
+        headers: ["Código", diaActualLabel, "Total Semana"],
         rows: CODIGOS_SEMANA.map((codigo) => [
           codigo,
           valoresGrid[codigo]?.[diaActual] ?? "",
           totalPorCodigo(codigo) || "",
-          valoresGrid[codigo]?.meta ?? "",
         ]),
-        totalsRow: ["TOTAL", totalPorDia(diaActual) || "", granTotalSemana || "", totalMetas || ""],
+        totalsRow: ["TOTAL", totalPorDia(diaActual) || "", granTotalSemana || ""],
       });
 
       sheets.push({
@@ -558,7 +556,6 @@ export default function ProduccionIngresar() {
                     <th className="py-2 px-3 text-left whitespace-nowrap">Código</th>
                     <th className="py-2 px-2 whitespace-nowrap">{diaActualLabel}</th>
                     <th className="py-2 px-3 whitespace-nowrap">Total Semana</th>
-                    <th className="py-2 px-3 whitespace-nowrap">Meta</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -577,32 +574,20 @@ export default function ProduccionIngresar() {
                         />
                       </td>
                       <td className="py-1.5 px-3 text-center font-semibold">{totalPorCodigo(codigo) || "—"}</td>
-                      <td className="py-1 px-1">
-                        <input
-                          type="number"
-                          step="1"
-                          className={inputClaseSemana}
-                          value={valoresGrid[codigo]?.meta ?? ""}
-                          onChange={(e) => handleChangeGrid(codigo, "meta", e.target.value)}
-                          onBlur={() => handleBlurGrid(codigo, "meta")}
-                          placeholder="—"
-                        />
-                      </td>
                     </tr>
                   ))}
                   <tr className="border-t-2 font-semibold bg-muted/30">
                     <td className="py-2 px-3 whitespace-nowrap">TOTAL</td>
                     <td className="py-2 px-2 text-center">{totalPorDia(diaActual) || "—"}</td>
                     <td className="py-2 px-3 text-center">{granTotalSemana || "—"}</td>
-                    <td className="py-2 px-3 text-center">{totalMetas || "—"}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           )}
           <p className="text-xs text-muted-foreground mt-3">
-            La celda de {diaActualLabel ?? "cada día"} y la columna Meta se escriben a mano y se
-            guardan automáticamente al salir del campo. Total Semana y TOTAL se calculan sobre
+            La celda de {diaActualLabel ?? "cada día"} se escribe a mano y se
+            guarda automáticamente al salir del campo. Total Semana y TOTAL se calculan sobre
             los 6 días de la semana, aunque aquí solo se vea uno a la vez.
           </p>
         </CardContent>
