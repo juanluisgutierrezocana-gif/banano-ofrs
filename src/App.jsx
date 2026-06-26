@@ -27,6 +27,11 @@ import AvancesHome from "@/pages/avances/AvancesHome";
 import AvancesConfiguraciones from "@/pages/avances/AvancesConfiguraciones";
 import LaborDetalle from "@/pages/avances/LaborDetalle";
 import ReporteLaborAgricola from "@/pages/avances/ReporteLaborAgricola";
+import ProduccionLayout from "@/components/layout/ProduccionLayout";
+import ProduccionHome from "@/pages/produccion/ProduccionHome";
+import ProduccionIngresar from "@/pages/produccion/ProduccionIngresar";
+import ProduccionReporteria from "@/pages/produccion/ProduccionReporteria";
+import ProduccionConfiguraciones from "@/pages/produccion/ProduccionConfiguraciones";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -79,6 +84,14 @@ const AuthenticatedApp = () => {
           <Route path="/avances-agricolas/configuraciones" element={<AvancesConfiguraciones />} />
           <Route path="/avances-agricolas/reporteria" element={<ReporteLaborAgricola />} />
           <Route path="/avances-agricolas/labor/:laborId" element={<LaborDetalle />} />
+        </Route>
+      </Route>
+      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/welcome" replace />} />}>
+        <Route element={<ProduccionLayout />}>
+          <Route path="/produccion" element={<ProduccionHome />} />
+          <Route path="/produccion/ingresar" element={<ProduccionIngresar />} />
+          <Route path="/produccion/reporteria" element={<ProduccionReporteria />} />
+          <Route path="/produccion/configuraciones" element={<ProduccionConfiguraciones />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />

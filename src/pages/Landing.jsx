@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Banana, ChevronRight, Sprout, LogOut } from "lucide-react";
+import { Banana, ChevronRight, Sprout, Factory, LogOut } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 import { useRole } from "@/hooks/useRole";
@@ -82,6 +82,23 @@ export default function Landing() {
               <div className="flex items-center gap-3">
                 <Sprout className="w-6 h-6 text-green-400" />
                 <span>Avances Agrícolas</span>
+              </div>
+              <ChevronRight className="w-5 h-5 opacity-80" />
+            </Link>
+          )}
+
+          {/* Botón Producción: mismo patrón de permiso granular que Avances
+              Agrícolas. Admin/Dueño siempre lo ven; un Editor solo si el
+              admin le activó 'produccion' desde Configuraciones->Usuarios. */}
+          {(isAdmin || hasPermiso("produccion")) && (
+            <Link
+              to="/produccion"
+              className="w-full flex items-center justify-between gap-3 py-4 px-6 rounded-2xl font-semibold text-lg transition-all duration-200 shadow-xl active:scale-95 border-2"
+              style={{ background: "rgba(255,255,255,0.05)", borderColor: "rgba(74,222,128,0.35)", color: "white" }}
+            >
+              <div className="flex items-center gap-3">
+                <Factory className="w-6 h-6 text-green-400" />
+                <span>Producción</span>
               </div>
               <ChevronRight className="w-5 h-5 opacity-80" />
             </Link>

@@ -112,6 +112,9 @@ export const ordenAcres = createEntity('orden_acres');
 /** Perdida → perdidas */
 export const losses = createEntity('perdidas');
 
+/** RegistroProduccion (datos diarios de proceso de banano) → registros_produccion */
+export const produccion = createEntity('registros_produccion');
+
 // ============================================================
 // INVENTARIO / EMBOLSE
 // Con aliases para compatibilidad (createEmbolse, updateEmbolse, etc.)
