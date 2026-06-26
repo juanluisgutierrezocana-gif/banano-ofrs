@@ -115,6 +115,12 @@ export const losses = createEntity('perdidas');
 /** RegistroProduccion (datos diarios de proceso de banano) → registros_produccion */
 export const produccion = createEntity('registros_produccion');
 
+/** ProduccionSemanal (grid semanal por código de producto, días lunes-sábado) → produccion_semanal */
+export const produccionSemanal = createEntity('produccion_semanal');
+
+/** ProduccionCajasPalet (cajas/palet por día de la semana) → produccion_cajas_palet */
+export const produccionCajasPalet = createEntity('produccion_cajas_palet');
+
 // ============================================================
 // INVENTARIO / EMBOLSE
 // Con aliases para compatibilidad (createEmbolse, updateEmbolse, etc.)

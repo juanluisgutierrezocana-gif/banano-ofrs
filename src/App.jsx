@@ -32,6 +32,7 @@ import ProduccionHome from "@/pages/produccion/ProduccionHome";
 import ProduccionIngresar from "@/pages/produccion/ProduccionIngresar";
 import ProduccionReporteria from "@/pages/produccion/ProduccionReporteria";
 import ProduccionConfiguraciones from "@/pages/produccion/ProduccionConfiguraciones";
+import ProduccionSemanal from "@/pages/produccion/ProduccionSemanal";
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -90,6 +91,7 @@ const AuthenticatedApp = () => {
         <Route element={<ProduccionLayout />}>
           <Route path="/produccion" element={<ProduccionHome />} />
           <Route path="/produccion/ingresar" element={<ProduccionIngresar />} />
+          <Route path="/produccion/semanal" element={<ProduccionSemanal />} />
           <Route path="/produccion/reporteria" element={<ProduccionReporteria />} />
           <Route path="/produccion/configuraciones" element={<ProduccionConfiguraciones />} />
         </Route>
