@@ -15,6 +15,7 @@ export function calcularDatosProceso(registro) {
   const cajasSegunda = Number(registro.cajas_segunda) || 0;
   const racimosCosechados = Number(registro.racimos_cosechados) || 0;
   const racimosRechazados = Number(registro.racimos_rechazados) || 0;
+  const acres = Number(registro.acres) || 0;
 
   // HRAS. TRABAJADAS = HORA SALIDA - HORA INICIO - TIEMPO PERDIDO
   const horasTrabajadas = horaSalida - horaInicio - tiempoPerdido;
@@ -37,10 +38,21 @@ export function calcularDatosProceso(registro) {
   // RAC. PROCESADOS = RAC. COSECHADOS - RAC. RECHAZADOS
   const racimosProcesados = racimosCosechados - racimosRechazados;
 
+  // CAJAS EMPAQUE = CAJAS HORA / EMPAQUE
+  // Verificado contra el ejemplo real del boceto (FINCA LA GRACIA, SEMANA 12):
+  // 174 / 3 = 58.
+  const cajasEmpaque = empaque > 0 ? cajasHora / empaque : 0;
+
+  // HECTAREAS = ACRES x 0.404686 (conversión estándar acre -> hectárea)
+  // Verificado contra el ejemplo real del boceto: 80.4 x 0.404686 ≈ 32.54.
+  const hectareas = acres * 0.404686;
+
   return {
     horasTrabajadas,
     cajasHora,
     cajasPersona,
     racimosProcesados,
+    cajasEmpaque,
+    hectareas,
   };
 }

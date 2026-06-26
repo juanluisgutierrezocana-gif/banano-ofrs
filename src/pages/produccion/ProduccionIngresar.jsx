@@ -1,12 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { produccion } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ClipboardList, Trash2, Plus } from "lucide-react";
+import { ClipboardList, Trash2, Plus, ListTree } from "lucide-react";
 import { toast } from "sonner";
+import { calcularDatosProceso } from "@/lib/produccionCalc";
+
+// Mismas columnas manuales que en ProduccionHome.jsx (sin fórmula confirmada
+// todavía). Se repiten aquí porque esta tabla "Datos de Proceso" muestra el
+// mismo registro completo, en formato vertical, como en el boceto.
+const CAMPOS_MANUALES = [
+  { field: "factor_primera", label: "Factor 1ra" },
+  { field: "factor_general", label: "Factor General" },
+  { field: "factor_potencial", label: "Factor Potencial" },
+  { field: "peso_racimo", label: "Peso Racimo" },
+  { field: "desperdicio_monte", label: "Desperdicio del Monte" },
+  { field: "desperdicio_general", label: "Desperdicio General" },
+];
 
 // Campos de "DATO BÁSICOS" tal como aparecen en la hoja real del cliente
 // (INF. PROCESO E INVENTARIOS, hoja LA GRACIA12). Los campos calculados
@@ -52,6 +65,42 @@ export default function ProduccionIngresar() {
     },
   });
 
+  const ultimo = registros[0];
+  const calculado = ultimo ? calcularDatosProceso(ultimo) : null;
+
+  // Valores locales de los campos manuales del panel "Datos de Proceso"
+  // (mismo patrón que ProduccionHome.jsx: se guardan al salir del campo).
+  const [valoresProceso, setValoresProceso] = useState({});
+
+  useEffect(() => {
+    if (ultimo) {
+      const inicial = {};
+      CAMPOS_MANUALES.forEach(({ field }) => {
+        inicial[field] = ultimo[field] ?? "";
+      });
+      setValoresProceso(inicial);
+    }
+  }, [ultimo?.id]);
+
+  const handleChangeProceso = (field, value) => {
+    setValoresProceso((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleBlurProceso = async (field) => {
+    if (!ultimo) return;
+    const raw = valoresProceso[field];
+    const nuevoValor = raw === "" ? null : parseFloat(raw);
+    const valorActual = ultimo[field] ?? null;
+    if (nuevoValor === valorActual) return; // sin cambios, no llamamos a Supabase
+
+    const { error } = await produccion.update(ultimo.id, { [field]: nuevoValor });
+    if (error) {
+      toast.error("No se pudo guardar: " + error.message);
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
+  };
+
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSave = async () => {
@@ -86,8 +135,22 @@ export default function ProduccionIngresar() {
     queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
   };
 
+  // Redondea valores calculados a 2 decimales, sin tocar null/undefined.
+  const redondear = (valor) =>
+    valor === null || valor === undefined || Number.isNaN(valor)
+      ? null
+      : Math.round(valor * 100) / 100;
+
+  // Fila de solo lectura para el panel "Datos de Proceso".
+  const FilaProceso = ({ label, valor }) => (
+    <tr className="border-b last:border-0">
+      <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">{label}</td>
+      <td className="py-1.5 text-right font-medium">{valor ?? "—"}</td>
+    </tr>
+  );
+
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-7xl mx-auto">
       <div className="flex items-center gap-3 mb-8">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center"
           style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}>
@@ -99,7 +162,8 @@ export default function ProduccionIngresar() {
         </div>
       </div>
 
-      <Card className="mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 items-start">
+      <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Nuevo Registro Diario</CardTitle>
         </CardHeader>
@@ -191,6 +255,67 @@ export default function ProduccionIngresar() {
           </Button>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ListTree className="w-4 h-4" />
+            Datos de Proceso
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!ultimo ? (
+            <p className="text-muted-foreground text-sm text-center py-8">
+              Aún no hay registros. Guarda el primero para ver aquí los datos calculados.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <tbody>
+                <FilaProceso label="Hora Inicio" valor={ultimo.hora_inicio} />
+                <FilaProceso label="Hora Salida" valor={ultimo.hora_salida} />
+                <FilaProceso label="Hrs. Trabajadas" valor={redondear(calculado?.horasTrabajadas)} />
+                <FilaProceso label="Tiempo Perdido" valor={ultimo.tiempo_perdido} />
+                <FilaProceso label="Cuadrilla" valor={ultimo.cuadrilla} />
+                <FilaProceso label="Empaque" valor={ultimo.empaque} />
+                <FilaProceso label="Cajas Hora" valor={redondear(calculado?.cajasHora)} />
+                <FilaProceso label="Cajas Persona" valor={redondear(calculado?.cajasPersona)} />
+                <FilaProceso label="Cajas Empaque" valor={redondear(calculado?.cajasEmpaque)} />
+                <FilaProceso label="Acres" valor={ultimo.acres} />
+                <FilaProceso label="Hectáreas" valor={redondear(calculado?.hectareas)} />
+                <FilaProceso label="Racimos Cosechados" valor={ultimo.racimos_cosechados} />
+                <FilaProceso label="Racimos Rechazados" valor={ultimo.racimos_rechazados} />
+                <FilaProceso label="Racimos Procesados" valor={calculado?.racimosProcesados} />
+                <FilaProceso label="Peso Pinzote" valor={ultimo.peso_pinzote} />
+                <FilaProceso label="No. Manos" valor={ultimo.no_manos} />
+                <FilaProceso label="Calibre" valor={ultimo.calibre} />
+                <FilaProceso label="Cajas Tercera" valor={ultimo.cajas_tercera} />
+                {CAMPOS_MANUALES.map(({ field, label }) => (
+                  <tr key={field} className="border-b last:border-0">
+                    <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">{label}</td>
+                    <td className="py-1.5 text-right">
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-28 text-right rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        value={valoresProceso[field] ?? ""}
+                        onChange={(e) => handleChangeProceso(field, e.target.value)}
+                        onBlur={() => handleBlurProceso(field)}
+                        placeholder="—"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p className="text-xs text-muted-foreground mt-3">
+            Día: <span className="font-medium text-foreground">{ultimo?.fecha ?? "—"}</span>.
+            Factor 1ra/General/Potencial, Peso Racimo y Desperdicio se escriben a mano y se
+            guardan automáticamente al salir del campo.
+          </p>
+        </CardContent>
+      </Card>
+      </div>
 
       <Card>
         <CardHeader className="pb-3">
