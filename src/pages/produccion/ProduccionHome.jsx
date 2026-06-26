@@ -19,6 +19,19 @@ const CAMPOS_MANUALES = [
   { field: "desperdicio_general", label: "Desperdicio General" },
 ];
 
+// Columnas que en "Ingresar Datos" vienen del registro diario (ahí se
+// siguen mostrando igual). El cliente pidió que en ESTA tabla también se
+// puedan rellenar de forma independiente, igual que las columnas manuales
+// de arriba. No es una copia separada del dato: edita el mismo registro.
+const CAMPOS_REGISTRO = [
+  { field: "racimos_cosechados", label: "Racimos Cosechados" },
+  { field: "racimos_rechazados", label: "Racimos Rechazados" },
+  { field: "cajas_primera", label: "Cajas 1ra" },
+  { field: "cajas_segunda", label: "Cajas 2da" },
+  { field: "cajas_tercera", label: "Cajas 3ra" },
+  { field: "quintales_rechazo", label: "Quintales Rechazo" },
+];
+
 export default function ProduccionHome() {
   const queryClient = useQueryClient();
   const { data: registros = [], isLoading } = useQuery({
@@ -40,7 +53,7 @@ export default function ProduccionHome() {
   useEffect(() => {
     if (ultimo) {
       const inicial = {};
-      CAMPOS_MANUALES.forEach(({ field }) => {
+      [...CAMPOS_REGISTRO, ...CAMPOS_MANUALES].forEach(({ field }) => {
         inicial[field] = ultimo[field] ?? "";
       });
       setValores(inicial);
@@ -66,9 +79,26 @@ export default function ProduccionHome() {
     queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
   };
 
-  // Celda de solo lectura (datos que ya vienen de "Ingresar Datos")
+  // Celda de solo lectura (valores que se calculan, sin fórmula confirmada
+  // todavía para guardar un override manual aquí).
   const CeldaFija = ({ valor }) => (
     <td className="py-2 px-3 text-center whitespace-nowrap">{valor ?? "—"}</td>
+  );
+
+  // Celda editable e independiente: se guarda al salir del campo, igual
+  // que Factor 1ra/General/etc.
+  const CeldaEditable = ({ field }) => (
+    <td className="py-1 px-2">
+      <input
+        type="number"
+        step="0.01"
+        className="w-24 text-center rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+        value={valores[field] ?? ""}
+        onChange={(e) => handleChange(field, e.target.value)}
+        onBlur={() => handleBlur(field)}
+        placeholder="—"
+      />
+    </td>
   );
 
   return (
@@ -119,25 +149,15 @@ export default function ProduccionHome() {
                   </thead>
                   <tbody>
                     <tr>
-                      <CeldaFija valor={ultimo.racimos_cosechados} />
-                      <CeldaFija valor={ultimo.racimos_rechazados} />
+                      <CeldaEditable field="racimos_cosechados" />
+                      <CeldaEditable field="racimos_rechazados" />
                       <CeldaFija valor={calculado?.racimosProcesados} />
-                      <CeldaFija valor={ultimo.cajas_primera} />
-                      <CeldaFija valor={ultimo.cajas_segunda} />
-                      <CeldaFija valor={ultimo.cajas_tercera} />
-                      <CeldaFija valor={ultimo.quintales_rechazo} />
+                      <CeldaEditable field="cajas_primera" />
+                      <CeldaEditable field="cajas_segunda" />
+                      <CeldaEditable field="cajas_tercera" />
+                      <CeldaEditable field="quintales_rechazo" />
                       {CAMPOS_MANUALES.map(({ field }) => (
-                        <td key={field} className="py-1 px-2">
-                          <input
-                            type="number"
-                            step="0.01"
-                            className="w-24 text-center rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                            value={valores[field] ?? ""}
-                            onChange={(e) => handleChange(field, e.target.value)}
-                            onBlur={() => handleBlur(field)}
-                            placeholder="—"
-                          />
-                        </td>
+                        <CeldaEditable key={field} field={field} />
                       ))}
                     </tr>
                   </tbody>
@@ -146,8 +166,8 @@ export default function ProduccionHome() {
             </CardContent>
           </Card>
           <p className="text-xs text-muted-foreground mt-3">
-            Las columnas Factor 1ra, Factor General, Factor Potencial, Peso Racimo y Desperdicio
-            se escriben a mano (sin fórmula) y se guardan automáticamente al salir del campo.
+            Todas las columnas de esta tabla (excepto Racimos Procesados, que se calcula) se
+            escriben a mano de forma independiente y se guardan automáticamente al salir del campo.
           </p>
         </>
       )}

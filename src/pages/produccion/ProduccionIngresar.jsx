@@ -37,14 +37,24 @@ const DIAS_SEMANA = [
   { key: "sabado", label: "Sábado" },
 ];
 
-// Devuelve la fecha (YYYY-MM-DD) del lunes de la semana actual.
-function lunesDeEstaSemana() {
-  const hoy = new Date();
-  const diaSemana = hoy.getDay(); // 0 = domingo
+// Devuelve la fecha (YYYY-MM-DD) del lunes de la semana que contiene
+// `fechaStr`. Si no se pasa fechaStr, usa la semana actual.
+function lunesDeSemanaDe(fechaStr) {
+  const fecha = fechaStr ? new Date(fechaStr + "T00:00:00") : new Date();
+  const diaSemana = fecha.getDay(); // 0 = domingo
   const diff = diaSemana === 0 ? -6 : 1 - diaSemana;
-  const lunes = new Date(hoy);
-  lunes.setDate(hoy.getDate() + diff);
+  const lunes = new Date(fecha);
+  lunes.setDate(fecha.getDate() + diff);
   return lunes.toISOString().slice(0, 10);
+}
+
+// Día de la semana (clave de DIAS_SEMANA) correspondiente a `fechaStr`.
+// Devuelve null si cae en domingo (no hay columna para ese día).
+const DIA_INDICE_A_CLAVE = { 1: "lunes", 2: "martes", 3: "miercoles", 4: "jueves", 5: "viernes", 6: "sabado" };
+function diaKeyDeFecha(fechaStr) {
+  if (!fechaStr) return null;
+  const fecha = new Date(fechaStr + "T00:00:00");
+  return DIA_INDICE_A_CLAVE[fecha.getDay()] ?? null;
 }
 
 const numeroSemana = (v) => {
@@ -57,7 +67,6 @@ const numeroSemana = (v) => {
 // ("DATOS DE PROCESO") NO se guardan aquí: se derivan en ProduccionHome.jsx
 // y ProduccionReporteria.jsx a partir de estos valores.
 const emptyForm = {
-  fecha: new Date().toISOString().slice(0, 10),
   hora_inicio: "",
   hora_salida: "",
   tiempo_perdido: "",
@@ -87,6 +96,13 @@ export default function ProduccionIngresar() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
+  // Fecha única que controla TODA la sección "Ingresar Datos": el registro
+  // diario, la producción semanal por código y cajas/palet por día. Antes
+  // existían 2 selectores de fecha independientes; ahora solo hay uno.
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(
+    () => new Date().toISOString().slice(0, 10)
+  );
+
   const { data: registros = [], isLoading } = useQuery({
     queryKey: ["produccion-registros"],
     queryFn: async () => {
@@ -96,7 +112,9 @@ export default function ProduccionIngresar() {
     },
   });
 
-  const ultimo = registros[0];
+  // El registro que coincide con la fecha seleccionada (no siempre el más
+  // reciente): así "Datos de Proceso" cambia junto con la fecha de arriba.
+  const ultimo = registros.find((r) => r.fecha === fechaSeleccionada) ?? null;
   const calculado = ultimo ? calcularDatosProceso(ultimo) : null;
 
   // Valores locales de los campos manuales del panel "Datos de Proceso"
@@ -133,7 +151,11 @@ export default function ProduccionIngresar() {
   };
 
   // --- Tablas semanales (migradas desde "Inventario Semanal") ---
-  const [semana, setSemana] = useState(lunesDeEstaSemana());
+  // La semana y el día visible se derivan de fechaSeleccionada; ya no son
+  // selectores independientes.
+  const semana = lunesDeSemanaDe(fechaSeleccionada);
+  const diaActual = diaKeyDeFecha(fechaSeleccionada);
+  const diaActualLabel = DIAS_SEMANA.find((d) => d.key === diaActual)?.label ?? null;
 
   const { data: filasSemana = [], isLoading: cargandoGrid } = useQuery({
     queryKey: ["produccion-semanal", semana],
@@ -280,12 +302,12 @@ export default function ProduccionIngresar() {
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSave = async () => {
-    if (!form.fecha) {
+    if (!fechaSeleccionada) {
       toast.error("La fecha es obligatoria");
       return;
     }
     setSaving(true);
-    const payload = { fecha: form.fecha, calibre: form.calibre || null };
+    const payload = { fecha: fechaSeleccionada, calibre: form.calibre || null };
     NUMERIC_FIELDS.forEach((f) => {
       payload[f] = form[f] === "" ? null : parseFloat(form[f]);
     });
@@ -366,7 +388,15 @@ export default function ProduccionIngresar() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             <div className="space-y-1.5">
               <Label htmlFor="fecha" className="text-xs">Fecha</Label>
-              <Input id="fecha" name="fecha" type="date" value={form.fecha} onChange={handleChange} />
+              <Input
+                id="fecha"
+                type="date"
+                value={fechaSeleccionada}
+                onChange={(e) => setFechaSeleccionada(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Controla todas las tablas de esta página.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="hora_inicio" className="text-xs">Hora Inicio</Label>
@@ -444,7 +474,7 @@ export default function ProduccionIngresar() {
                 value={form.cajas_segunda} onChange={handleChange} />
             </div>
           </div>
-          <Button onClick={handleSave} disabled={saving || !form.fecha} className="w-full sm:w-auto">
+          <Button onClick={handleSave} disabled={saving || !fechaSeleccionada} className="w-full sm:w-auto">
             <Plus className="w-4 h-4" />
             {saving ? "Guardando..." : "Guardar Registro"}
           </Button>
@@ -455,24 +485,27 @@ export default function ProduccionIngresar() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Producción Semanal por Código</CardTitle>
-          <div className="max-w-[180px] space-y-1.5 pt-2">
-            <Label htmlFor="semana" className="text-xs">Semana (lunes)</Label>
-            <Input id="semana" type="date" value={semana} onChange={(e) => setSemana(e.target.value)} />
-          </div>
+          <p className="text-xs text-muted-foreground pt-1">
+            {diaActualLabel
+              ? `Mostrando: ${diaActualLabel} (semana del ${semana}) — según la fecha de arriba.`
+              : "La fecha seleccionada cae en domingo, día sin columna en esta tabla."}
+          </p>
         </CardHeader>
         <CardContent>
           {cargandoGrid ? (
             <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
+          ) : !diaActual ? (
+            <p className="text-muted-foreground text-sm text-center py-8">
+              Elige una fecha de lunes a sábado para ver esta tabla.
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="text-sm border-collapse">
                 <thead>
                   <tr className="text-center text-muted-foreground border-b bg-muted/30">
                     <th className="py-2 px-3 text-left whitespace-nowrap">Código</th>
-                    {DIAS_SEMANA.map(({ key, label }) => (
-                      <th key={key} className="py-2 px-2 whitespace-nowrap">{label}</th>
-                    ))}
-                    <th className="py-2 px-3 whitespace-nowrap">Total</th>
+                    <th className="py-2 px-2 whitespace-nowrap">{diaActualLabel}</th>
+                    <th className="py-2 px-3 whitespace-nowrap">Total Semana</th>
                     <th className="py-2 px-3 whitespace-nowrap">Meta</th>
                   </tr>
                 </thead>
@@ -480,19 +513,17 @@ export default function ProduccionIngresar() {
                   {CODIGOS_SEMANA.map((codigo) => (
                     <tr key={codigo} className="border-b last:border-0">
                       <td className="py-1.5 px-3 font-medium whitespace-nowrap">{codigo}</td>
-                      {DIAS_SEMANA.map(({ key }) => (
-                        <td key={key} className="py-1 px-1">
-                          <input
-                            type="number"
-                            step="1"
-                            className={inputClaseSemana}
-                            value={valoresGrid[codigo]?.[key] ?? ""}
-                            onChange={(e) => handleChangeGrid(codigo, key, e.target.value)}
-                            onBlur={() => handleBlurGrid(codigo, key)}
-                            placeholder="—"
-                          />
-                        </td>
-                      ))}
+                      <td className="py-1 px-1">
+                        <input
+                          type="number"
+                          step="1"
+                          className={inputClaseSemana}
+                          value={valoresGrid[codigo]?.[diaActual] ?? ""}
+                          onChange={(e) => handleChangeGrid(codigo, diaActual, e.target.value)}
+                          onBlur={() => handleBlurGrid(codigo, diaActual)}
+                          placeholder="—"
+                        />
+                      </td>
                       <td className="py-1.5 px-3 text-center font-semibold">{totalPorCodigo(codigo) || "—"}</td>
                       <td className="py-1 px-1">
                         <input
@@ -509,9 +540,7 @@ export default function ProduccionIngresar() {
                   ))}
                   <tr className="border-t-2 font-semibold bg-muted/30">
                     <td className="py-2 px-3 whitespace-nowrap">TOTAL</td>
-                    {DIAS_SEMANA.map(({ key }) => (
-                      <td key={key} className="py-2 px-2 text-center">{totalPorDia(key) || "—"}</td>
-                    ))}
+                    <td className="py-2 px-2 text-center">{totalPorDia(diaActual) || "—"}</td>
                     <td className="py-2 px-3 text-center">{granTotalSemana || "—"}</td>
                     <td className="py-2 px-3 text-center">{totalMetas || "—"}</td>
                   </tr>
@@ -520,8 +549,9 @@ export default function ProduccionIngresar() {
             </div>
           )}
           <p className="text-xs text-muted-foreground mt-3">
-            Las celdas de cada código y la columna Meta se escriben a mano y se guardan
-            automáticamente al salir del campo. Total y TOTAL se calculan en pantalla.
+            La celda de {diaActualLabel ?? "cada día"} y la columna Meta se escriben a mano y se
+            guardan automáticamente al salir del campo. Total Semana y TOTAL se calculan sobre
+            los 6 días de la semana, aunque aquí solo se vea uno a la vez.
           </p>
         </CardContent>
       </Card>
@@ -529,10 +559,19 @@ export default function ProduccionIngresar() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Cajas / Palet por Día</CardTitle>
+          <p className="text-xs text-muted-foreground pt-1">
+            {diaActualLabel
+              ? `Mostrando: ${diaActualLabel} — según la fecha de arriba.`
+              : "La fecha seleccionada cae en domingo, día sin fila en esta tabla."}
+          </p>
         </CardHeader>
         <CardContent>
           {cargandoCajasPalet ? (
             <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
+          ) : !diaActual ? (
+            <p className="text-muted-foreground text-sm text-center py-8">
+              Elige una fecha de lunes a sábado para ver esta tabla.
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="text-sm border-collapse">
@@ -544,33 +583,31 @@ export default function ProduccionIngresar() {
                   </tr>
                 </thead>
                 <tbody>
-                  {DIAS_SEMANA.map(({ key, label }) => (
-                    <tr key={key} className="border-b last:border-0">
-                      <td className="py-1.5 px-3 font-medium whitespace-nowrap">{label}</td>
-                      <td className="py-1 px-2">
-                        <input
-                          type="number"
-                          step="1"
-                          className={inputClaseSemana}
-                          value={valoresCajasPalet[key]?.cajas ?? ""}
-                          onChange={(e) => handleChangeCajasPalet(key, "cajas", e.target.value)}
-                          onBlur={() => handleBlurCajasPalet(key, "cajas")}
-                          placeholder="—"
-                        />
-                      </td>
-                      <td className="py-1 px-2">
-                        <input
-                          type="number"
-                          step="1"
-                          className={inputClaseSemana}
-                          value={valoresCajasPalet[key]?.palet ?? ""}
-                          onChange={(e) => handleChangeCajasPalet(key, "palet", e.target.value)}
-                          onBlur={() => handleBlurCajasPalet(key, "palet")}
-                          placeholder="—"
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                  <tr className="border-b last:border-0">
+                    <td className="py-1.5 px-3 font-medium whitespace-nowrap">{diaActualLabel}</td>
+                    <td className="py-1 px-2">
+                      <input
+                        type="number"
+                        step="1"
+                        className={inputClaseSemana}
+                        value={valoresCajasPalet[diaActual]?.cajas ?? ""}
+                        onChange={(e) => handleChangeCajasPalet(diaActual, "cajas", e.target.value)}
+                        onBlur={() => handleBlurCajasPalet(diaActual, "cajas")}
+                        placeholder="—"
+                      />
+                    </td>
+                    <td className="py-1 px-2">
+                      <input
+                        type="number"
+                        step="1"
+                        className={inputClaseSemana}
+                        value={valoresCajasPalet[diaActual]?.palet ?? ""}
+                        onChange={(e) => handleChangeCajasPalet(diaActual, "palet", e.target.value)}
+                        onBlur={() => handleBlurCajasPalet(diaActual, "palet")}
+                        placeholder="—"
+                      />
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
