@@ -6,17 +6,16 @@ import { Factory } from "lucide-react";
 import { toast } from "sonner";
 import { calcularDatosProceso } from "@/lib/produccionCalc";
 
-// Columnas que se llenan a mano directamente en esta tabla porque su
-// fórmula todavía no está confirmada con el cliente (boceto "PRODUCCIÓN E
-// INVENTARIO SEMANAL"). Se guardan tal cual las escribe el usuario, sin
-// ningún cálculo de por medio.
-const CAMPOS_MANUALES = [
-  { field: "factor_primera", label: "Factor 1ra" },
-  { field: "factor_general", label: "Factor General" },
-  { field: "factor_potencial", label: "Factor Potencial" },
-  { field: "peso_racimo", label: "Peso Racimo" },
-  { field: "desperdicio_monte", label: "Desperdicio del Monte" },
-  { field: "desperdicio_general", label: "Desperdicio General" },
+// Columnas calculadas a partir de la fórmula real del cliente (Excel "INF.
+// PROCESO E INVENTARIOS", hoja LA GRACIA12). Ya no se editan a mano: se
+// derivan en calcularDatosProceso() junto con Racimos Procesados.
+const CAMPOS_CALCULADOS = [
+  { field: "factorPrimera", label: "Factor 1ra", formato: "decimal" },
+  { field: "factorGeneral", label: "Factor General", formato: "decimal" },
+  { field: "factorPotencial", label: "Factor Potencial", formato: "decimal" },
+  { field: "pesoRacimo", label: "Peso Racimo", formato: "decimal" },
+  { field: "desperdicioMonte", label: "Desperdicio del Monte", formato: "porcentaje" },
+  { field: "desperdicioGeneral", label: "Desperdicio General", formato: "porcentaje" },
 ];
 
 // Columnas que en "Ingresar Datos" vienen del registro diario (ahí se
@@ -53,7 +52,7 @@ export default function ProduccionHome() {
   useEffect(() => {
     if (ultimo) {
       const inicial = {};
-      [...CAMPOS_REGISTRO, ...CAMPOS_MANUALES].forEach(({ field }) => {
+      CAMPOS_REGISTRO.forEach(({ field }) => {
         inicial[field] = ultimo[field] ?? "";
       });
       setValores(inicial);
@@ -79,11 +78,17 @@ export default function ProduccionHome() {
     queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
   };
 
-  // Celda de solo lectura (valores que se calculan, sin fórmula confirmada
-  // todavía para guardar un override manual aquí).
-  const CeldaFija = ({ valor }) => (
-    <td className="py-2 px-3 text-center whitespace-nowrap">{valor ?? "—"}</td>
-  );
+  // Celda de solo lectura para valores calculados (Racimos Procesados y,
+  // ahora, Factor 1ra/General/Potencial, Peso Racimo y Desperdicios).
+  const CeldaFija = ({ valor, formato }) => {
+    let texto = "—";
+    if (valor !== null && valor !== undefined && !Number.isNaN(valor)) {
+      texto = formato === "porcentaje"
+        ? `${(valor * 100).toFixed(2)}%`
+        : (Math.round(valor * 100) / 100).toString();
+    }
+    return <td className="py-2 px-3 text-center whitespace-nowrap">{texto}</td>;
+  };
 
   // Celda editable e independiente: se guarda al salir del campo, igual
   // que Factor 1ra/General/etc.
@@ -142,7 +147,7 @@ export default function ProduccionHome() {
                       <th className="py-2 px-3 whitespace-nowrap">Cajas 2da</th>
                       <th className="py-2 px-3 whitespace-nowrap">Cajas 3ra</th>
                       <th className="py-2 px-3 whitespace-nowrap">Quintales Rechazo</th>
-                      {CAMPOS_MANUALES.map(({ field, label }) => (
+                      {CAMPOS_CALCULADOS.map(({ field, label }) => (
                         <th key={field} className="py-2 px-3 whitespace-nowrap">{label}</th>
                       ))}
                     </tr>
@@ -156,8 +161,8 @@ export default function ProduccionHome() {
                       <CeldaEditable field="cajas_segunda" />
                       <CeldaEditable field="cajas_tercera" />
                       <CeldaEditable field="quintales_rechazo" />
-                      {CAMPOS_MANUALES.map(({ field }) => (
-                        <CeldaEditable key={field} field={field} />
+                      {CAMPOS_CALCULADOS.map(({ field, formato }) => (
+                        <CeldaFija key={field} valor={calculado?.[field]} formato={formato} />
                       ))}
                     </tr>
                   </tbody>
@@ -166,8 +171,9 @@ export default function ProduccionHome() {
             </CardContent>
           </Card>
           <p className="text-xs text-muted-foreground mt-3">
-            Todas las columnas de esta tabla (excepto Racimos Procesados, que se calcula) se
-            escriben a mano de forma independiente y se guardan automáticamente al salir del campo.
+            Racimos Cosechados/Rechazados, Cajas y Quintales Rechazo se escriben a mano y se
+            guardan automáticamente al salir del campo. El resto de columnas se calcula
+            automáticamente a partir de esos valores.
           </p>
         </>
       )}

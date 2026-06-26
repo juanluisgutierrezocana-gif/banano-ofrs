@@ -9,18 +9,6 @@ import { ClipboardList, Trash2, Plus, ListTree } from "lucide-react";
 import { toast } from "sonner";
 import { calcularDatosProceso } from "@/lib/produccionCalc";
 
-// Mismas columnas manuales que en ProduccionHome.jsx (sin fórmula confirmada
-// todavía). Se repiten aquí porque esta tabla "Datos de Proceso" muestra el
-// mismo registro completo, en formato vertical, como en el boceto.
-const CAMPOS_MANUALES = [
-  { field: "factor_primera", label: "Factor 1ra" },
-  { field: "factor_general", label: "Factor General" },
-  { field: "factor_potencial", label: "Factor Potencial" },
-  { field: "peso_racimo", label: "Peso Racimo" },
-  { field: "desperdicio_monte", label: "Desperdicio del Monte" },
-  { field: "desperdicio_general", label: "Desperdicio Real" },
-];
-
 // --- Tablas semanales (migradas desde la antigua página "Inventario
 // Semanal", ahora integradas aquí en "Ingresar Datos") ---
 const CODIGOS_SEMANA = [
@@ -116,39 +104,6 @@ export default function ProduccionIngresar() {
   // reciente): así "Datos de Proceso" cambia junto con la fecha de arriba.
   const ultimo = registros.find((r) => r.fecha === fechaSeleccionada) ?? null;
   const calculado = ultimo ? calcularDatosProceso(ultimo) : null;
-
-  // Valores locales de los campos manuales del panel "Datos de Proceso"
-  // (mismo patrón que ProduccionHome.jsx: se guardan al salir del campo).
-  const [valoresProceso, setValoresProceso] = useState({});
-
-  useEffect(() => {
-    if (ultimo) {
-      const inicial = {};
-      CAMPOS_MANUALES.forEach(({ field }) => {
-        inicial[field] = ultimo[field] ?? "";
-      });
-      setValoresProceso(inicial);
-    }
-  }, [ultimo?.id]);
-
-  const handleChangeProceso = (field, value) => {
-    setValoresProceso((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleBlurProceso = async (field) => {
-    if (!ultimo) return;
-    const raw = valoresProceso[field];
-    const nuevoValor = raw === "" ? null : parseFloat(raw);
-    const valorActual = ultimo[field] ?? null;
-    if (nuevoValor === valorActual) return; // sin cambios, no llamamos a Supabase
-
-    const { error } = await produccion.update(ultimo.id, { [field]: nuevoValor });
-    if (error) {
-      toast.error("No se pudo guardar: " + error.message);
-      return;
-    }
-    queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
-  };
 
   // --- Tablas semanales (migradas desde "Inventario Semanal") ---
   // La semana y el día visible se derivan de fechaSeleccionada; ya no son
@@ -339,29 +294,17 @@ export default function ProduccionIngresar() {
       ? null
       : Math.round(valor * 100) / 100;
 
+  // Formatea un valor decimal (0.1257) como porcentaje con 2 decimales (12.57%).
+  const porcentaje = (valor) =>
+    valor === null || valor === undefined || Number.isNaN(valor)
+      ? null
+      : `${(valor * 100).toFixed(2)}%`;
+
   // Fila de solo lectura para el panel "Datos de Proceso".
   const FilaProceso = ({ label, valor }) => (
     <tr className="border-b last:border-0">
       <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">{label}</td>
       <td className="py-1.5 text-right font-medium">{valor ?? "—"}</td>
-    </tr>
-  );
-
-  // Fila editable (a mano) para el panel "Datos de Proceso".
-  const FilaEditable = ({ field, label }) => (
-    <tr className="border-b last:border-0">
-      <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">{label}</td>
-      <td className="py-1.5 text-right">
-        <input
-          type="number"
-          step="0.01"
-          className="w-28 text-right rounded-md border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-          value={valoresProceso[field] ?? ""}
-          onChange={(e) => handleChangeProceso(field, e.target.value)}
-          onBlur={() => handleBlurProceso(field)}
-          placeholder="—"
-        />
-      </td>
     </tr>
   );
 
@@ -649,13 +592,13 @@ export default function ProduccionIngresar() {
                 <FilaProceso label="Racimos Cosechados" valor={ultimo.racimos_cosechados} />
                 <FilaProceso label="Racimos Rechazados" valor={ultimo.racimos_rechazados} />
                 <FilaProceso label="Racimos Procesados" valor={calculado?.racimosProcesados} />
-                <FilaEditable field="factor_primera" label="Factor 1ra" />
-                <FilaEditable field="factor_general" label="Factor General" />
-                <FilaEditable field="factor_potencial" label="Factor Potencial" />
-                <FilaEditable field="desperdicio_monte" label="Desperdicio del Monte" />
-                <FilaEditable field="desperdicio_general" label="Desperdicio Real" />
+                <FilaProceso label="Factor 1ra" valor={redondear(calculado?.factorPrimera)} />
+                <FilaProceso label="Factor General" valor={redondear(calculado?.factorGeneral)} />
+                <FilaProceso label="Factor Potencial" valor={redondear(calculado?.factorPotencial)} />
+                <FilaProceso label="Desperdicio del Monte" valor={porcentaje(calculado?.desperdicioMonte)} />
+                <FilaProceso label="Desperdicio Real" valor={porcentaje(calculado?.desperdicioGeneral)} />
                 <FilaProceso label="Peso Pinzote" valor={ultimo.peso_pinzote} />
-                <FilaEditable field="peso_racimo" label="Peso Racimo" />
+                <FilaProceso label="Peso Racimo" valor={redondear(calculado?.pesoRacimo)} />
                 <FilaProceso label="Número de Manos" valor={ultimo.no_manos} />
                 <FilaProceso label="Calibre" valor={ultimo.calibre} />
                 <FilaProceso label="Total Cajas" valor={redondear(calculado?.cajasTotal)} />
@@ -668,8 +611,8 @@ export default function ProduccionIngresar() {
           )}
           <p className="text-xs text-muted-foreground mt-3">
             Día: <span className="font-medium text-foreground">{ultimo?.fecha ?? "—"}</span>.
-            Factor 1ra/General/Potencial, Peso Racimo, Desperdicio del Monte y Desperdicio Real
-            se escriben a mano y se guardan automáticamente al salir del campo.
+            Todos los valores de "Datos de Proceso" se calculan automáticamente a partir de
+            los datos básicos ingresados arriba.
           </p>
         </CardContent>
       </Card>
