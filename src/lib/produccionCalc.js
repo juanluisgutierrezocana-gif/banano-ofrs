@@ -16,6 +16,7 @@ export function calcularDatosProceso(registro) {
   const racimosCosechados = Number(registro.racimos_cosechados) || 0;
   const racimosRechazados = Number(registro.racimos_rechazados) || 0;
   const acres = Number(registro.acres) || 0;
+  const pesoRacimo = Number(registro.peso_racimo) || 0;
 
   // HRAS. TRABAJADAS = HORA SALIDA - HORA INICIO - TIEMPO PERDIDO
   const horasTrabajadas = horaSalida - horaInicio - tiempoPerdido;
@@ -47,6 +48,14 @@ export function calcularDatosProceso(registro) {
   // Verificado contra el ejemplo real del boceto: 80.4 x 0.404686 ≈ 32.54.
   const hectareas = acres * 0.404686;
 
+  // TOTAL CAJAS = CAJAS 1RA + CAJAS 2DA (NO incluye Cajas Tercera).
+  // Confirmado con el cliente: "Suma de CAJAS DE PRIMERA + CAJAS SEGUNDA".
+  const cajasTotal = cajasPrimera + cajasSegunda;
+
+  // LIBRAS PROCESADAS = RAC. PROCESADOS x PESO RACIMO.
+  // Confirmado con el cliente contra el ejemplo del boceto: 1318 x 56.40 ≈ 74,331.
+  const librasProcesadas = racimosProcesados * pesoRacimo;
+
   return {
     horasTrabajadas,
     cajasHora,
@@ -54,5 +63,7 @@ export function calcularDatosProceso(registro) {
     racimosProcesados,
     cajasEmpaque,
     hectareas,
+    cajasTotal,
+    librasProcesadas,
   };
 }

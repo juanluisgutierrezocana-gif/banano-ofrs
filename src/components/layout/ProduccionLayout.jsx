@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { Factory, ClipboardList, CalendarRange, BarChart3, Settings, Menu, X, LogOut } from "lucide-react";
+import { Factory, ClipboardList, BarChart3, Settings, Menu, X, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole";
 import AdminOnlyMessage from "@/components/avances/AdminOnlyMessage";
@@ -10,7 +10,6 @@ import AdminOnlyMessage from "@/components/avances/AdminOnlyMessage";
 const navItems = [
   { path: "/produccion", label: "Producción", icon: Factory, exact: true },
   { path: "/produccion/ingresar", label: "Ingresar Datos", icon: ClipboardList },
-  { path: "/produccion/semanal", label: "Inventario Semanal", icon: CalendarRange },
   { path: "/produccion/reporteria", label: "Reportería", icon: BarChart3 },
   { path: "/produccion/configuraciones", label: "Configuraciones", icon: Settings },
 ];
