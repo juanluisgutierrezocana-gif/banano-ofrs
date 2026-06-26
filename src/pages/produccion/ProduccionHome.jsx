@@ -1,10 +1,26 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { produccion } from "@/api/supabaseClient";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Factory } from "lucide-react";
+import { toast } from "sonner";
 import { calcularDatosProceso } from "@/lib/produccionCalc";
 
+// Columnas que se llenan a mano directamente en esta tabla porque su
+// fórmula todavía no está confirmada con el cliente (boceto "PRODUCCIÓN E
+// INVENTARIO SEMANAL"). Se guardan tal cual las escribe el usuario, sin
+// ningún cálculo de por medio.
+const CAMPOS_MANUALES = [
+  { field: "factor_primera", label: "Factor 1ra" },
+  { field: "factor_general", label: "Factor General" },
+  { field: "factor_potencial", label: "Factor Potencial" },
+  { field: "peso_racimo", label: "Peso Racimo" },
+  { field: "desperdicio_monte", label: "Desperdicio del Monte" },
+  { field: "desperdicio_general", label: "Desperdicio General" },
+];
+
 export default function ProduccionHome() {
+  const queryClient = useQueryClient();
   const { data: registros = [], isLoading } = useQuery({
     queryKey: ["produccion-registros"],
     queryFn: async () => {
@@ -17,18 +33,43 @@ export default function ProduccionHome() {
   const ultimo = registros[0];
   const calculado = ultimo ? calcularDatosProceso(ultimo) : null;
 
-  const cards = ultimo ? [
-    { label: "Racimos Cosechados", value: ultimo.racimos_cosechados ?? "—" },
-    { label: "Racimos Rechazados", value: ultimo.racimos_rechazados ?? "—" },
-    { label: "Racimos Procesados", value: calculado.racimosProcesados },
-    { label: "Cajas 1ra", value: ultimo.cajas_primera ?? "—" },
-    { label: "Cajas 2da", value: ultimo.cajas_segunda ?? "—" },
-    { label: "Cajas Tercera", value: ultimo.cajas_tercera ?? "—" },
-    { label: "Quintales Rechazo", value: ultimo.quintales_rechazo ?? "—" },
-    { label: "Horas Trabajadas", value: calculado.horasTrabajadas.toFixed(1) },
-    { label: "Cajas / Hora", value: calculado.cajasHora.toFixed(1) },
-    { label: "Cajas / Persona", value: calculado.cajasPersona.toFixed(2) },
-  ] : [];
+  // Valores locales de los campos manuales, para poder editarlos sin
+  // disparar un guardado en cada tecla (se guarda al salir del campo).
+  const [valores, setValores] = useState({});
+
+  useEffect(() => {
+    if (ultimo) {
+      const inicial = {};
+      CAMPOS_MANUALES.forEach(({ field }) => {
+        inicial[field] = ultimo[field] ?? "";
+      });
+      setValores(inicial);
+    }
+  }, [ultimo?.id]);
+
+  const handleChange = (field, value) => {
+    setValores((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleBlur = async (field) => {
+    if (!ultimo) return;
+    const raw = valores[field];
+    const nuevoValor = raw === "" ? null : parseFloat(raw);
+    const valorActual = ultimo[field] ?? null;
+    if (nuevoValor === valorActual) return; // sin cambios, no llamamos a Supabase
+
+    const { error } = await produccion.update(ultimo.id, { [field]: nuevoValor });
+    if (error) {
+      toast.error("No se pudo guardar: " + error.message);
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
+  };
+
+  // Celda de solo lectura (datos que ya vienen de "Ingresar Datos")
+  const CeldaFija = ({ valor }) => (
+    <td className="py-2 px-3 text-center whitespace-nowrap">{valor ?? "—"}</td>
+  );
 
   return (
     <div>
@@ -58,18 +99,56 @@ export default function ProduccionHome() {
           <p className="text-sm text-muted-foreground mb-4">
             Día: <span className="font-semibold text-foreground">{ultimo.fecha}</span>
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            {cards.map((c) => (
-              <Card key={c.label}>
-                <CardHeader className="pb-1">
-                  <CardTitle className="text-xs font-medium text-muted-foreground">{c.label}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold text-foreground">{c.value}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-center text-muted-foreground border-b bg-muted/30">
+                      <th className="py-2 px-3 whitespace-nowrap">Racimos Cosechados</th>
+                      <th className="py-2 px-3 whitespace-nowrap">Racimos Rechazados</th>
+                      <th className="py-2 px-3 whitespace-nowrap">Racimos Procesados</th>
+                      <th className="py-2 px-3 whitespace-nowrap">Cajas 1ra</th>
+                      <th className="py-2 px-3 whitespace-nowrap">Cajas 2da</th>
+                      <th className="py-2 px-3 whitespace-nowrap">Cajas 3ra</th>
+                      <th className="py-2 px-3 whitespace-nowrap">Quintales Rechazo</th>
+                      {CAMPOS_MANUALES.map(({ field, label }) => (
+                        <th key={field} className="py-2 px-3 whitespace-nowrap">{label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <CeldaFija valor={ultimo.racimos_cosechados} />
+                      <CeldaFija valor={ultimo.racimos_rechazados} />
+                      <CeldaFija valor={calculado?.racimosProcesados} />
+                      <CeldaFija valor={ultimo.cajas_primera} />
+                      <CeldaFija valor={ultimo.cajas_segunda} />
+                      <CeldaFija valor={ultimo.cajas_tercera} />
+                      <CeldaFija valor={ultimo.quintales_rechazo} />
+                      {CAMPOS_MANUALES.map(({ field }) => (
+                        <td key={field} className="py-1 px-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-24 text-center rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            value={valores[field] ?? ""}
+                            onChange={(e) => handleChange(field, e.target.value)}
+                            onBlur={() => handleBlur(field)}
+                            placeholder="—"
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+          <p className="text-xs text-muted-foreground mt-3">
+            Las columnas Factor 1ra, Factor General, Factor Potencial, Peso Racimo y Desperdicio
+            se escriben a mano (sin fórmula) y se guardan automáticamente al salir del campo.
+          </p>
         </>
       )}
     </div>
