@@ -1,182 +1,207 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { produccion } from "@/api/supabaseClient";
+import { produccionResumen } from "@/api/supabaseClient";
 import { Card, CardContent } from "@/components/ui/card";
-import { Factory } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Factory, Save, Download } from "lucide-react";
 import { toast } from "sonner";
-import { calcularDatosProceso } from "@/lib/produccionCalc";
+import { exportStyledExcel } from "@/utils/excelExport";
 
-// Columnas calculadas a partir de la fórmula real del cliente (Excel "INF.
-// PROCESO E INVENTARIOS", hoja LA GRACIA12). Ya no se editan a mano: se
-// derivan en calcularDatosProceso() junto con Racimos Procesados.
-const CAMPOS_CALCULADOS = [
-  { field: "factorPrimera", label: "Factor 1ra", formato: "decimal" },
-  { field: "factorGeneral", label: "Factor General", formato: "decimal" },
-  { field: "factorPotencial", label: "Factor Potencial", formato: "decimal" },
-  { field: "pesoRacimo", label: "Peso Racimo", formato: "decimal" },
-  { field: "desperdicioMonte", label: "Desperdicio del Monte", formato: "porcentaje" },
-  { field: "desperdicioGeneral", label: "Desperdicio General", formato: "porcentaje" },
-];
-
-// Columnas que en "Ingresar Datos" vienen del registro diario (ahí se
-// siguen mostrando igual). El cliente pidió que en ESTA tabla también se
-// puedan rellenar de forma independiente, igual que las columnas manuales
-// de arriba. No es una copia separada del dato: edita el mismo registro.
-const CAMPOS_REGISTRO = [
+// Tabla 100% independiente, tal cual la pidió el cliente (imagen de
+// referencia): sin valores predefinidos, sin fórmulas, sin enlace a
+// "Ingresar Datos" ni a registros_produccion. Cada campo se llena a
+// mano y se guarda en su propia tabla (produccion_resumen), un
+// registro por fecha.
+const CAMPOS = [
   { field: "racimos_cosechados", label: "Racimos Cosechados" },
   { field: "racimos_rechazados", label: "Racimos Rechazados" },
+  { field: "racimos_procesados", label: "Racimos Procesados" },
   { field: "cajas_primera", label: "Cajas 1ra" },
   { field: "cajas_segunda", label: "Cajas 2da" },
   { field: "cajas_tercera", label: "Cajas 3ra" },
   { field: "quintales_rechazo", label: "Quintales Rechazo" },
+  { field: "factor_primera", label: "Factor 1ra" },
+  { field: "factor_general", label: "Factor General" },
+  { field: "factor_potencial", label: "Factor Potencial" },
+  { field: "peso_racimo", label: "Peso Racimo" },
+  { field: "desperdicio_monte", label: "Desperdicio del Monte" },
+  { field: "desperdicio_general", label: "Desperdicio General" },
 ];
+
+const formularioVacio = () =>
+  CAMPOS.reduce((acc, { field }) => ({ ...acc, [field]: "" }), {});
 
 export default function ProduccionHome() {
   const queryClient = useQueryClient();
-  const { data: registros = [], isLoading } = useQuery({
-    queryKey: ["produccion-registros"],
+  const [guardando, setGuardando] = useState(false);
+
+  // Fecha que controla esta tabla. Cambiarla muestra el registro guardado
+  // de ese día (si existe) o la tabla vacía y rellenable (si no existe).
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(
+    () => new Date().toISOString().slice(0, 10)
+  );
+
+  const { data: filasFecha = [], isLoading } = useQuery({
+    queryKey: ["produccion-resumen", fechaSeleccionada],
     queryFn: async () => {
-      const { data, error } = await produccion.list("-fecha");
+      const { data, error } = await produccionResumen.filter({ fecha: fechaSeleccionada });
       if (error) throw error;
       return data ?? [];
     },
   });
 
-  const ultimo = registros[0];
-  const calculado = ultimo ? calcularDatosProceso(ultimo) : null;
+  // Historial completo, solo para el botón "Exportar a Excel".
+  const { data: historial = [] } = useQuery({
+    queryKey: ["produccion-resumen-historial"],
+    queryFn: async () => {
+      const { data, error } = await produccionResumen.list("-fecha");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
-  // Valores locales de los campos manuales, para poder editarlos sin
-  // disparar un guardado en cada tecla (se guarda al salir del campo).
-  const [valores, setValores] = useState({});
+  const filaActual = filasFecha[0] ?? null;
+
+  // Valores locales del formulario. Se llenan con la fila guardada de la
+  // fecha elegida, o quedan vacíos si esa fecha todavía no tiene datos.
+  const [valores, setValores] = useState(formularioVacio());
 
   useEffect(() => {
-    if (ultimo) {
+    if (filaActual) {
       const inicial = {};
-      CAMPOS_REGISTRO.forEach(({ field }) => {
-        inicial[field] = ultimo[field] ?? "";
+      CAMPOS.forEach(({ field }) => {
+        inicial[field] = filaActual[field] ?? "";
       });
       setValores(inicial);
+    } else {
+      setValores(formularioVacio());
     }
-  }, [ultimo?.id]);
+  }, [filaActual?.id, fechaSeleccionada]);
 
   const handleChange = (field, value) => {
     setValores((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleBlur = async (field) => {
-    if (!ultimo) return;
-    const raw = valores[field];
-    const nuevoValor = raw === "" ? null : parseFloat(raw);
-    const valorActual = ultimo[field] ?? null;
-    if (nuevoValor === valorActual) return; // sin cambios, no llamamos a Supabase
+  // Guardado explícito (botón), no automático al salir del campo: el
+  // cliente pidió un botón de Guardar que funcione para esta tabla.
+  const handleGuardar = async () => {
+    setGuardando(true);
+    const payload = { fecha: fechaSeleccionada };
+    CAMPOS.forEach(({ field }) => {
+      const raw = valores[field];
+      payload[field] = raw === "" || raw === null || raw === undefined ? null : parseFloat(raw);
+    });
 
-    const { error } = await produccion.update(ultimo.id, { [field]: nuevoValor });
+    const { error } = filaActual
+      ? await produccionResumen.update(filaActual.id, payload)
+      : await produccionResumen.create(payload);
+
+    setGuardando(false);
     if (error) {
       toast.error("No se pudo guardar: " + error.message);
       return;
     }
-    queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
+    toast.success("Datos guardados");
+    queryClient.invalidateQueries({ queryKey: ["produccion-resumen", fechaSeleccionada] });
+    queryClient.invalidateQueries({ queryKey: ["produccion-resumen-historial"] });
   };
 
-  // Celda de solo lectura para valores calculados (Racimos Procesados y,
-  // ahora, Factor 1ra/General/Potencial, Peso Racimo y Desperdicios).
-  const CeldaFija = ({ valor, formato }) => {
-    let texto = "—";
-    if (valor !== null && valor !== undefined && !Number.isNaN(valor)) {
-      texto = formato === "porcentaje"
-        ? `${(valor * 100).toFixed(2)}%`
-        : (Math.round(valor * 100) / 100).toString();
+  const handleExportar = () => {
+    if (historial.length === 0) {
+      toast.error("No hay datos guardados para exportar");
+      return;
     }
-    return <td className="py-2 px-3 text-center whitespace-nowrap">{texto}</td>;
+    const headers = ["Fecha", ...CAMPOS.map((c) => c.label)];
+    const rows = historial.map((fila) => [
+      fila.fecha,
+      ...CAMPOS.map((c) => fila[c.field] ?? ""),
+    ]);
+    exportStyledExcel({
+      title: "Producción — Resumen por Día",
+      headers,
+      rows,
+      sheetName: "Produccion",
+      fileName: `produccion_resumen_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    });
   };
-
-  // Celda editable e independiente: se guarda al salir del campo, igual
-  // que Factor 1ra/General/etc.
-  const CeldaEditable = ({ field }) => (
-    <td className="py-1 px-2">
-      <input
-        type="number"
-        step="0.01"
-        className="w-24 text-center rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-        value={valores[field] ?? ""}
-        onChange={(e) => handleChange(field, e.target.value)}
-        onBlur={() => handleBlur(field)}
-        placeholder="—"
-      />
-    </td>
-  );
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-8">
+      <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center"
           style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}>
           <Factory className="w-6 h-6 text-white" />
         </div>
         <div>
           <h1 className="text-2xl font-heading font-bold text-foreground">Producción</h1>
-          <p className="text-muted-foreground text-sm">Resumen del último día registrado</p>
+          <p className="text-muted-foreground text-sm">Tabla de resumen por día</p>
         </div>
       </div>
 
-      {isLoading ? (
-        <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
-      ) : !ultimo ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground text-sm">
-              Aún no hay registros de producción. Empieza en <strong>Ingresar Datos</strong>.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <p className="text-sm text-muted-foreground mb-4">
-            Día: <span className="font-semibold text-foreground">{ultimo.fecha}</span>
+      <Card className="mb-6">
+        <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <Label htmlFor="fecha-produccion" className="text-sm font-medium whitespace-nowrap">
+            Fecha
+          </Label>
+          <Input
+            id="fecha-produccion"
+            type="date"
+            className="sm:w-48"
+            value={fechaSeleccionada}
+            onChange={(e) => setFechaSeleccionada(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Cambia la fecha para ver el resumen guardado de ese día. Si no tiene datos
+            guardados, la tabla aparece vacía y lista para llenar.
           </p>
-          <Card>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-center text-muted-foreground border-b bg-muted/30">
-                      <th className="py-2 px-3 whitespace-nowrap">Racimos Cosechados</th>
-                      <th className="py-2 px-3 whitespace-nowrap">Racimos Rechazados</th>
-                      <th className="py-2 px-3 whitespace-nowrap">Racimos Procesados</th>
-                      <th className="py-2 px-3 whitespace-nowrap">Cajas 1ra</th>
-                      <th className="py-2 px-3 whitespace-nowrap">Cajas 2da</th>
-                      <th className="py-2 px-3 whitespace-nowrap">Cajas 3ra</th>
-                      <th className="py-2 px-3 whitespace-nowrap">Quintales Rechazo</th>
-                      {CAMPOS_CALCULADOS.map(({ field, label }) => (
-                        <th key={field} className="py-2 px-3 whitespace-nowrap">{label}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <CeldaEditable field="racimos_cosechados" />
-                      <CeldaEditable field="racimos_rechazados" />
-                      <CeldaFija valor={calculado?.racimosProcesados} />
-                      <CeldaEditable field="cajas_primera" />
-                      <CeldaEditable field="cajas_segunda" />
-                      <CeldaEditable field="cajas_tercera" />
-                      <CeldaEditable field="quintales_rechazo" />
-                      {CAMPOS_CALCULADOS.map(({ field, formato }) => (
-                        <CeldaFija key={field} valor={calculado?.[field]} formato={formato} />
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-          <p className="text-xs text-muted-foreground mt-3">
-            Racimos Cosechados/Rechazados, Cajas y Quintales Rechazo se escriben a mano y se
-            guardan automáticamente al salir del campo. El resto de columnas se calcula
-            automáticamente a partir de esos valores.
-          </p>
-        </>
-      )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-center text-muted-foreground border-b bg-muted/30">
+                  {CAMPOS.map(({ field, label }) => (
+                    <th key={field} className="py-2 px-3 whitespace-nowrap">{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  {CAMPOS.map(({ field }) => (
+                    <td key={field} className="py-1 px-2">
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-24 text-center rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        value={valores[field] ?? ""}
+                        onChange={(e) => handleChange(field, e.target.value)}
+                        placeholder="—"
+                        disabled={isLoading}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-wrap gap-3 mt-4">
+        <Button onClick={handleGuardar} disabled={guardando}>
+          <Save className="w-4 h-4" />
+          {guardando ? "Guardando..." : "Guardar"}
+        </Button>
+        <Button variant="outline" onClick={handleExportar}>
+          <Download className="w-4 h-4" />
+          Exportar a Excel
+        </Button>
+      </div>
     </div>
   );
 }

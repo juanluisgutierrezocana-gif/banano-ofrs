@@ -1,17 +1,11 @@
 import XLSXStyle from "xlsx-js-style";
 
 /**
- * Exporta datos a Excel con formato profesional usando xlsx-js-style:
- * - Título del reporte con fecha de generación
- * - Encabezados con fondo verde oscuro y texto blanco en negrita
- * - Filas alternadas en verde muy claro / blanco
- * - Fila de totales en verde claro con negrita
- * - Bordes en TODAS las celdas con datos
- * - Anchos de columna automáticos
+ * Construye UNA hoja con formato profesional (título, encabezados,
+ * filas alternadas, totales, bordes). Función interna reutilizada tanto
+ * por exportStyledExcel (1 hoja) como por exportStyledWorkbook (N hojas).
  */
-export function exportStyledExcel({ title, headers, rows, totalsRow, sheetName, fileName }) {
-  const wb = XLSXStyle.utils.book_new();
-
+function buildStyledSheet({ title, headers, rows, totalsRow, sheetName }) {
   // ── Construir datos ──────────────────────────────────────────────
   const titleRow    = [title, ...Array(headers.length - 1).fill("")];
   const subtitleRow = [`Generado: ${new Date().toLocaleString("es-GT")}`, ...Array(headers.length - 1).fill("")];
@@ -140,6 +134,33 @@ export function exportStyledExcel({ title, headers, rows, totalsRow, sheetName, 
     }
   };
 
-  XLSXStyle.utils.book_append_sheet(wb, ws, sheetName);
+  return ws;
+}
+
+/**
+ * Exporta un archivo Excel con UNA o VARIAS hojas, todas con el mismo
+ * formato profesional (título, encabezados, filas alternadas, totales,
+ * bordes). Usar cuando una página tiene varias tablas (ej. "Ingresar
+ * Datos": Datos de Proceso + Producción Semanal + Cajas/Palet).
+ *
+ * sheets: [{ title, headers, rows, totalsRow, sheetName }, ...]
+ */
+export function exportStyledWorkbook({ fileName, sheets }) {
+  const wb = XLSXStyle.utils.book_new();
+  sheets.forEach((sheet) => {
+    const ws = buildStyledSheet(sheet);
+    // Excel limita el nombre de hoja a 31 caracteres y prohíbe : \ / ? * [ ]
+    const nombreSeguro = sheet.sheetName.replace(/[:\\/?*[\]]/g, "").slice(0, 31);
+    XLSXStyle.utils.book_append_sheet(wb, ws, nombreSeguro);
+  });
   XLSXStyle.writeFile(wb, fileName);
+}
+
+/**
+ * Exporta datos a Excel con formato profesional usando xlsx-js-style
+ * (1 sola hoja). Mantiene la firma original para no romper los reportes
+ * que ya la usan; por debajo reutiliza exportStyledWorkbook.
+ */
+export function exportStyledExcel({ title, headers, rows, totalsRow, sheetName, fileName }) {
+  exportStyledWorkbook({ fileName, sheets: [{ title, headers, rows, totalsRow, sheetName }] });
 }

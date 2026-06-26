@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ClipboardList, Trash2, Plus, ListTree } from "lucide-react";
+import { ClipboardList, Trash2, Plus, ListTree, Download } from "lucide-react";
 import { toast } from "sonner";
 import { calcularDatosProceso } from "@/lib/produccionCalc";
+import { exportStyledWorkbook } from "@/utils/excelExport";
 
 // --- Tablas semanales (migradas desde la antigua página "Inventario
 // Semanal", ahora integradas aquí en "Ingresar Datos") ---
@@ -308,18 +309,138 @@ export default function ProduccionIngresar() {
     </tr>
   );
 
+  // Exporta todas las tablas visibles de esta página (Datos de Proceso,
+  // Producción Semanal, Cajas/Palet, Últimos Registros) a un solo Excel
+  // con varias hojas, todas con formato profesional.
+  const handleExportar = () => {
+    const sheets = [];
+
+    if (ultimo) {
+      sheets.push({
+        sheetName: "Datos de Proceso",
+        title: `Datos de Proceso — ${ultimo.fecha}`,
+        headers: ["Campo", "Valor"],
+        rows: [
+          ["Hora Inicio", ultimo.hora_inicio ?? ""],
+          ["Hora Salida", ultimo.hora_salida ?? ""],
+          ["Hrs. Trabajadas", redondear(calculado?.horasTrabajadas) ?? ""],
+          ["Cuadrilla", ultimo.cuadrilla ?? ""],
+          ["Empaque", ultimo.empaque ?? ""],
+          ["Cajas Hora", redondear(calculado?.cajasHora) ?? ""],
+          ["Cajas Persona", redondear(calculado?.cajasPersona) ?? ""],
+          ["Cajas Empaque", redondear(calculado?.cajasEmpaque) ?? ""],
+          ["Acres", ultimo.acres ?? ""],
+          ["Hectáreas", redondear(calculado?.hectareas) ?? ""],
+          ["Racimos Cosechados", ultimo.racimos_cosechados ?? ""],
+          ["Racimos Rechazados", ultimo.racimos_rechazados ?? ""],
+          ["Racimos Procesados", calculado?.racimosProcesados ?? ""],
+          ["Factor 1ra", redondear(calculado?.factorPrimera) ?? ""],
+          ["Factor General", redondear(calculado?.factorGeneral) ?? ""],
+          ["Factor Potencial", redondear(calculado?.factorPotencial) ?? ""],
+          ["Desperdicio del Monte", porcentaje(calculado?.desperdicioMonte) ?? ""],
+          ["Desperdicio Real", porcentaje(calculado?.desperdicioGeneral) ?? ""],
+          ["Peso Pinzote", ultimo.peso_pinzote ?? ""],
+          ["Peso Racimo", redondear(calculado?.pesoRacimo) ?? ""],
+          ["Número de Manos", ultimo.no_manos ?? ""],
+          ["Calibre", ultimo.calibre ?? ""],
+          ["Total Cajas", redondear(calculado?.cajasTotal) ?? ""],
+          ["Libras Procesadas", redondear(calculado?.librasProcesadas) ?? ""],
+          ["Quintales", ultimo.quintales_rechazo ?? ""],
+          ["Tiempo Perdido", ultimo.tiempo_perdido ?? ""],
+          ["Tercera", ultimo.cajas_tercera ?? ""],
+        ],
+      });
+    }
+
+    if (diaActual) {
+      sheets.push({
+        sheetName: "Produccion Semanal",
+        title: `Producción Semanal por Código — semana del ${semana}`,
+        headers: ["Código", diaActualLabel, "Total Semana", "Meta"],
+        rows: CODIGOS_SEMANA.map((codigo) => [
+          codigo,
+          valoresGrid[codigo]?.[diaActual] ?? "",
+          totalPorCodigo(codigo) || "",
+          valoresGrid[codigo]?.meta ?? "",
+        ]),
+        totalsRow: ["TOTAL", totalPorDia(diaActual) || "", granTotalSemana || "", totalMetas || ""],
+      });
+
+      sheets.push({
+        sheetName: "Cajas y Palet",
+        title: `Cajas / Palet — ${diaActualLabel}`,
+        headers: ["Día", "Cajas", "Palet"],
+        rows: [[
+          diaActualLabel,
+          valoresCajasPalet[diaActual]?.cajas ?? "",
+          valoresCajasPalet[diaActual]?.palet ?? "",
+        ]],
+      });
+    }
+
+    if (registros.length > 0) {
+      sheets.push({
+        sheetName: "Ultimos Registros",
+        title: "Últimos Registros",
+        headers: ["Fecha", "Cuadrilla", "Racimos Cosech.", "Racimos Rechaz.", "Cajas 1ra", "Cajas 2da"],
+        rows: registros.map((r) => [
+          r.fecha,
+          r.cuadrilla ?? "",
+          r.racimos_cosechados ?? "",
+          r.racimos_rechazados ?? "",
+          r.cajas_primera ?? "",
+          r.cajas_segunda ?? "",
+        ]),
+      });
+    }
+
+    if (sheets.length === 0) {
+      toast.error("No hay datos para exportar");
+      return;
+    }
+
+    exportStyledWorkbook({
+      fileName: `ingresar_datos_${fechaSeleccionada}.xlsx`,
+      sheets,
+    });
+  };
+
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}>
-          <ClipboardList className="w-6 h-6 text-white" />
+      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+            style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}>
+            <ClipboardList className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-heading font-bold text-foreground">Ingresar Datos</h1>
+            <p className="text-muted-foreground text-sm">Datos básicos diarios de proceso</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-heading font-bold text-foreground">Ingresar Datos</h1>
-          <p className="text-muted-foreground text-sm">Datos básicos diarios de proceso</p>
-        </div>
+        <Button variant="outline" onClick={handleExportar}>
+          <Download className="w-4 h-4" />
+          Exportar a Excel
+        </Button>
       </div>
+
+      <Card className="mb-6">
+        <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <Label htmlFor="fecha" className="text-sm font-medium whitespace-nowrap">
+            Fecha de trabajo
+          </Label>
+          <Input
+            id="fecha"
+            type="date"
+            className="sm:w-48"
+            value={fechaSeleccionada}
+            onChange={(e) => setFechaSeleccionada(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Esta fecha controla todas las tablas de esta página.
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 items-start">
       <div className="space-y-6">
@@ -329,18 +450,6 @@ export default function ProduccionIngresar() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="fecha" className="text-xs">Fecha</Label>
-              <Input
-                id="fecha"
-                type="date"
-                value={fechaSeleccionada}
-                onChange={(e) => setFechaSeleccionada(e.target.value)}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Controla todas las tablas de esta página.
-              </p>
-            </div>
             <div className="space-y-1.5">
               <Label htmlFor="hora_inicio" className="text-xs">Hora Inicio</Label>
               <Input id="hora_inicio" name="hora_inicio" type="number" min="0" max="23" placeholder="Ej: 7"

@@ -115,6 +115,10 @@ export const losses = createEntity('perdidas');
 /** RegistroProduccion (datos diarios de proceso de banano) → registros_produccion */
 export const produccion = createEntity('registros_produccion');
 
+/** Tabla independiente de "Producción" (resumen rellenable a mano, sin
+ *  fórmulas ni enlace a registros_produccion) → produccion_resumen */
+export const produccionResumen = createEntity('produccion_resumen');
+
 /** ProduccionSemanal (grid semanal por código de producto, días lunes-sábado) → produccion_semanal */
 export const produccionSemanal = createEntity('produccion_semanal');
 

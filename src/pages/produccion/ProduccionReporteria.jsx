@@ -1,8 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { produccion } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { BarChart3, Download } from "lucide-react";
+import { toast } from "sonner";
 import { calcularDatosProceso } from "@/lib/produccionCalc";
+import { exportStyledExcel } from "@/utils/excelExport";
 
 // Reportería v1: tabla diaria con todos los campos verificados. Los 3
 // reportes del boceto (general por día/semana/mes/año, producción por
@@ -18,17 +21,57 @@ export default function ProduccionReporteria() {
     },
   });
 
+  const handleExportar = () => {
+    if (registros.length === 0) {
+      toast.error("No hay datos para exportar");
+      return;
+    }
+    const headers = [
+      "Fecha", "Rac. Cosech.", "Rac. Rechaz.", "Rac. Procesados",
+      "Cajas 1ra", "Cajas 2da", "Cajas Tercera",
+      "Hrs. Trabajadas", "Cajas/Hora", "Cajas/Persona",
+    ];
+    const rows = registros.map((r) => {
+      const c = calcularDatosProceso(r);
+      return [
+        r.fecha,
+        r.racimos_cosechados ?? "",
+        r.racimos_rechazados ?? "",
+        c.racimosProcesados,
+        r.cajas_primera ?? "",
+        r.cajas_segunda ?? "",
+        r.cajas_tercera ?? "",
+        c.horasTrabajadas.toFixed(1),
+        c.cajasHora.toFixed(1),
+        c.cajasPersona.toFixed(2),
+      ];
+    });
+    exportStyledExcel({
+      title: "Reportería de Producción — Histórico Diario",
+      headers,
+      rows,
+      sheetName: "Reporteria",
+      fileName: `reporteria_produccion_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    });
+  };
+
   return (
     <div>
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}>
-          <BarChart3 className="w-6 h-6 text-white" />
+      <div className="flex items-center justify-between gap-3 mb-8 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+            style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}>
+            <BarChart3 className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-heading font-bold text-foreground">Reportería de Producción</h1>
+            <p className="text-muted-foreground text-sm">Histórico diario</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-heading font-bold text-foreground">Reportería de Producción</h1>
-          <p className="text-muted-foreground text-sm">Histórico diario</p>
-        </div>
+        <Button variant="outline" onClick={handleExportar}>
+          <Download className="w-4 h-4" />
+          Exportar a Excel
+        </Button>
       </div>
 
       <Card>
