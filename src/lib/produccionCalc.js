@@ -108,3 +108,59 @@ export function calcularDatosProceso(registro) {
     desperdicioGeneral,
   };
 }
+
+// Suma los campos crudos de un grupo de registros diarios (de una semana o
+// un mes) y vuelve a calcular factores/desperdicio/peso racimo sobre esas
+// SUMAS — no promedia los valores ya calculados día por día. Así es como
+// el Excel real del cliente obtiene sus resúmenes semanal y mensual.
+// Usado por la Reportería (Resumen Semanal / Resumen Mensual).
+export function calcularDatosProcesoAgregado(registros) {
+  const sum = (campo) =>
+    registros.reduce((acc, r) => acc + (Number(r[campo]) || 0), 0);
+
+  const racimosCosechados = sum("racimos_cosechados");
+  const racimosRechazados = sum("racimos_rechazados");
+  const racimosProcesados = racimosCosechados - racimosRechazados;
+  const cajasPrimera = sum("cajas_primera");
+  const cajasSegunda = sum("cajas_segunda");
+  const cajasTercera = sum("cajas_tercera");
+  const quintalesRechazo = sum("quintales_rechazo");
+  const cajasTotal = cajasPrimera + cajasSegunda;
+
+  // Horas Planta = suma de las horas trabajadas de cada día del grupo.
+  const horasTrabajadas = registros.reduce(
+    (acc, r) => acc + calcularDatosProceso(r).horasTrabajadas,
+    0
+  );
+
+  // Mismas fórmulas de PESO RACIMO / FACTOR GENERAL / FACTOR POTENCIAL /
+  // DESPERDICIO GENERAL que calcularDatosProceso(), pero con los totales
+  // del grupo en vez de los valores de un solo día.
+  const pesoTotalCajas =
+    (cajasSegunda + cajasPrimera) * 41.5 + cajasTercera * 42.5 + quintalesRechazo * 100;
+  const pesoRacimo = racimosCosechados > 0 ? pesoTotalCajas / racimosCosechados : 0;
+
+  const factorGeneral = racimosProcesados > 0 ? cajasTotal / racimosProcesados : 0;
+  // "Factor Aprovechamiento" del resumen = Factor 1ra (Cajas 1ra / Rac. Procesados).
+  const factorAprovechamiento = racimosProcesados > 0 ? cajasPrimera / racimosProcesados : 0;
+  const factorPotencial = pesoRacimo / 41.5;
+
+  const pesoRechazo = cajasTercera * 42.5 + quintalesRechazo * 100;
+  const desperdicioGeneral = pesoTotalCajas > 0 ? pesoRechazo / pesoTotalCajas : 0;
+
+  return {
+    diasPlanta: registros.length,
+    racimosCosechados,
+    racimosRechazados,
+    racimosProcesados,
+    cajasTotal,
+    cajasPrimera,
+    cajasTercera,
+    horasTrabajadas,
+    pesoRacimo,
+    factorGeneral,
+    factorAprovechamiento,
+    factorPotencial,
+    desperdicioGeneral,
+  };
+}
