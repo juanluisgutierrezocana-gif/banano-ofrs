@@ -14,15 +14,24 @@ import { useAuth } from "@/lib/AuthContext";
 // --- Tablas semanales (migradas desde la antigua página "Inventario
 // Semanal", ahora integradas aquí en "Ingresar Datos") ---
 const CODIGOS_SEMANA = [
-  "DMD", "DM9", "PRIM", "PREM", "3LB", "IP", "24COUNT",
+  "DMD", "DM9", "PRIM", "PREM", "3LB", "IP", "24COUNT", "24COUNT_G39",
   "ROSY NORMAL", "ROSY CONSUMER", "DM BANABAC", "DM BANABAC MINI", "3LBS",
 ];
 
+// Texto de "Calidad" a mostrar en pantalla para cada código interno de
+// CODIGOS_SEMANA. Por defecto es igual a la clave; solo hace falta una
+// entrada aquí cuando el código interno no coincide con el texto visible.
+// Caso "24COUNT_G39": el Excel real tiene 2 códigos para la misma calidad
+// "24 COUNT" (C39 y G39). Antes se omitía G39 por decisión del cliente;
+// ahora se agrega con una clave interna propia (para no chocar con la fila
+// de C39 en valoresGrid/Supabase) pero mostrando el mismo texto "24COUNT".
+const CALIDAD_LABEL = {
+  "24COUNT_G39": "24COUNT",
+};
+
 // Código corto (columna "CODIGO" de la hoja real) que corresponde a cada
 // calidad de CODIGOS_SEMANA (columna "CALIDAD"). Tomado tal cual del Excel
-// del cliente (INF. PROCESO E INVENTARIOS, hoja LA GRACIA12). "24COUNT"
-// tenía 2 códigos en el Excel (C39 y G39); se deja un único código porque
-// la app maneja 12 calidades, no 13 (decisión confirmada con el cliente).
+// del cliente (INF. PROCESO E INVENTARIOS, hoja LA GRACIA12).
 const CODIGO_CORTO = {
   DMD: "C68",
   DM9: "C23",
@@ -31,6 +40,7 @@ const CODIGO_CORTO = {
   "3LB": "CQ2",
   IP: "CH7",
   "24COUNT": "C39",
+  "24COUNT_G39": "G39",
   "ROSY NORMAL": "G05",
   "ROSY CONSUMER": "GQ5",
   "DM BANABAC": "GP7",
@@ -49,6 +59,7 @@ const CAJ_DEFAULT = {
   "3LB": 45,
   IP: 48,
   "24COUNT": 45,
+  "24COUNT_G39": 45,
   "ROSY NORMAL": 48,
   "ROSY CONSUMER": 48,
   "DM BANABAC": 54,
@@ -622,7 +633,7 @@ export default function ProduccionIngresar() {
               <table className="text-sm border-collapse">
                 <thead>
                   <tr className="text-center text-muted-foreground border-b bg-muted/30">
-                    <th className="py-2 px-3 text-left whitespace-nowrap">Código</th>
+                    <th className="py-2 px-3 text-left whitespace-nowrap">Calidad</th>
                     <th className="py-2 px-2 whitespace-nowrap">Caj.</th>
                     <th className="py-2 px-2 whitespace-nowrap">Cod</th>
                     <th className="py-2 px-2 whitespace-nowrap">{diaActualLabel}</th>
@@ -632,7 +643,7 @@ export default function ProduccionIngresar() {
                 <tbody>
                   {CODIGOS_SEMANA.map((codigo) => (
                     <tr key={codigo} className="border-b last:border-0">
-                      <td className="py-1.5 px-3 font-medium whitespace-nowrap">{codigo}</td>
+                      <td className="py-1.5 px-3 font-medium whitespace-nowrap">{CALIDAD_LABEL[codigo] ?? codigo}</td>
                       <td className="py-1.5 px-2 text-center text-muted-foreground">
                         {CAJ_DEFAULT[codigo] ?? "—"}
                       </td>
@@ -858,7 +869,7 @@ export default function ProduccionIngresar() {
                           <td className="py-1.5 px-3 font-medium whitespace-nowrap">
                             {CODIGO_CORTO[calidad] ?? "—"}
                           </td>
-                          <td className="py-1.5 px-3 whitespace-nowrap">{calidad}</td>
+                          <td className="py-1.5 px-3 whitespace-nowrap">{CALIDAD_LABEL[calidad] ?? calidad}</td>
                           <td className="py-1.5 px-2 text-center font-semibold">{total || "—"}</td>
                           <td className="py-1.5 px-2 text-center">{dif || "—"}</td>
                         </tr>
