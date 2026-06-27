@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ClipboardList, Trash2, Plus, ListTree, Download } from "lucide-react";
+import { ClipboardList, Trash2, Plus, ListTree, Download, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import { calcularDatosProceso } from "@/lib/produccionCalc";
 import { exportStyledWorkbook } from "@/utils/excelExport";
+import { useAuth } from "@/lib/AuthContext";
 
 // --- Tablas semanales (migradas desde la antigua página "Inventario
 // Semanal", ahora integradas aquí en "Ingresar Datos") ---
@@ -16,6 +17,31 @@ const CODIGOS_SEMANA = [
   "DMD", "DM9", "PRIM", "PREM", "3LB", "IP", "24COUNT",
   "ROSY NORMAL", "ROSY CONSUMER", "DM BANABAC", "DM BANABAC MINI", "3LBS",
 ];
+
+// Código corto (columna "CODIGO" de la hoja real) que corresponde a cada
+// calidad de CODIGOS_SEMANA (columna "CALIDAD"). Tomado tal cual del Excel
+// del cliente (INF. PROCESO E INVENTARIOS, hoja LA GRACIA12). "24COUNT"
+// tenía 2 códigos en el Excel (C39 y G39); se deja un único código porque
+// la app maneja 12 calidades, no 13 (decisión confirmada con el cliente).
+const CODIGO_CORTO = {
+  DMD: "C68",
+  DM9: "C23",
+  PRIM: "CH1",
+  PREM: "G01",
+  "3LB": "CQ2",
+  IP: "CH7",
+  "24COUNT": "C39",
+  "ROSY NORMAL": "G05",
+  "ROSY CONSUMER": "GQ5",
+  "DM BANABAC": "GP7",
+  "DM BANABAC MINI": "GP7",
+  "3LBS": "CP9",
+};
+
+// Área total de la finca (en acres), usada como denominador de
+// "% Área Cosecha Día" = Área Cosecha Día / ÁREA_TOTAL_FINCA_ACRES.
+// Valor confirmado por el cliente (Excel: +"AREA COSECHA DIA ACRES"/260.6).
+const AREA_TOTAL_FINCA_ACRES = 260.6;
 
 const DIAS_SEMANA = [
   { key: "lunes", label: "Lunes" },
@@ -81,6 +107,7 @@ const NUMERIC_FIELDS = [
 
 export default function ProduccionIngresar() {
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -105,6 +132,13 @@ export default function ProduccionIngresar() {
   // reciente): así "Datos de Proceso" cambia junto con la fecha de arriba.
   const ultimo = registros.find((r) => r.fecha === fechaSeleccionada) ?? null;
   const calculado = ultimo ? calcularDatosProceso(ultimo) : null;
+
+  // % Área Cosecha Día = Área Cosecha Día (acres) / área total de la finca.
+  // Fórmula confirmada por el cliente sobre el Excel real.
+  const areaCosechaPct =
+    ultimo?.acres != null && ultimo.acres !== ""
+      ? Number(ultimo.acres) / AREA_TOTAL_FINCA_ACRES
+      : null;
 
   // --- Tablas semanales (migradas desde "Inventario Semanal") ---
   // La semana y el día visible se derivan de fechaSeleccionada; ya no son
@@ -657,6 +691,7 @@ export default function ProduccionIngresar() {
       </Card>
       </div>
 
+      <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -710,6 +745,108 @@ export default function ProduccionIngresar() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Tabla "FINCA / SEMANA" estilo reporte (boceto Excel, hoja LA
+          GRACIA12). CAJ.PROG y DIF quedan pendientes a propósito: el Excel
+          no tiene fórmula para CAJ.PROG (se escribe a mano) y la app
+          todavía no tiene dónde guardarlo — decisión confirmada con el
+          cliente. El resto de los campos sigue las fórmulas reales del
+          Excel, relacionadas con datos que la app ya carga arriba. */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileSpreadsheet className="w-4 h-4" />
+            Resumen de Producción
+          </CardTitle>
+          <p className="text-xs text-muted-foreground pt-1">
+            {diaActualLabel
+              ? `Mostrando: ${diaActualLabel} (semana del ${semana}) — según la fecha de arriba.`
+              : "La fecha seleccionada cae en domingo, día sin datos en este resumen."}
+          </p>
+        </CardHeader>
+        <CardContent>
+          <table className="w-full text-sm mb-4 border rounded-md overflow-hidden">
+            <tbody>
+              <tr className="border-b bg-muted/30">
+                <td className="py-1.5 px-3 font-semibold w-28">Finca</td>
+                <td className="py-1.5 px-3">{currentUser?.finca?.nombre || "—"}</td>
+              </tr>
+              <tr>
+                <td className="py-1.5 px-3 font-semibold w-28">Semana</td>
+                <td className="py-1.5 px-3">Semana del {semana}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {!diaActual ? (
+            <p className="text-muted-foreground text-sm text-center py-8">
+              Elige una fecha de lunes a sábado para ver este resumen.
+            </p>
+          ) : (
+            <>
+              <div className="overflow-x-auto mb-4">
+                <table className="text-sm border-collapse w-full">
+                  <thead>
+                    <tr className="text-center text-muted-foreground border-b bg-muted/30">
+                      <th className="py-2 px-2 whitespace-nowrap">Caj.Prog</th>
+                      <th className="py-2 px-3 text-left whitespace-nowrap">Código</th>
+                      <th className="py-2 px-3 text-left whitespace-nowrap">Calidad</th>
+                      <th className="py-2 px-2 whitespace-nowrap">Total</th>
+                      <th className="py-2 px-2 whitespace-nowrap">Dif</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CODIGOS_SEMANA.map((calidad) => (
+                      <tr key={calidad} className="border-b last:border-0">
+                        <td className="py-1.5 px-2 text-center text-muted-foreground">—</td>
+                        <td className="py-1.5 px-3 font-medium whitespace-nowrap">
+                          {CODIGO_CORTO[calidad] ?? "—"}
+                        </td>
+                        <td className="py-1.5 px-3 whitespace-nowrap">{calidad}</td>
+                        <td className="py-1.5 px-2 text-center font-semibold">
+                          {numeroSemana(valoresGrid[calidad]?.[diaActual]) || "—"}
+                        </td>
+                        <td className="py-1.5 px-2 text-center text-muted-foreground">—</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 font-semibold bg-muted/30">
+                      <td className="py-2 px-2"></td>
+                      <td className="py-2 px-3" colSpan={2}>TOTAL</td>
+                      <td className="py-2 px-2 text-center">{totalPorDia(diaActual) || "—"}</td>
+                      <td className="py-2 px-2"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <table className="w-full text-sm">
+                <tbody>
+                  <FilaProceso label="Total Cajas" valor={redondear(calculado?.cajasTotal)} />
+                  <FilaProceso label="Total Paletas" valor={valoresCajasPalet[diaActual]?.palet || "—"} />
+                  <FilaProceso label="Cajas Tercera" valor={ultimo?.cajas_tercera ?? "—"} />
+                  <FilaProceso label="Rac. Cosechados" valor={ultimo?.racimos_cosechados ?? "—"} />
+                  <FilaProceso label="Racimos Rechazados" valor={ultimo?.racimos_rechazados ?? "—"} />
+                  <FilaProceso label="Racimos Procesados" valor={calculado?.racimosProcesados ?? "—"} />
+                  <FilaProceso label="Área Cosecha Día" valor={ultimo?.acres ?? "—"} />
+                  <FilaProceso label="% Área Cosecha Día" valor={porcentaje(areaCosechaPct) ?? "—"} />
+                  <FilaProceso label="Factor Primera" valor={redondear(calculado?.factorPrimera)} />
+                  <FilaProceso label="Factor General" valor={redondear(calculado?.factorGeneral)} />
+                  <FilaProceso label="Desperdicio DM" valor={porcentaje(calculado?.desperdicioMonte)} />
+                  <FilaProceso label="Desperdicio Real" valor={porcentaje(calculado?.desperdicioGeneral)} />
+                  <FilaProceso label="Rechazo en Camión (Quintal)" valor={ultimo?.quintales_rechazo ?? "—"} />
+                </tbody>
+              </table>
+            </>
+          )}
+
+          <p className="text-xs text-muted-foreground mt-3">
+            Caj.Prog y Dif quedan pendientes (sin campo de captura todavía). El resto sigue las
+            fórmulas reales de "INF. PROCESO E INVENTARIOS" y se calcula con los datos que ya
+            cargas arriba.
+          </p>
+        </CardContent>
+      </Card>
+      </div>
       </div>
 
       <Card>
