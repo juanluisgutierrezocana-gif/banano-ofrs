@@ -8,7 +8,6 @@
 export function calcularDatosProceso(registro) {
   const horaInicio = Number(registro.hora_inicio) || 0;
   const horaSalida = Number(registro.hora_salida) || 0;
-  const tiempoPerdido = Number(registro.tiempo_perdido) || 0;
   const cuadrilla = Number(registro.cuadrilla) || 0;
   const empaque = Number(registro.empaque) || 0;
   const cajasPrimera = Number(registro.cajas_primera) || 0;
@@ -19,8 +18,10 @@ export function calcularDatosProceso(registro) {
   const racimosRechazados = Number(registro.racimos_rechazados) || 0;
   const acres = Number(registro.acres) || 0;
 
-  // HRAS. TRABAJADAS = HORA SALIDA - HORA INICIO - TIEMPO PERDIDO
-  const horasTrabajadas = horaSalida - horaInicio - tiempoPerdido;
+  // HRAS. TRABAJADAS = HORA SALIDA - HORA INICIO - 1 (hora fija de almuerzo,
+  // NO el campo "Tiempo Perdido" — confirmado por el cliente: la fórmula real
+  // del Excel resta 1 constante, no el tiempo perdido ingresado).
+  const horasTrabajadas = horaSalida - horaInicio - 1;
 
   // CAJAS HORA = (CAJAS 1RA + CAJAS 2DA) / HRAS. TRABAJADAS  (celda I10)
   const cajasHora = horasTrabajadas > 0 ? (cajasPrimera + cajasSegunda) / horasTrabajadas : 0;

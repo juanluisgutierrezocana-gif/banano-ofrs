@@ -38,6 +38,24 @@ const CODIGO_CORTO = {
   "3LBS": "CP9",
 };
 
+// Valor "CAJ." por default de cada calidad (columna fija de la hoja real,
+// junto a "CODIGO"). Confirmado por el cliente sobre la imagen del Excel
+// (INF. PROCESO E INVENTARIOS, hoja LA GRACIA12).
+const CAJ_DEFAULT = {
+  DMD: 48,
+  DM9: 48,
+  PRIM: 48,
+  PREM: 48,
+  "3LB": 45,
+  IP: 48,
+  "24COUNT": 45,
+  "ROSY NORMAL": 48,
+  "ROSY CONSUMER": 48,
+  "DM BANABAC": 54,
+  "DM BANABAC MINI": 32,
+  "3LBS": 48,
+};
+
 // Área total de la finca (en acres), usada como denominador de
 // "% Área Cosecha Día" = Área Cosecha Día / ÁREA_TOTAL_FINCA_ACRES.
 // Valor confirmado por el cliente (Excel: +"AREA COSECHA DIA ACRES"/260.6).
@@ -588,6 +606,8 @@ export default function ProduccionIngresar() {
                 <thead>
                   <tr className="text-center text-muted-foreground border-b bg-muted/30">
                     <th className="py-2 px-3 text-left whitespace-nowrap">Código</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Caj.</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Cod</th>
                     <th className="py-2 px-2 whitespace-nowrap">{diaActualLabel}</th>
                     <th className="py-2 px-3 whitespace-nowrap">Total Semana</th>
                   </tr>
@@ -596,6 +616,12 @@ export default function ProduccionIngresar() {
                   {CODIGOS_SEMANA.map((codigo) => (
                     <tr key={codigo} className="border-b last:border-0">
                       <td className="py-1.5 px-3 font-medium whitespace-nowrap">{codigo}</td>
+                      <td className="py-1.5 px-2 text-center text-muted-foreground">
+                        {CAJ_DEFAULT[codigo] ?? "—"}
+                      </td>
+                      <td className="py-1.5 px-2 text-center text-muted-foreground">
+                        {CODIGO_CORTO[codigo] ?? "—"}
+                      </td>
                       <td className="py-1 px-1">
                         <input
                           type="number"
@@ -611,7 +637,7 @@ export default function ProduccionIngresar() {
                     </tr>
                   ))}
                   <tr className="border-t-2 font-semibold bg-muted/30">
-                    <td className="py-2 px-3 whitespace-nowrap">TOTAL</td>
+                    <td className="py-2 px-3 whitespace-nowrap" colSpan={3}>TOTAL</td>
                     <td className="py-2 px-2 text-center">{totalPorDia(diaActual) || "—"}</td>
                     <td className="py-2 px-3 text-center">{granTotalSemana || "—"}</td>
                   </tr>
