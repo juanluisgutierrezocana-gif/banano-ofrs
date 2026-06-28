@@ -68,6 +68,24 @@ export function calcularDatosProceso(registro) {
   // (celda I19: =SI.ERROR(((D18+D19)/(I15-I16));"0")). Verificado: 1566/1318 = 1.19
   const factorGeneral = racimosProcesados > 0 ? (cajasPrimera + cajasSegunda) / racimosProcesados : 0;
 
+  // FACTOR APROVECHAMIENTO = (CAJAS 1RA + CAJAS 2DA + CAJAS 3RA) / RAC. PROCESADOS
+  // Mide el aprovechamiento total del racimo procesado (incluye Tercera),
+  // a diferencia de Factor Primera (solo 1ra) y Factor General (1ra+2da).
+  // NOTA: columna nueva pedida por el cliente en Reportería; fórmula
+  // a confirmar contra el Excel real si difiere.
+  const factorAprovechamiento = racimosProcesados > 0
+    ? (cajasPrimera + cajasSegunda + cajasTercera) / racimosProcesados
+    : 0;
+
+  // % RECORRIDO = RAC. PROCESADOS / RAC. COSECHADOS
+  // Columna nueva pedida por el cliente en Reportería.
+  const pctRecorrido = racimosCosechados > 0 ? racimosProcesados / racimosCosechados : 0;
+
+  // HORAS PERDIDAS PLANTA = campo "Tiempo Perdido" ingresado en el registro
+  // (NO se usa para Horas Trabajadas — ver nota arriba — pero sí se reporta
+  // como columna propia en Reportería).
+  const horasPerdidas = Number(registro.tiempo_perdido) || 0;
+
   // FACTOR POTENCIAL = PESO RACIMO / 41,5
   // (celda I20: =SI.ERROR((I24/41,5);"0")). Verificado: 56.40/41.5 = 1.36
   const factorPotencial = pesoRacimo / 41.5;
@@ -99,11 +117,16 @@ export function calcularDatosProceso(registro) {
     cajasEmpaque,
     hectareas,
     cajasTotal,
+    cajasSegunda,
     librasProcesadas,
     pesoRacimo,
     factorPrimera,
     factorGeneral,
+    factorAprovechamiento,
     factorPotencial,
+    pctRecorrido,
+    quintalesRechazo,
+    horasPerdidas,
     desperdicioMonte,
     desperdicioGeneral,
   };
@@ -133,6 +156,9 @@ export function calcularDatosProcesoAgregado(registros) {
     0
   );
 
+  // Horas Perdidas Planta = suma del campo "Tiempo Perdido" de cada día.
+  const horasPerdidas = sum("tiempo_perdido");
+
   // Mismas fórmulas de PESO RACIMO / FACTOR GENERAL / FACTOR POTENCIAL /
   // DESPERDICIO GENERAL que calcularDatosProceso(), pero con los totales
   // del grupo en vez de los valores de un solo día.
@@ -140,10 +166,18 @@ export function calcularDatosProcesoAgregado(registros) {
     (cajasSegunda + cajasPrimera) * 41.5 + cajasTercera * 42.5 + quintalesRechazo * 100;
   const pesoRacimo = racimosCosechados > 0 ? pesoTotalCajas / racimosCosechados : 0;
 
+  // FACTOR PRIMERA = CAJAS 1RA / RAC. PROCESADOS (igual que calcularDatosProceso).
+  const factorPrimera = racimosProcesados > 0 ? cajasPrimera / racimosProcesados : 0;
   const factorGeneral = racimosProcesados > 0 ? cajasTotal / racimosProcesados : 0;
-  // "Factor Aprovechamiento" del resumen = Factor 1ra (Cajas 1ra / Rac. Procesados).
-  const factorAprovechamiento = racimosProcesados > 0 ? cajasPrimera / racimosProcesados : 0;
+  // FACTOR APROVECHAMIENTO = (1RA + 2DA + 3RA) / RAC. PROCESADOS — distinto
+  // de Factor Primera y Factor General (ver misma nota en calcularDatosProceso).
+  const factorAprovechamiento = racimosProcesados > 0
+    ? (cajasPrimera + cajasSegunda + cajasTercera) / racimosProcesados
+    : 0;
   const factorPotencial = pesoRacimo / 41.5;
+
+  // % RECORRIDO = RAC. PROCESADOS / RAC. COSECHADOS
+  const pctRecorrido = racimosCosechados > 0 ? racimosProcesados / racimosCosechados : 0;
 
   const pesoRechazo = cajasTercera * 42.5 + quintalesRechazo * 100;
   const desperdicioGeneral = pesoTotalCajas > 0 ? pesoRechazo / pesoTotalCajas : 0;
@@ -155,12 +189,17 @@ export function calcularDatosProcesoAgregado(registros) {
     racimosProcesados,
     cajasTotal,
     cajasPrimera,
+    cajasSegunda,
     cajasTercera,
+    quintalesRechazo,
     horasTrabajadas,
+    horasPerdidas,
     pesoRacimo,
+    factorPrimera,
     factorGeneral,
     factorAprovechamiento,
     factorPotencial,
+    pctRecorrido,
     desperdicioGeneral,
   };
 }

@@ -125,6 +125,23 @@ export const produccionSemanal = createEntity('produccion_semanal');
 /** ProduccionCajasPalet (cajas/palet por día de la semana) → produccion_cajas_palet */
 export const produccionCajasPalet = createEntity('produccion_cajas_palet');
 
+/** Costo Caja rellenable por período (diario/semanal/mensual) → produccion_costos
+ *  Una fila por (periodo_tipo, periodo_key); se guarda con upsert. */
+const produccionCostosBase = createEntity('produccion_costos');
+export const produccionCostos = {
+  ...produccionCostosBase,
+  async upsert(periodoTipo, periodoKey, costoCaja) {
+    return await supabase
+      .from('produccion_costos')
+      .upsert(
+        { periodo_tipo: periodoTipo, periodo_key: periodoKey, costo_caja: costoCaja },
+        { onConflict: 'periodo_tipo,periodo_key' }
+      )
+      .select()
+      .single();
+  },
+};
+
 // ============================================================
 // INVENTARIO / EMBOLSE
 // Con aliases para compatibilidad (createEmbolse, updateEmbolse, etc.)
