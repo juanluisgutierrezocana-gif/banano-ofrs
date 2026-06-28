@@ -60,6 +60,49 @@ function agruparPorSemana(registros, filasCajasPalet) {
     });
 }
 
+const MESES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+// Agrupa los registros diarios por mes calendario de `anio`. A diferencia
+// de agruparPorSemana, SIEMPRE devuelve los 12 meses (en cero si no hay
+// datos todavía), igual que el boceto "RESUMEN MENSUAL" del cliente, más
+// una fila TOTAL recalculada sobre el año completo (no es la suma de los
+// factores mensuales — mismo criterio que la fila TOTAL de la semanal).
+function agruparPorMes(registros, filasCajasPalet, anio) {
+  const anioStr = String(anio);
+  const registrosDelAno = registros.filter((r) => r.fecha?.slice(0, 4) === anioStr);
+
+  const filas = MESES.map((nombre, idx) => {
+    const mesStr = String(idx + 1).padStart(2, "0");
+    const registrosDelMes = registrosDelAno.filter((r) => r.fecha.slice(5, 7) === mesStr);
+    // Total Palet del mes: semanas cuyo lunes (fecha_semana) cae en este
+    // mes/año. Una semana que cruza fin de mes se atribuye completa al
+    // mes de su lunes (mismo criterio simplificado usado en Ingresar Datos).
+    const totalPalet = filasCajasPalet
+      .filter((cp) => cp.fecha_semana?.slice(0, 4) === anioStr && cp.fecha_semana?.slice(5, 7) === mesStr)
+      .reduce((acc, cp) => acc + (Number(cp.palet) || 0), 0);
+    return {
+      mes: nombre,
+      totalPalet,
+      ...calcularDatosProcesoAgregado(registrosDelMes),
+    };
+  });
+
+  const totalPaletAno = filasCajasPalet
+    .filter((cp) => cp.fecha_semana?.slice(0, 4) === anioStr)
+    .reduce((acc, cp) => acc + (Number(cp.palet) || 0), 0);
+
+  const totalAno = {
+    mes: "TOTAL",
+    totalPalet: totalPaletAno,
+    ...calcularDatosProcesoAgregado(registrosDelAno),
+  };
+
+  return { filas, totalAno };
+}
+
 export default function ProduccionReporteria() {
   const { data: registros = [], isLoading } = useQuery({
     queryKey: ["produccion-registros"],
@@ -79,11 +122,26 @@ export default function ProduccionReporteria() {
     },
   });
 
-  const [vista, setVista] = useState("diario"); // "diario" | "semanal"
+  const [vista, setVista] = useState("diario"); // "diario" | "semanal" | "mensual"
 
   const resumenSemanal = useMemo(
     () => agruparPorSemana(registros, filasCajasPalet),
     [registros, filasCajasPalet]
+  );
+
+  // Años con datos (más el año actual, para que siempre haya algo que
+  // elegir aunque todavía no se haya cargado producción).
+  const aniosDisponibles = useMemo(() => {
+    const anioActual = String(new Date().getFullYear());
+    const anios = new Set([anioActual, ...registros.filter((r) => r.fecha).map((r) => r.fecha.slice(0, 4))]);
+    return Array.from(anios).sort((a, b) => b.localeCompare(a));
+  }, [registros]);
+
+  const [anioSeleccionado, setAnioSeleccionado] = useState(() => String(new Date().getFullYear()));
+
+  const resumenMensual = useMemo(
+    () => agruparPorMes(registros, filasCajasPalet, anioSeleccionado),
+    [registros, filasCajasPalet, anioSeleccionado]
   );
 
   const handleExportar = () => {
@@ -131,7 +189,7 @@ export default function ProduccionReporteria() {
           <div>
             <h1 className="text-2xl font-heading font-bold text-foreground">Reportería de Producción</h1>
             <p className="text-muted-foreground text-sm">
-              {vista === "diario" ? "Histórico diario" : "Resumen semanal"}
+              {vista === "diario" ? "Histórico diario" : vista === "semanal" ? "Resumen semanal" : "Resumen mensual"}
             </p>
           </div>
         </div>
@@ -147,6 +205,9 @@ export default function ProduccionReporteria() {
         </Button>
         <Button size="sm" variant={vista === "semanal" ? "default" : "outline"} onClick={() => setVista("semanal")}>
           Resumen Semanal
+        </Button>
+        <Button size="sm" variant={vista === "mensual" ? "default" : "outline"} onClick={() => setVista("mensual")}>
+          Resumen Mensual
         </Button>
       </div>
 
@@ -227,7 +288,7 @@ export default function ProduccionReporteria() {
                     <th className="py-2 px-2 whitespace-nowrap">Rac. Rechaz.</th>
                     <th className="py-2 px-2 whitespace-nowrap">Rac. Procesados</th>
                     <th className="py-2 px-2 whitespace-nowrap">Total Cajas 1ra y 2da</th>
-                    <th className="py-2 px-2 whitespace-nowrap">Cajas 1ra</th>
+                    <th className="py-2 px-2 whitespace-nowrap">Total Cajas x Semana</th>
                     <th className="py-2 px-2 whitespace-nowrap">Cajas Tercera</th>
                     <th className="py-2 px-2 whitespace-nowrap">Total Palet</th>
                     <th className="py-2 px-2 whitespace-nowrap">F. General</th>
@@ -247,7 +308,7 @@ export default function ProduccionReporteria() {
                       <td className="py-2 px-2">{s.racimosRechazados}</td>
                       <td className="py-2 px-2">{s.racimosProcesados}</td>
                       <td className="py-2 px-2">{s.cajasTotal}</td>
-                      <td className="py-2 px-2">{s.cajasPrimera}</td>
+                      <td className="py-2 px-2">{s.cajasTotal + s.cajasTercera}</td>
                       <td className="py-2 px-2">{s.cajasTercera}</td>
                       <td className="py-2 px-2">{s.totalPalet || "—"}</td>
                       <td className="py-2 px-2">{s.factorGeneral.toFixed(2)}</td>
@@ -263,6 +324,92 @@ export default function ProduccionReporteria() {
               </table>
             </div>
           )}
+        </CardContent>
+      </Card>
+      )}
+
+      {vista === "mensual" && (
+      <Card>
+        <CardHeader className="pb-3 flex flex-row items-center justify-between flex-wrap gap-2">
+          <CardTitle className="text-base">Resumen Mensual</CardTitle>
+          <select
+            className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+            value={anioSeleccionado}
+            onChange={(e) => setAnioSeleccionado(e.target.value)}
+          >
+            {aniosDisponibles.map((anio) => (
+              <option key={anio} value={anio}>{anio}</option>
+            ))}
+          </select>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-center text-muted-foreground border-b bg-muted/30">
+                  <th className="py-2 px-2" rowSpan={2}>Mes</th>
+                  <th className="py-1 px-2 border-b" colSpan={7}>Racimos y Cajas</th>
+                  <th className="py-1 px-2 border-b" colSpan={3}>Factores</th>
+                  <th className="py-1 px-2 border-b" colSpan={2}>Desperdicio</th>
+                  <th className="py-1 px-2 border-b" colSpan={2}>Días y Hrs</th>
+                </tr>
+                <tr className="text-center text-muted-foreground border-b bg-muted/30 text-xs">
+                  <th className="py-2 px-2 whitespace-nowrap">Rac. Cosech.</th>
+                  <th className="py-2 px-2 whitespace-nowrap">Rac. Rechaz.</th>
+                  <th className="py-2 px-2 whitespace-nowrap">Rac. Procesados</th>
+                  <th className="py-2 px-2 whitespace-nowrap">Total Cajas 1ra y 2da</th>
+                  <th className="py-2 px-2 whitespace-nowrap">Total Cajas x Mes</th>
+                  <th className="py-2 px-2 whitespace-nowrap">Cajas Tercera</th>
+                  <th className="py-2 px-2 whitespace-nowrap">Total Palet</th>
+                  <th className="py-2 px-2 whitespace-nowrap">F. General</th>
+                  <th className="py-2 px-2 whitespace-nowrap">F. Aprovech.</th>
+                  <th className="py-2 px-2 whitespace-nowrap">F. Potencial</th>
+                  <th className="py-2 px-2 whitespace-nowrap">% Desperdicio</th>
+                  <th className="py-2 px-2 whitespace-nowrap">Peso Racimo</th>
+                  <th className="py-2 px-2 whitespace-nowrap">Horas Planta</th>
+                  <th className="py-2 px-2 whitespace-nowrap">Días Planta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumenMensual.filas.map((m) => (
+                  <tr key={m.mes} className="border-b last:border-0 hover:bg-muted/30 text-center">
+                    <td className="py-2 px-2 font-medium">{m.mes}</td>
+                    <td className="py-2 px-2">{m.racimosCosechados}</td>
+                    <td className="py-2 px-2">{m.racimosRechazados}</td>
+                    <td className="py-2 px-2">{m.racimosProcesados}</td>
+                    <td className="py-2 px-2">{m.cajasTotal}</td>
+                    <td className="py-2 px-2">{m.cajasTotal + m.cajasTercera}</td>
+                    <td className="py-2 px-2">{m.cajasTercera}</td>
+                    <td className="py-2 px-2">{m.totalPalet || "—"}</td>
+                    <td className="py-2 px-2">{m.factorGeneral.toFixed(2)}</td>
+                    <td className="py-2 px-2">{m.factorAprovechamiento.toFixed(2)}</td>
+                    <td className="py-2 px-2">{m.factorPotencial.toFixed(2)}</td>
+                    <td className="py-2 px-2">{(m.desperdicioGeneral * 100).toFixed(2)}%</td>
+                    <td className="py-2 px-2">{m.pesoRacimo.toFixed(2)}</td>
+                    <td className="py-2 px-2">{m.horasTrabajadas.toFixed(1)}</td>
+                    <td className="py-2 px-2">{m.diasPlanta}</td>
+                  </tr>
+                ))}
+                <tr className="text-center font-semibold bg-muted/40 border-t-2">
+                  <td className="py-2 px-2">{resumenMensual.totalAno.mes}</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.racimosCosechados}</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.racimosRechazados}</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.racimosProcesados}</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.cajasTotal}</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.cajasTotal + resumenMensual.totalAno.cajasTercera}</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.cajasTercera}</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.totalPalet || "—"}</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.factorGeneral.toFixed(2)}</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.factorAprovechamiento.toFixed(2)}</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.factorPotencial.toFixed(2)}</td>
+                  <td className="py-2 px-2">{(resumenMensual.totalAno.desperdicioGeneral * 100).toFixed(2)}%</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.pesoRacimo.toFixed(2)}</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.horasTrabajadas.toFixed(1)}</td>
+                  <td className="py-2 px-2">{resumenMensual.totalAno.diasPlanta}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
       )}
