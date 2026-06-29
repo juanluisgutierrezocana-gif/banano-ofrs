@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports, ordenAcres } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { Layers, Clock, Calendar, RefreshCw } from "lucide-react";
+import { Layers, Clock, Calendar, RefreshCw, LandPlot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import HourlyChart from "@/components/dashboard/HourlyChart";
 import CrewTable from "@/components/dashboard/CrewTable";
@@ -51,6 +51,26 @@ export default function PanelDiario() {
 
   // Garantizar que buttons es siempre un array
   const buttons = Array.isArray(buttonsResponse?.data) ? buttonsResponse.data : [];
+
+  // Total de Acres del día cargado en el panel (tabla orden_acres, igual
+  // fuente que usan "Acres" y "Reportería > Acres"). Solo se suman los
+  // registros del formato nuevo (columna "minifinca" poblada).
+  const { data: acresRegistros = [] } = useQuery({
+    queryKey: ["acres-totales", fecha],
+    queryFn: async () => {
+      const { data, error } = await ordenAcres.filter({ fecha });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const totalAcres = useMemo(
+    () =>
+      acresRegistros
+        .filter((r) => r.minifinca)
+        .reduce((sum, r) => sum + (parseFloat(r.acres) || 0), 0),
+    [acresRegistros]
+  );
 
   const totalRacimos = useMemo(() =>
     trenadaRecords.reduce((sum, t) => sum + (t.total_racimos || 0), 0),
@@ -148,6 +168,19 @@ export default function PanelDiario() {
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Trenadas del Día</p>
                 <p className="text-2xl font-bold">{trenadaRecords.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-secondary/20 flex items-center justify-center">
+                <LandPlot className="w-5 h-5 text-secondary" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Acres del Día</p>
+                <p className="text-2xl font-bold">{totalAcres.toFixed(2)}</p>
               </div>
             </div>
           </CardContent>

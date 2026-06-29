@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { format, subDays } from "date-fns";
-import * as XLSX from "xlsx";
+import { exportStyledExcel } from "@/utils/excelExport";
 
 // Rediseño: ya no son columnas fijas por semana (Sub-Basal/Apical). Ahora
 // las columnas son dinámicas por minifinca (Minifinca 1, Minifinca 2, ...),
@@ -48,20 +48,32 @@ export default function ReporteAcres() {
   const totalFecha = (fecha) =>
     minifincas.reduce((sum, mf) => sum + (parseFloat(grouped[fecha]?.[mf]) || 0), 0);
 
-  // Exportar Excel
+  // Autosuma por minifinca y gran total, sobre todas las fechas del rango
+  // elegido (no solo por fila) — se muestra en pantalla y en el Excel.
+  const totalPorMinifinca = (mf) =>
+    fechas.reduce((sum, fecha) => sum + (parseFloat(grouped[fecha]?.[mf]) || 0), 0);
+  const granTotal = fechas.reduce((sum, fecha) => sum + totalFecha(fecha), 0);
+
+  // Exportar Excel (mismo diseño que el resto de reportes: título, encabezados
+  // en verde, filas alternadas y fila de TOTAL resaltada).
   const exportExcel = () => {
     const headers = ["Fecha", ...minifincas, "Total"];
     const rows = fechas.map((fecha) => {
       const row = [fecha];
       minifincas.forEach((mf) => row.push(grouped[fecha]?.[mf] ?? ""));
-      row.push(totalFecha(fecha));
+      row.push(totalFecha(fecha).toFixed(2));
       return row;
     });
+    const totalsRow = ["TOTAL", ...minifincas.map((mf) => totalPorMinifinca(mf).toFixed(2)), granTotal.toFixed(2)];
 
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Acres");
-    XLSX.writeFile(wb, `acres_${desde}_${hasta}.xlsx`);
+    exportStyledExcel({
+      title: `Reporte Acres — ${desde} al ${hasta}`,
+      headers,
+      rows,
+      totalsRow,
+      sheetName: "Acres",
+      fileName: `acres_${desde}_${hasta}.xlsx`,
+    });
   };
 
   return (
@@ -119,6 +131,19 @@ export default function ReporteAcres() {
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="bg-primary/10 font-bold">
+                  <td className="py-2 px-3 sticky left-0 bg-primary/10 z-10">Total</td>
+                  {minifincas.map((mf) => (
+                    <td key={mf} className="py-2 px-3 text-center border-l border-border">
+                      {totalPorMinifinca(mf).toFixed(2)}
+                    </td>
+                  ))}
+                  <td className="py-2 px-3 text-center border-l border-border text-primary">
+                    {granTotal.toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}

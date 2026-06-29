@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ordenAcres } from "@/api/supabaseClient";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Save } from "lucide-react";
@@ -123,10 +123,7 @@ export default function Acres() {
       </div>
 
       <Card className="shadow-md border-0">
-        <CardHeader className="pb-4">
-          <CardTitle className="font-heading text-lg">Orden de Corte</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-6">
           {/* Selector de fecha */}
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium text-muted-foreground whitespace-nowrap">Fecha:</label>

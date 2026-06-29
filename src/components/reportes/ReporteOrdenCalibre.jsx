@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { format, subDays } from "date-fns";
-import * as XLSX from "xlsx";
+import { exportStyledExcel } from "@/utils/excelExport";
 
 const SEMANAS = [14, 13, 12, 11, 10];
 
@@ -36,7 +36,8 @@ export default function ReporteOrdenCalibre() {
 
   const fechas = Object.keys(grouped).sort();
 
-  // Exportar Excel
+  // Exportar Excel (mismo diseño que el resto de reportes: título,
+  // encabezados en verde, filas alternadas y bordes).
   const exportExcel = () => {
     const headers = ["Fecha"];
     SEMANAS.forEach(s => {
@@ -52,10 +53,13 @@ export default function ReporteOrdenCalibre() {
       return row;
     });
 
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Orden Calibre");
-    XLSX.writeFile(wb, `orden_calibre_${desde}_${hasta}.xlsx`);
+    exportStyledExcel({
+      title: `Reporte Orden de Calibre — ${desde} al ${hasta}`,
+      headers,
+      rows,
+      sheetName: "Orden Calibre",
+      fileName: `orden_calibre_${desde}_${hasta}.xlsx`,
+    });
   };
 
   return (
