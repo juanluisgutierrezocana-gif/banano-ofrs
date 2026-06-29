@@ -3,7 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { produccion, produccionCajasPalet, produccionCostos } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Download } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { BarChart3, Download, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { calcularDatosProceso, calcularDatosProcesoAgregado } from "@/lib/produccionCalc";
 import { exportStyledExcel } from "@/utils/excelExport";
@@ -153,6 +158,29 @@ function formatearColumna(valor, formato, key) {
   }
 }
 
+// Campos básicos editables de un registro diario (registros_produccion) —
+// mismo set que el formulario "Nuevo Registro Diario" de Ingresar Datos
+// (ver NUMERIC_FIELDS en ProduccionIngresar.jsx). Solo aplica a la vista
+// Diario: cada fila ahí corresponde a 1 registro real. Semanal y Mensual
+// son agregados de varios días y quedan de solo lectura.
+const CAMPOS_EDITAR_DIARIO = [
+  { field: "hora_inicio", label: "Hora Inicio" },
+  { field: "hora_salida", label: "Hora Salida" },
+  { field: "tiempo_perdido", label: "Tiempo Perdido (hrs)" },
+  { field: "cuadrilla", label: "Cuadrilla" },
+  { field: "empaque", label: "Empaque" },
+  { field: "acres", label: "Acres" },
+  { field: "racimos_cosechados", label: "Racimos Cosechados" },
+  { field: "racimos_rechazados", label: "Racimos Rechazados" },
+  { field: "no_manos", label: "No. Manos" },
+  { field: "peso_pinzote", label: "Peso Pinzote" },
+  { field: "calibre", label: "Calibre", texto: true },
+  { field: "quintales_rechazo", label: "Quintales Rechazo" },
+  { field: "cajas_primera", label: "Cajas 1ra" },
+  { field: "cajas_segunda", label: "Cajas 2da" },
+  { field: "cajas_tercera", label: "Cajas Tercera" },
+];
+
 // Construye la fila normalizada (mismas 18 claves) para cada granularidad.
 function normalizarDiario(r, filasCajasPalet, costosMap) {
   const c = calcularDatosProceso(r);
@@ -163,6 +191,7 @@ function normalizarDiario(r, filasCajasPalet, costosMap) {
   const cajasTercera = Number(r.cajas_tercera) || 0;
   return {
     id: r.id,
+    _raw: r, // registro original (registros_produccion), para Editar/Borrar
     label: r.fecha,
     racimosCosechados: Number(r.racimos_cosechados) || 0,
     racimosRechazados: Number(r.racimos_rechazados) || 0,
@@ -321,6 +350,63 @@ export default function ProduccionReporteria() {
 
   const [vista, setVista] = useState("diario"); // "diario" | "semanal" | "mensual"
 
+  // Edición/borrado de filas Diario (1 fila = 1 registro real en
+  // registros_produccion). Semanal y Mensual son agregados, no se editan.
+  const [editando, setEditando] = useState(null); // registro crudo en edición, o null
+  const [formEdit, setFormEdit] = useState({});
+  const [guardandoEdit, setGuardandoEdit] = useState(false);
+  const [borrandoId, setBorrandoId] = useState(null);
+
+  const abrirEditar = (registro) => {
+    const inicial = {};
+    CAMPOS_EDITAR_DIARIO.forEach(({ field }) => {
+      inicial[field] = registro[field] ?? "";
+    });
+    setFormEdit(inicial);
+    setEditando(registro);
+  };
+
+  const handleChangeEdit = (field, value) => {
+    setFormEdit((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleGuardarEdit = async () => {
+    if (!editando) return;
+    setGuardandoEdit(true);
+    const payload = {};
+    CAMPOS_EDITAR_DIARIO.forEach(({ field, texto }) => {
+      const raw = formEdit[field];
+      payload[field] = raw === "" || raw === null || raw === undefined
+        ? null
+        : texto ? raw : parseFloat(raw);
+    });
+    const { error } = await produccion.update(editando.id, payload);
+    setGuardandoEdit(false);
+    if (error) {
+      toast.error("No se pudo guardar: " + error.message);
+      return;
+    }
+    toast.success("Registro actualizado");
+    queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
+    setEditando(null);
+  };
+
+  // Borra un registro diario. Acción irreversible: se confirma antes.
+  const handleBorrarDiario = async (registro) => {
+    if (!confirm(`¿Eliminar el registro del ${registro.fecha}? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    setBorrandoId(registro.id);
+    const { error } = await produccion.delete(registro.id);
+    setBorrandoId(null);
+    if (error) {
+      toast.error("No se pudo eliminar: " + error.message);
+      return;
+    }
+    toast.success("Registro eliminado");
+    queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
+  };
+
   const resumenSemanal = useMemo(
     () => agruparPorSemana(registros, filasCajasPalet),
     [registros, filasCajasPalet]
@@ -466,6 +552,9 @@ export default function ProduccionReporteria() {
                     {COLUMNAS.map((col) => (
                       <th key={col.key} className="py-2 px-2 whitespace-nowrap">{col.label}</th>
                     ))}
+                    {vista === "diario" && (
+                      <th className="py-2 px-2 whitespace-nowrap">Acciones</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -477,6 +566,31 @@ export default function ProduccionReporteria() {
                           ? <CostoCajaCell key={col.key} fila={f} onGuardado={recargarCostos} />
                           : <td key={col.key} className="py-2 px-2">{formatearColumna(f[col.key], col.formato, col.key)}</td>
                       ))}
+                      {vista === "diario" && (
+                        <td className="py-2 px-2">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              title="Editar"
+                              onClick={() => abrirEditar(f._raw)}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              title="Eliminar"
+                              disabled={borrandoId === f.id}
+                              onClick={() => handleBorrarDiario(f._raw)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                   {vista === "mensual" && (
@@ -495,6 +609,35 @@ export default function ProduccionReporteria() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal de edición — solo para filas de la vista Diario (1 fila =
+          1 registro real en registros_produccion). */}
+      <Dialog open={!!editando} onOpenChange={(open) => !open && setEditando(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar registro — {editando?.fecha}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 py-2">
+            {CAMPOS_EDITAR_DIARIO.map(({ field, label, texto }) => (
+              <div key={field} className="space-y-1.5">
+                <Label htmlFor={`edit_${field}`} className="text-xs">{label}</Label>
+                <Input
+                  id={`edit_${field}`}
+                  type={texto ? "text" : "number"}
+                  value={formEdit[field] ?? ""}
+                  onChange={(e) => handleChangeEdit(field, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditando(null)}>Cancelar</Button>
+            <Button onClick={handleGuardarEdit} disabled={guardandoEdit}>
+              {guardandoEdit ? "Guardando..." : "Guardar Cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

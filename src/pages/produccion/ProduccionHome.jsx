@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Factory, Save, Download } from "lucide-react";
+import { Factory, Save, Download, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { exportStyledExcel } from "@/utils/excelExport";
 
@@ -36,6 +36,7 @@ const formularioVacio = () =>
 export default function ProduccionHome() {
   const queryClient = useQueryClient();
   const [guardando, setGuardando] = useState(false);
+  const [borrando, setBorrando] = useState(false);
 
   // Fecha que controla esta tabla. Cambiarla muestra el registro guardado
   // de ese día (si existe) o la tabla vacía y rellenable (si no existe).
@@ -104,6 +105,25 @@ export default function ProduccionHome() {
       return;
     }
     toast.success("Datos guardados");
+    queryClient.invalidateQueries({ queryKey: ["produccion-resumen", fechaSeleccionada] });
+    queryClient.invalidateQueries({ queryKey: ["produccion-resumen-historial"] });
+  };
+
+  // Borra el resumen guardado de la fecha seleccionada (produccion_resumen).
+  // Acción irreversible: se confirma antes de ejecutar.
+  const handleBorrar = async () => {
+    if (!filaActual) return;
+    if (!confirm(`¿Eliminar el resumen de producción del ${fechaSeleccionada}? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    setBorrando(true);
+    const { error } = await produccionResumen.delete(filaActual.id);
+    setBorrando(false);
+    if (error) {
+      toast.error("No se pudo eliminar: " + error.message);
+      return;
+    }
+    toast.success("Registro eliminado");
     queryClient.invalidateQueries({ queryKey: ["produccion-resumen", fechaSeleccionada] });
     queryClient.invalidateQueries({ queryKey: ["produccion-resumen-historial"] });
   };
@@ -196,6 +216,14 @@ export default function ProduccionHome() {
         <Button onClick={handleGuardar} disabled={guardando}>
           <Save className="w-4 h-4" />
           {guardando ? "Guardando..." : "Guardar"}
+        </Button>
+        <Button
+          variant="destructive"
+          onClick={handleBorrar}
+          disabled={!filaActual || borrando}
+        >
+          <Trash2 className="w-4 h-4" />
+          {borrando ? "Eliminando..." : "Borrar Registro"}
         </Button>
         <Button variant="outline" onClick={handleExportar}>
           <Download className="w-4 h-4" />

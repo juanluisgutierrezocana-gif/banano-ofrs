@@ -162,6 +162,22 @@ export default function ProduccionIngresar() {
   const ultimo = registros.find((r) => r.fecha === fechaSeleccionada) ?? null;
   const calculado = ultimo ? calcularDatosProceso(ultimo) : null;
 
+  // Si la fecha elegida ya tiene un registro guardado, precargar el
+  // formulario con sus valores (antes siempre quedaba vacío y "Guardar"
+  // creaba un duplicado). Si no existe, el formulario queda vacío para
+  // crear uno nuevo.
+  useEffect(() => {
+    if (ultimo) {
+      const inicial = { calibre: ultimo.calibre ?? "" };
+      NUMERIC_FIELDS.forEach((f) => {
+        inicial[f] = ultimo[f] ?? "";
+      });
+      setForm(inicial);
+    } else {
+      setForm(emptyForm);
+    }
+  }, [ultimo?.id, fechaSeleccionada]);
+
   // % Área Cosecha Día = Área Cosecha Día (acres) / área total de la finca.
   // Fórmula confirmada por el cliente sobre el Excel real.
   const areaCosechaPct =
@@ -346,18 +362,23 @@ export default function ProduccionIngresar() {
     NUMERIC_FIELDS.forEach((f) => {
       payload[f] = form[f] === "" ? null : parseFloat(form[f]);
     });
-    const { error } = await produccion.create(payload);
+    // Si la fecha ya tiene registro, actualizarlo en vez de crear un duplicado.
+    const { error } = ultimo
+      ? await produccion.update(ultimo.id, payload)
+      : await produccion.create(payload);
     setSaving(false);
     if (error) {
       toast.error("No se pudo guardar: " + error.message);
       return;
     }
-    toast.success("Registro de producción guardado");
+    toast.success(ultimo ? "Registro actualizado" : "Registro de producción guardado");
     queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
-    setForm(emptyForm);
   };
 
+  // Borra el registro de la fecha seleccionada. Acción irreversible: se
+  // confirma antes de ejecutar.
   const handleDelete = async (id) => {
+    if (!confirm("¿Eliminar el registro de este día? Esta acción no se puede deshacer.")) return;
     setDeletingId(id);
     const { error } = await produccion.delete(id);
     setDeletingId(null);
@@ -365,6 +386,7 @@ export default function ProduccionIngresar() {
       toast.error("No se pudo eliminar: " + error.message);
       return;
     }
+    toast.success("Registro eliminado");
     queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
   };
 
@@ -524,7 +546,9 @@ export default function ProduccionIngresar() {
       <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Nuevo Registro Diario</CardTitle>
+          <CardTitle className="text-base">
+            {ultimo ? "Editar Registro Diario" : "Nuevo Registro Diario"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
@@ -604,10 +628,21 @@ export default function ProduccionIngresar() {
                 value={form.cajas_segunda} onChange={handleChange} />
             </div>
           </div>
-          <Button onClick={handleSave} disabled={saving || !fechaSeleccionada} className="w-full sm:w-auto">
-            <Plus className="w-4 h-4" />
-            {saving ? "Guardando..." : "Guardar Registro"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleSave} disabled={saving || !fechaSeleccionada} className="w-full sm:w-auto">
+              <Plus className="w-4 h-4" />
+              {saving ? "Guardando..." : ultimo ? "Actualizar Registro" : "Guardar Registro"}
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full sm:w-auto"
+              onClick={() => handleDelete(ultimo.id)}
+              disabled={!ultimo || deletingId === ultimo?.id}
+            >
+              <Trash2 className="w-4 h-4" />
+              {deletingId === ultimo?.id ? "Eliminando..." : "Borrar Registro"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
