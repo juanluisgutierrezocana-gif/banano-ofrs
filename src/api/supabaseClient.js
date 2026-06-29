@@ -142,6 +142,24 @@ export const produccionCostos = {
   },
 };
 
+/** Visibilidad de columnas/calidades en Producción e Ingresar Datos →
+ *  produccion_visibilidad. Una fila por (grupo, clave); se guarda con
+ *  upsert. grupo: 'produccion_columnas' | 'ingresar_calidades'. */
+const produccionVisibilidadBase = createEntity('produccion_visibilidad');
+export const produccionVisibilidad = {
+  ...produccionVisibilidadBase,
+  async upsert(grupo, clave, visible) {
+    return await supabase
+      .from('produccion_visibilidad')
+      .upsert(
+        { grupo, clave, visible },
+        { onConflict: 'grupo,clave' }
+      )
+      .select()
+      .single();
+  },
+};
+
 // ============================================================
 // INVENTARIO / EMBOLSE
 // Con aliases para compatibilidad (createEmbolse, updateEmbolse, etc.)

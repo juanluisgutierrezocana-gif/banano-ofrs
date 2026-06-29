@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { produccionResumen } from "@/api/supabaseClient";
+import { produccionResumen, produccionVisibilidad } from "@/api/supabaseClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,27 +8,15 @@ import { Label } from "@/components/ui/label";
 import { Factory, Save, Download, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { exportStyledExcel } from "@/utils/excelExport";
+import { CAMPOS_RESUMEN as CAMPOS } from "@/lib/produccionConstantes";
 
 // Tabla 100% independiente, tal cual la pidió el cliente (imagen de
 // referencia): sin valores predefinidos, sin fórmulas, sin enlace a
 // "Ingresar Datos" ni a registros_produccion. Cada campo se llena a
 // mano y se guarda en su propia tabla (produccion_resumen), un
-// registro por fecha.
-const CAMPOS = [
-  { field: "racimos_cosechados", label: "Racimos Cosechados" },
-  { field: "racimos_rechazados", label: "Racimos Rechazados" },
-  { field: "racimos_procesados", label: "Racimos Procesados" },
-  { field: "cajas_primera", label: "Cajas 1ra" },
-  { field: "cajas_segunda", label: "Cajas 2da" },
-  { field: "cajas_tercera", label: "Cajas 3ra" },
-  { field: "quintales_rechazo", label: "Quintales Rechazo" },
-  { field: "factor_primera", label: "Factor 1ra" },
-  { field: "factor_general", label: "Factor General" },
-  { field: "factor_potencial", label: "Factor Potencial" },
-  { field: "peso_racimo", label: "Peso Racimo" },
-  { field: "desperdicio_monte", label: "Desperdicio del Monte" },
-  { field: "desperdicio_general", label: "Desperdicio General" },
-];
+// registro por fecha. La lista de columnas vive en produccionConstantes.js
+// (CAMPOS_RESUMEN) para que "Configuración" pueda generar sus botones de
+// mostrar/ocultar sobre la misma lista, sin duplicarla.
 
 const formularioVacio = () =>
   CAMPOS.reduce((acc, { field }) => ({ ...acc, [field]: "" }), {});
@@ -62,6 +50,24 @@ export default function ProduccionHome() {
       return data ?? [];
     },
   });
+
+  // Columnas ocultadas desde Configuración (produccion_visibilidad, grupo
+  // 'produccion_columnas'). Solo afecta qué se muestra/exporta — los datos
+  // ya guardados de una columna oculta no se borran ni dejan de cargarse.
+  const { data: visibilidad = [] } = useQuery({
+    queryKey: ["produccion-visibilidad"],
+    queryFn: async () => {
+      const { data, error } = await produccionVisibilidad.list();
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const ocultos = new Set(
+    visibilidad
+      .filter((v) => v.grupo === "produccion_columnas" && v.visible === false)
+      .map((v) => v.clave)
+  );
+  const camposVisibles = CAMPOS.filter((c) => !ocultos.has(c.field));
 
   const filaActual = filasFecha[0] ?? null;
 
@@ -133,10 +139,10 @@ export default function ProduccionHome() {
       toast.error("No hay datos guardados para exportar");
       return;
     }
-    const headers = ["Fecha", ...CAMPOS.map((c) => c.label)];
+    const headers = ["Fecha", ...camposVisibles.map((c) => c.label)];
     const rows = historial.map((fila) => [
       fila.fecha,
-      ...CAMPOS.map((c) => fila[c.field] ?? ""),
+      ...camposVisibles.map((c) => fila[c.field] ?? ""),
     ]);
     exportStyledExcel({
       title: "Producción — Resumen por Día",
@@ -185,14 +191,14 @@ export default function ProduccionHome() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-center text-muted-foreground border-b bg-muted/30">
-                  {CAMPOS.map(({ field, label }) => (
+                  {camposVisibles.map(({ field, label }) => (
                     <th key={field} className="py-2 px-3 whitespace-nowrap">{label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  {CAMPOS.map(({ field }) => (
+                  {camposVisibles.map(({ field }) => (
                     <td key={field} className="py-1 px-2">
                       <input
                         type="number"

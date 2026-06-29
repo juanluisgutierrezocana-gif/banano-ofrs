@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { produccion, produccionSemanal, produccionCajasPalet } from "@/api/supabaseClient";
+import { produccion, produccionSemanal, produccionCajasPalet, produccionVisibilidad } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,62 +10,18 @@ import { toast } from "sonner";
 import { calcularDatosProceso } from "@/lib/produccionCalc";
 import { exportStyledWorkbook } from "@/utils/excelExport";
 import { useAuth } from "@/lib/AuthContext";
+import {
+  CODIGOS_SEMANA,
+  CALIDAD_LABEL,
+  CODIGO_CORTO,
+  CAJ_DEFAULT,
+} from "@/lib/produccionConstantes";
 
 // --- Tablas semanales (migradas desde la antigua página "Inventario
 // Semanal", ahora integradas aquí en "Ingresar Datos") ---
-const CODIGOS_SEMANA = [
-  "DMD", "DM9", "PRIM", "PREM", "3LB", "IP", "24COUNT", "24COUNT_G39",
-  "ROSY NORMAL", "ROSY CONSUMER", "DM BANABAC", "DM BANABAC MINI", "3LBS",
-];
-
-// Texto de "Calidad" a mostrar en pantalla para cada código interno de
-// CODIGOS_SEMANA. Por defecto es igual a la clave; solo hace falta una
-// entrada aquí cuando el código interno no coincide con el texto visible.
-// Caso "24COUNT_G39": el Excel real tiene 2 códigos para la misma calidad
-// "24 COUNT" (C39 y G39). Antes se omitía G39 por decisión del cliente;
-// ahora se agrega con una clave interna propia (para no chocar con la fila
-// de C39 en valoresGrid/Supabase) pero mostrando el mismo texto "24COUNT".
-const CALIDAD_LABEL = {
-  "24COUNT_G39": "24COUNT",
-};
-
-// Código corto (columna "CODIGO" de la hoja real) que corresponde a cada
-// calidad de CODIGOS_SEMANA (columna "CALIDAD"). Tomado tal cual del Excel
-// del cliente (INF. PROCESO E INVENTARIOS, hoja LA GRACIA12).
-const CODIGO_CORTO = {
-  DMD: "C68",
-  DM9: "C23",
-  PRIM: "CH1",
-  PREM: "G01",
-  "3LB": "CQ2",
-  IP: "CH7",
-  "24COUNT": "C39",
-  "24COUNT_G39": "G39",
-  "ROSY NORMAL": "G05",
-  "ROSY CONSUMER": "GQ5",
-  "DM BANABAC": "GP7",
-  "DM BANABAC MINI": "GP7",
-  "3LBS": "CP9",
-};
-
-// Valor "CAJ." por default de cada calidad (columna fija de la hoja real,
-// junto a "CODIGO"). Confirmado por el cliente sobre la imagen del Excel
-// (INF. PROCESO E INVENTARIOS, hoja LA GRACIA12).
-const CAJ_DEFAULT = {
-  DMD: 48,
-  DM9: 48,
-  PRIM: 48,
-  PREM: 48,
-  "3LB": 45,
-  IP: 48,
-  "24COUNT": 45,
-  "24COUNT_G39": 45,
-  "ROSY NORMAL": 48,
-  "ROSY CONSUMER": 48,
-  "DM BANABAC": 54,
-  "DM BANABAC MINI": 32,
-  "3LBS": 48,
-};
+// CODIGOS_SEMANA, CALIDAD_LABEL, CODIGO_CORTO y CAJ_DEFAULT viven en
+// produccionConstantes.js para que "Configuración" pueda generar sus
+// botones de mostrar/ocultar sobre la misma lista, sin duplicarla.
 
 // Área total de la finca (en acres), usada como denominador de
 // "% Área Cosecha Día" = Área Cosecha Día / ÁREA_TOTAL_FINCA_ACRES.
@@ -209,6 +165,26 @@ export default function ProduccionIngresar() {
       return data ?? [];
     },
   });
+
+  // Calidades ocultadas desde Configuración (produccion_visibilidad, grupo
+  // 'ingresar_calidades'). Solo afecta qué filas se muestran/exportan en
+  // las tablas de abajo — los datos guardados de una calidad oculta no se
+  // borran, y los TOTALES siguen sumando todas las calidades (decisión
+  // confirmada con el cliente: ocultar es solo visual/exportación).
+  const { data: visibilidad = [] } = useQuery({
+    queryKey: ["produccion-visibilidad"],
+    queryFn: async () => {
+      const { data, error } = await produccionVisibilidad.list();
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const codigosOcultos = new Set(
+    visibilidad
+      .filter((v) => v.grupo === "ingresar_calidades" && v.visible === false)
+      .map((v) => v.clave)
+  );
+  const codigosVisibles = CODIGOS_SEMANA.filter((c) => !codigosOcultos.has(c));
 
   const [valoresGrid, setValoresGrid] = useState({});
   useEffect(() => {
@@ -458,7 +434,7 @@ export default function ProduccionIngresar() {
         sheetName: "Produccion Semanal",
         title: `Producción Semanal por Código — semana del ${semana}`,
         headers: ["Código", diaActualLabel, "Total Semana"],
-        rows: CODIGOS_SEMANA.map((codigo) => [
+        rows: codigosVisibles.map((codigo) => [
           codigo,
           valoresGrid[codigo]?.[diaActual] ?? "",
           totalPorCodigo(codigo) || "",
@@ -676,7 +652,7 @@ export default function ProduccionIngresar() {
                   </tr>
                 </thead>
                 <tbody>
-                  {CODIGOS_SEMANA.map((codigo) => (
+                  {codigosVisibles.map((codigo) => (
                     <tr key={codigo} className="border-b last:border-0">
                       <td className="py-1.5 px-3 font-medium whitespace-nowrap">{CALIDAD_LABEL[codigo] ?? codigo}</td>
                       <td className="py-1.5 px-2 text-center text-muted-foreground">
@@ -885,7 +861,7 @@ export default function ProduccionIngresar() {
                     </tr>
                   </thead>
                   <tbody>
-                    {CODIGOS_SEMANA.map((calidad) => {
+                    {codigosVisibles.map((calidad) => {
                       const campoCajProg = `caj_prog_${diaActual}`;
                       const total = numeroSemana(valoresGrid[calidad]?.[diaActual]);
                       const cajProg = numeroSemana(valoresGrid[calidad]?.[campoCajProg]);
