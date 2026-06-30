@@ -85,8 +85,38 @@ export async function POST(request) {
   }
 
   if (!finca) {
-    console.warn(`Webhook de ${email} sin finca asociada (event_type=${event.event_type})`);
-    return Response.json({ received: true, ignored: 'finca no encontrada' });
+    // Sin finca asociada: puede ser alguien que pagó ANTES de registrarse
+    // (pre-pago). Solo nos interesa guardarlo si fue un cobro exitoso —
+    // eventos de suscripción (past_due/paused/cancel) sin finca no aplican.
+    if (event.event_type !== 'intent.succeeded') {
+      console.warn(`Webhook de ${email} sin finca asociada (event_type=${event.event_type})`);
+      return Response.json({ received: true, ignored: 'finca no encontrada' });
+    }
+
+    // Guardamos el pago en pagos_pendientes para que, cuando esta persona
+    // se registre, Register.jsx/RegisterComplete.jsx lo encuentren por email
+    // y activen la cuenta directo (sin trial) en vez de ignorar el pago.
+    // onConflict + ignoreDuplicates: si Recurrente reintenta el webhook
+    // (mismo evento.id), no se duplica la fila.
+    const { error: pagoError } = await supabaseAdmin
+      .from('pagos_pendientes')
+      .upsert(
+        {
+          email,
+          evento_id: event.id,
+          monto: event?.amount_in_cents ?? null,
+          moneda: event?.currency ?? null,
+        },
+        { onConflict: 'evento_id', ignoreDuplicates: true }
+      );
+
+    if (pagoError) {
+      console.error('Error guardando pago pendiente:', pagoError);
+      return Response.json({ error: 'Error de base de datos' }, { status: 500 });
+    }
+
+    console.log(`Pago pendiente guardado para ${email} (evento ${event.id}) — sin finca asociada todavía.`);
+    return Response.json({ received: true, pendiente: true });
   }
 
   // --- 3. Aplicar el cambio de estado según el evento ---
