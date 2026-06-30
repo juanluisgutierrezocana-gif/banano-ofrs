@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import BananoAnimation from "@/components/layout/BananoAnimation";
 import { LayoutDashboard, Truck, FileBarChart, Settings, Package, AlertTriangle, Menu, X, Banana, FilePenLine, BarChart3, Ruler, LandPlot, LogOut, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole";
@@ -154,8 +153,6 @@ export default function Sidebar() {
             Salir a Pantalla Inicial
           </button>
         </nav>
-
-        <BananoAnimation />
 
       </aside>
     </>);
