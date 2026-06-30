@@ -588,58 +588,91 @@ export default function ProduccionReporteria() {
   const labelProduccion = (f) =>
     vista === "diario" ? f.fecha : vista === "semanal" ? `Sem ${f.semanaNum}` : f.mes;
 
-  const handleExportar = () => {
-    if (filasActuales.length === 0 && filasProduccionActuales.length === 0) {
+  const tituloVistaActual = vista === "diario" ? "Histórico Diario" : vista === "semanal" ? "Resumen Semanal" : "Resumen Mensual";
+
+  // Construye la hoja de Excel de "Ingresar Datos" para la vista actual, o
+  // null si no hay filas. La reutilizan los 3 botones de exportar (solo
+  // Ingresar Datos / solo Producción / ambos en el mismo archivo).
+  const construirHojaIngresar = () => {
+    if (filasActuales.length === 0) return null;
+    const headers = [etiquetaCol, ...COLUMNAS.map((c) => c.label)];
+    const filasExport = vista === "mensual" ? [...filasActuales, filaTotalMensual] : filasActuales;
+    const rows = filasExport.map((f) => [
+      f.label,
+      ...COLUMNAS.map((c) => {
+        if (c.key === "costoCaja") return f.esTotal || f.costoCaja === "" || f.costoCaja == null ? "" : f.costoCaja;
+        const valor = f[c.key];
+        if (valor === null || valor === undefined) return "";
+        if (c.formato === "pct") return (Number(valor) * 100).toFixed(2) + "%";
+        if (c.formato === "int") return Math.round(Number(valor));
+        if (c.formato === "dec1") return Number(valor).toFixed(1);
+        if (c.formato === "dec2") return Number(valor).toFixed(2);
+        return valor;
+      }),
+    ]);
+    return {
+      sheetName: "Ingresar Datos",
+      title: `Reportería — Ingresar Datos — ${tituloVistaActual}`,
+      headers,
+      rows,
+    };
+  };
+
+  // Misma idea para la tabla "Producción" (produccion_resumen).
+  const construirHojaProduccion = () => {
+    if (filasProduccionActuales.length === 0) return null;
+    const headers = [etiquetaCol, ...camposResumenVisibles.map((c) => c.label)];
+    const esAgregado = vista !== "diario";
+    const filasExport = vista === "mensual"
+      ? [...filasProduccionActuales, resumenMensualProduccion.totalAno]
+      : filasProduccionActuales;
+    const rows = filasExport.map((f) => [
+      labelProduccion(f),
+      ...camposResumenVisibles.map((c) => formatearCampoResumen(f[c.field], c.field, esAgregado)),
+    ]);
+    return {
+      sheetName: "Produccion",
+      title: `Reportería — Producción — ${tituloVistaActual}`,
+      headers,
+      rows,
+    };
+  };
+
+  // Exporta solo la tabla de "Ingresar Datos" de la vista actual.
+  const handleExportarIngresar = () => {
+    const hoja = construirHojaIngresar();
+    if (!hoja) {
       toast.error("No hay datos para exportar");
       return;
     }
-    const tituloVista = vista === "diario" ? "Histórico Diario" : vista === "semanal" ? "Resumen Semanal" : "Resumen Mensual";
-    const sheets = [];
+    exportStyledWorkbook({
+      fileName: `reporteria_ingresar_datos_${vista}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      sheets: [hoja],
+    });
+  };
 
-    if (filasActuales.length > 0) {
-      const headers = [etiquetaCol, ...COLUMNAS.map((c) => c.label)];
-      const filasExport = vista === "mensual" ? [...filasActuales, filaTotalMensual] : filasActuales;
-      const rows = filasExport.map((f) => [
-        f.label,
-        ...COLUMNAS.map((c) => {
-          if (c.key === "costoCaja") return f.esTotal || f.costoCaja === "" || f.costoCaja == null ? "" : f.costoCaja;
-          const valor = f[c.key];
-          if (valor === null || valor === undefined) return "";
-          if (c.formato === "pct") return (Number(valor) * 100).toFixed(2) + "%";
-          if (c.formato === "int") return Math.round(Number(valor));
-          if (c.formato === "dec1") return Number(valor).toFixed(1);
-          if (c.formato === "dec2") return Number(valor).toFixed(2);
-          return valor;
-        }),
-      ]);
-      sheets.push({
-        sheetName: "Ingresar Datos",
-        title: `Reportería — Ingresar Datos — ${tituloVista}`,
-        headers,
-        rows,
-      });
+  // Exporta solo la tabla de "Producción" de la vista actual.
+  const handleExportarProduccion = () => {
+    const hoja = construirHojaProduccion();
+    if (!hoja) {
+      toast.error("No hay datos para exportar");
+      return;
     }
-
-    if (filasProduccionActuales.length > 0) {
-      const headers = [etiquetaCol, ...camposResumenVisibles.map((c) => c.label)];
-      const esAgregado = vista !== "diario";
-      const filasExport = vista === "mensual"
-        ? [...filasProduccionActuales, resumenMensualProduccion.totalAno]
-        : filasProduccionActuales;
-      const rows = filasExport.map((f) => [
-        labelProduccion(f),
-        ...camposResumenVisibles.map((c) => formatearCampoResumen(f[c.field], c.field, esAgregado)),
-      ]);
-      sheets.push({
-        sheetName: "Produccion",
-        title: `Reportería — Producción — ${tituloVista}`,
-        headers,
-        rows,
-      });
-    }
-
     exportStyledWorkbook({
       fileName: `reporteria_produccion_${vista}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      sheets: [hoja],
+    });
+  };
+
+  // Exporta ambas tablas juntas, cada una en su propia hoja del mismo archivo.
+  const handleExportarAmbos = () => {
+    const sheets = [construirHojaIngresar(), construirHojaProduccion()].filter(Boolean);
+    if (sheets.length === 0) {
+      toast.error("No hay datos para exportar");
+      return;
+    }
+    exportStyledWorkbook({
+      fileName: `reporteria_completa_${vista}_${new Date().toISOString().slice(0, 10)}.xlsx`,
       sheets,
     });
   };
@@ -659,9 +692,9 @@ export default function ProduccionReporteria() {
             </p>
           </div>
         </div>
-        <Button variant="outline" onClick={handleExportar}>
+        <Button variant="outline" onClick={handleExportarAmbos}>
           <Download className="w-4 h-4" />
-          Exportar a Excel
+          Exportar Ambos
         </Button>
       </div>
 
@@ -684,17 +717,23 @@ export default function ProduccionReporteria() {
             {vista === "semanal" && `Resumen Semanal (${filasActuales.length} semanas)`}
             {vista === "mensual" && "Resumen Mensual"}
           </CardTitle>
-          {vista === "mensual" && (
-            <select
-              className="rounded-md border border-input bg-background px-2 py-1 text-sm"
-              value={anioSeleccionado}
-              onChange={(e) => setAnioSeleccionado(e.target.value)}
-            >
-              {aniosDisponibles.map((anio) => (
-                <option key={anio} value={anio}>{anio}</option>
-              ))}
-            </select>
-          )}
+          <div className="flex items-center gap-2">
+            {vista === "mensual" && (
+              <select
+                className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                value={anioSeleccionado}
+                onChange={(e) => setAnioSeleccionado(e.target.value)}
+              >
+                {aniosDisponibles.map((anio) => (
+                  <option key={anio} value={anio}>{anio}</option>
+                ))}
+              </select>
+            )}
+            <Button size="sm" variant="outline" onClick={handleExportarIngresar}>
+              <Download className="w-3.5 h-3.5" />
+              Exportar
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -774,17 +813,23 @@ export default function ProduccionReporteria() {
           confirmada con el cliente. Es de solo lectura aquí: se edita
           desde la página "Producción". */}
       <Card className="mt-6">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Factory className="w-4 h-4" />
-            Producción
-            {vista === "diario" && ` (${filasProduccionActuales.length})`}
-            {vista === "semanal" && ` — Resumen Semanal (${filasProduccionActuales.length} semanas)`}
-            {vista === "mensual" && " — Resumen Mensual"}
-          </CardTitle>
-          <p className="text-xs text-muted-foreground pt-1">
-            Datos de la página "Producción" (tabla independiente). Se edita desde ahí.
-          </p>
+        <CardHeader className="pb-3 flex flex-row items-start justify-between flex-wrap gap-2">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Factory className="w-4 h-4" />
+              Producción
+              {vista === "diario" && ` (${filasProduccionActuales.length})`}
+              {vista === "semanal" && ` — Resumen Semanal (${filasProduccionActuales.length} semanas)`}
+              {vista === "mensual" && " — Resumen Mensual"}
+            </CardTitle>
+            <p className="text-xs text-muted-foreground pt-1">
+              Datos de la página "Producción" (tabla independiente). Se edita desde ahí.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={handleExportarProduccion}>
+            <Download className="w-3.5 h-3.5" />
+            Exportar
+          </Button>
         </CardHeader>
         <CardContent>
           {cargandoResumen ? (
