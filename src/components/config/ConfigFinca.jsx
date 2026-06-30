@@ -75,19 +75,19 @@ export default function ConfigFinca() {
       // Guardar nombre
       await upsertSetting(KEYS.nombre, nombre, fincaId);
 
-      // Si hay imagen nueva, subirla primero
+      // Si hay imagen nueva, convertirla a base64 y guardarla en settings
+      // (evita dependencia de Storage bucket y sus políticas)
       if (pendingFile) {
         setUploading(true);
-        const ext = pendingFile.name.split(".").pop();
-        const fileName = `logos/finca_logo_${Date.now()}.${ext}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("uploads")
-          .upload(fileName, pendingFile, { upsert: true });
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("Error al leer el archivo de imagen"));
+          reader.readAsDataURL(pendingFile);
+        });
         setUploading(false);
-        if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage.from("uploads").getPublicUrl(uploadData.path);
-        await upsertSetting(KEYS.logo, publicUrl, fincaId);
-        setLogoPreview(publicUrl);
+        await upsertSetting(KEYS.logo, base64, fincaId);
+        setLogoPreview(base64);
         setPendingFile(null);
       }
     },
