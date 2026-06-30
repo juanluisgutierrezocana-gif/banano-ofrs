@@ -1,16 +1,18 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { produccionVisibilidad } from "@/api/supabaseClient";
+import { produccionVisibilidad, calidadesProduccion } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Settings, Eye, EyeOff } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { Settings, Eye, EyeOff, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useRole } from "@/hooks/useRole";
 import AdminOnlyMessage from "@/components/avances/AdminOnlyMessage";
-import {
-  CAMPOS_RESUMEN,
-  CODIGOS_SEMANA,
-  CALIDAD_LABEL,
-} from "@/lib/produccionConstantes";
+import { CAMPOS_RESUMEN } from "@/lib/produccionConstantes";
 
 // Cada botón = un título de columna/calidad de las tablas reales de
 // "Producción" e "Ingresar Datos". Apagar un botón solo oculta esa
@@ -36,9 +38,99 @@ export default function ProduccionConfiguraciones() {
     },
   });
 
+  // Calidades de "Ingresar Datos" (antes lista fija en produccionConstantes.js,
+  // ahora editable y con alta de calidades nuevas desde aquí mismo).
+  const { data: calidades = [], isLoading: cargandoCalidades } = useQuery({
+    queryKey: ["calidades-produccion"],
+    queryFn: async () => {
+      const { data, error } = await calidadesProduccion.list();
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  // Edición de una calidad existente (Calidad/Caj./Cod). El `codigo` interno
+  // no se edita aquí: ya lo usan produccion_semanal y produccion_visibilidad.
+  const [editando, setEditando] = useState(null);
+  const [formEdit, setFormEdit] = useState({ label: "", codigo_corto: "", caj_default: "" });
+  const [guardandoEdit, setGuardandoEdit] = useState(false);
+
+  // Alta de una calidad nueva.
+  const [agregando, setAgregando] = useState(false);
+  const [formNueva, setFormNueva] = useState({ label: "", codigo_corto: "", caj_default: "" });
+  const [guardandoNueva, setGuardandoNueva] = useState(false);
+
   if (!isAdmin && !hasPermiso("produccion")) {
     return <AdminOnlyMessage />;
   }
+
+  const abrirEditar = (calidad) => {
+    setFormEdit({
+      label: calidad.label ?? "",
+      codigo_corto: calidad.codigo_corto ?? "",
+      caj_default: calidad.caj_default ?? "",
+    });
+    setEditando(calidad);
+  };
+
+  const handleGuardarEdit = async () => {
+    if (!editando) return;
+    const label = formEdit.label.trim();
+    if (!label) {
+      toast.error("La calidad necesita un nombre");
+      return;
+    }
+    setGuardandoEdit(true);
+    const { error } = await calidadesProduccion.update(editando.id, {
+      label,
+      codigo_corto: formEdit.codigo_corto.trim() || null,
+      caj_default: formEdit.caj_default === "" ? null : parseFloat(formEdit.caj_default),
+    });
+    setGuardandoEdit(false);
+    if (error) {
+      toast.error("No se pudo guardar: " + error.message);
+      return;
+    }
+    toast.success("Calidad actualizada");
+    queryClient.invalidateQueries({ queryKey: ["calidades-produccion"] });
+    setEditando(null);
+  };
+
+  // El código interno nace igual al nombre escrito (en mayúsculas): es el
+  // mismo identificador que después usan produccion_semanal (codigo_producto)
+  // y produccion_visibilidad (clave), por eso no se puede cambiar después.
+  const handleAgregarCalidad = async () => {
+    const label = formNueva.label.trim();
+    if (!label) {
+      toast.error("La calidad necesita un nombre");
+      return;
+    }
+    const codigo = label.toUpperCase();
+    if (calidades.some((c) => c.codigo === codigo)) {
+      toast.error("Ya existe una calidad con ese nombre");
+      return;
+    }
+    setGuardandoNueva(true);
+    const siguientePosicion = calidades.length
+      ? Math.max(...calidades.map((c) => c.position ?? 0)) + 1
+      : 0;
+    const { error } = await calidadesProduccion.create({
+      codigo,
+      label,
+      codigo_corto: formNueva.codigo_corto.trim() || null,
+      caj_default: formNueva.caj_default === "" ? null : parseFloat(formNueva.caj_default),
+      position: siguientePosicion,
+    });
+    setGuardandoNueva(false);
+    if (error) {
+      toast.error("No se pudo crear: " + error.message);
+      return;
+    }
+    toast.success("Calidad agregada");
+    queryClient.invalidateQueries({ queryKey: ["calidades-produccion"] });
+    setFormNueva({ label: "", codigo_corto: "", caj_default: "" });
+    setAgregando(false);
+  };
 
   // visible=true por default si todavía no hay fila guardada para esa clave.
   const esVisible = (grupo, clave) => {
@@ -116,22 +208,132 @@ export default function ProduccionConfiguraciones() {
           </p>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isLoading || cargandoCalidades ? (
             <p className="text-muted-foreground text-sm">Cargando...</p>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {CODIGOS_SEMANA.map((codigo) => (
-                <BotonToggle
-                  key={codigo}
-                  grupo={GRUPO_CALIDADES}
-                  clave={codigo}
-                  label={CALIDAD_LABEL[codigo] ?? codigo}
-                />
+              {calidades.map((calidad) => (
+                <div key={calidad.id} className="flex items-center gap-1">
+                  <BotonToggle grupo={GRUPO_CALIDADES} clave={calidad.codigo} label={calidad.label} />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground"
+                    title="Editar calidad"
+                    onClick={() => abrirEditar(calidad)}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               ))}
+              <Button type="button" variant="outline" size="sm" onClick={() => setAgregando(true)}>
+                <Plus className="w-3.5 h-3.5" />
+                Agregar calidad
+              </Button>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Editar calidad existente — Calidad/Caj./Cod. El código interno
+          (codigo) no se edita: ya lo usan produccion_semanal y
+          produccion_visibilidad. */}
+      <Dialog open={!!editando} onOpenChange={(open) => !open && setEditando(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar calidad</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit_label" className="text-xs">Calidad</Label>
+              <Input
+                id="edit_label"
+                value={formEdit.label}
+                onChange={(e) => setFormEdit({ ...formEdit, label: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit_caj" className="text-xs">Caj.</Label>
+                <Input
+                  id="edit_caj"
+                  type="number"
+                  min="0"
+                  value={formEdit.caj_default}
+                  onChange={(e) => setFormEdit({ ...formEdit, caj_default: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit_cod" className="text-xs">Cod</Label>
+                <Input
+                  id="edit_cod"
+                  value={formEdit.codigo_corto}
+                  onChange={(e) => setFormEdit({ ...formEdit, codigo_corto: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditando(null)}>Cancelar</Button>
+            <Button onClick={handleGuardarEdit} disabled={guardandoEdit}>
+              {guardandoEdit ? "Guardando..." : "Guardar Cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Agregar calidad nueva — aparece de inmediato en "Producción Semanal
+          por Código" y "Resumen de Producción" de Ingresar Datos. */}
+      <Dialog open={agregando} onOpenChange={(open) => !open && setAgregando(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Agregar calidad nueva</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="nueva_label" className="text-xs">Calidad</Label>
+              <Input
+                id="nueva_label"
+                placeholder="Ej: DM10"
+                value={formNueva.label}
+                onChange={(e) => setFormNueva({ ...formNueva, label: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="nueva_caj" className="text-xs">Caj.</Label>
+                <Input
+                  id="nueva_caj"
+                  type="number"
+                  min="0"
+                  placeholder="Ej: 48"
+                  value={formNueva.caj_default}
+                  onChange={(e) => setFormNueva({ ...formNueva, caj_default: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="nueva_cod" className="text-xs">Cod</Label>
+                <Input
+                  id="nueva_cod"
+                  placeholder="Ej: C10"
+                  value={formNueva.codigo_corto}
+                  onChange={(e) => setFormNueva({ ...formNueva, codigo_corto: e.target.value })}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Esta calidad aparecerá en "Producción Semanal por Código" y "Resumen de Producción" de Ingresar Datos.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAgregando(false)}>Cancelar</Button>
+            <Button onClick={handleAgregarCalidad} disabled={guardandoNueva}>
+              {guardandoNueva ? "Guardando..." : "Agregar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
