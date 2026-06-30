@@ -78,9 +78,19 @@
 <section class="py-16 px-4 sm:px-6 max-w-6xl mx-auto">
   <div class="text-center max-w-2xl mx-auto mb-10">
     <h2 class="font-heading text-3xl font-bold text-[#0d2b1a] mb-3">Así se ve la app, en tiempo real</h2>
-    <p class="text-gray-600">Pantallas reales del sistema en uso por FINCA LA GRACIA: Panel Diario, Recepción de Fruta, Inventario de Embolse, Orden de Calibre, Reportería y Saldos.</p>
+    <p class="text-gray-600">Video real de la app en uso en campo, y las pantallas del sistema en uso por FINCA LA GRACIA: Panel Diario, Recepción de Fruta, Inventario de Embolse, Orden de Calibre, Reportería y Saldos.</p>
   </div>
-  <div class="phone-carousel flex flex-col items-center">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-8 items-center">
+    <div>
+      <div class="rounded-2xl overflow-hidden shadow-xl border border-gray-100 bg-black">
+        <video class="w-full h-auto block" controls preload="metadata">
+          <source src="assets/video/demo.mp4" type="video/mp4">
+          Tu navegador no soporta la reproducción de video. <a href="assets/video/demo.mp4" class="text-green-400 underline">Descárgalo aquí</a>.
+        </video>
+      </div>
+      <p class="text-center text-sm text-gray-500 mt-3">Video real — Finca La Gracia</p>
+    </div>
+    <div class="phone-carousel flex flex-col items-center">
     <div class="flex items-center gap-4 sm:gap-6">
       <button type="button" class="phone-nav-btn phone-prev" aria-label="Pantalla anterior">‹</button>
       <div class="phone-frame">
@@ -205,6 +215,8 @@
       <button type="button" class="phone-dot" data-slide="3" aria-label="Orden de Calibre"></button>
       <button type="button" class="phone-dot" data-slide="4" aria-label="Reportería"></button>
       <button type="button" class="phone-dot" data-slide="5" aria-label="Saldos de Inventario"></button>
+    </div>
+  </div>
     </div>
   </div>
 </section>
