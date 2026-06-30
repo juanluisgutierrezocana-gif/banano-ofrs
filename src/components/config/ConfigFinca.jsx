@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { supabase } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,32 +11,48 @@ import { toast } from "sonner";
 
 const KEYS = { nombre: "finca_nombre", logo: "finca_logo" };
 
-async function getSetting(key) {
-  // FIXED: no destructuraba { error } — un fallo (ej. RLS) se ignoraba
-  // en silencio y la consulta devolvía null como si simplemente no existiera.
-  const { data, error } = await supabase.from("settings").select("*").eq("key", key);
+// Lee el setting de la finca actual; filtra por finca_id para evitar
+// colisiones entre fincas (antes no filtraba y podía devolver el dato
+// de otra finca o null cuando sí existía para la finca actual).
+async function getSetting(key, fincaId) {
+  if (!fincaId) return null;
+  const { data, error } = await supabase
+    .from("settings")
+    .select("*")
+    .eq("key", key)
+    .eq("finca_id", fincaId)
+    .maybeSingle();
   if (error) throw error;
-  return data?.[0] || null;
+  return data || null;
 }
 
-async function upsertSetting(key, value, existing) {
-  // FIXED: no destructuraba { error } ni lo lanzaba — un fallo (ej. RLS)
-  // se ignoraba en silencio y saveMutation disparaba onSuccess igual.
-  if (existing?.id) {
-    const { error } = await supabase.from("settings").update({ key, value }).eq("id", existing.id);
-    if (error) throw error;
-  } else {
-    const { error } = await supabase.from("settings").insert({ key, value });
-    if (error) throw error;
-  }
+// Usa upsert con onConflict en (finca_id, key) para garantizar una sola
+// fila por finca y clave, sin duplicados. Requiere el UNIQUE constraint
+// settings_finca_id_key_unique en Supabase.
+async function upsertSetting(key, value, fincaId) {
+  if (!fincaId) throw new Error("finca_id requerido para guardar settings");
+  const { error } = await supabase
+    .from("settings")
+    .upsert({ key, value, finca_id: fincaId }, { onConflict: "finca_id,key" });
+  if (error) throw error;
 }
 
 export default function ConfigFinca() {
   const queryClient = useQueryClient();
   const fileRef = useRef();
+  const { user } = useAuth();
+  const fincaId = user?.finca_id;
 
-  const { data: nombreSetting } = useQuery({ queryKey: ["setting", KEYS.nombre], queryFn: () => getSetting(KEYS.nombre) });
-  const { data: logoSetting } = useQuery({ queryKey: ["setting", KEYS.logo], queryFn: () => getSetting(KEYS.logo) });
+  const { data: nombreSetting } = useQuery({
+    queryKey: ["setting", KEYS.nombre, fincaId],
+    queryFn: () => getSetting(KEYS.nombre, fincaId),
+    enabled: !!fincaId,
+  });
+  const { data: logoSetting } = useQuery({
+    queryKey: ["setting", KEYS.logo, fincaId],
+    queryFn: () => getSetting(KEYS.logo, fincaId),
+    enabled: !!fincaId,
+  });
 
   const [nombre, setNombre] = useState("");
   const [logoPreview, setLogoPreview] = useState(null);
@@ -56,7 +73,7 @@ export default function ConfigFinca() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       // Guardar nombre
-      await upsertSetting(KEYS.nombre, nombre, nombreSetting);
+      await upsertSetting(KEYS.nombre, nombre, fincaId);
 
       // Si hay imagen nueva, subirla primero
       if (pendingFile) {
@@ -69,7 +86,7 @@ export default function ConfigFinca() {
         setUploading(false);
         if (uploadError) throw uploadError;
         const { data: { publicUrl } } = supabase.storage.from("uploads").getPublicUrl(uploadData.path);
-        await upsertSetting(KEYS.logo, publicUrl, logoSetting);
+        await upsertSetting(KEYS.logo, publicUrl, fincaId);
         setLogoPreview(publicUrl);
         setPendingFile(null);
       }
