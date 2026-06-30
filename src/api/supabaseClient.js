@@ -160,6 +160,23 @@ export const produccionVisibilidad = {
   },
 };
 
+/** Calidades de "Ingresar Datos" / "Producción Semanal por Código" →
+ *  calidades_produccion. Antes era una lista fija en produccionConstantes.js;
+ *  ahora es editable desde Configuración (label, codigo_corto, caj_default)
+ *  y se pueden agregar calidades nuevas. El campo `codigo` es el
+ *  identificador interno y NO se edita: ya lo usan produccion_semanal
+ *  (codigo_producto) y produccion_visibilidad (clave). */
+const calidadesProduccionBase = createEntity('calidades_produccion');
+export const calidadesProduccion = {
+  ...calidadesProduccionBase,
+  async list() {
+    return await supabase
+      .from('calidades_produccion')
+      .select('*')
+      .order('position', { ascending: true });
+  },
+};
+
 // ============================================================
 // INVENTARIO / EMBOLSE
 // Con aliases para compatibilidad (createEmbolse, updateEmbolse, etc.)
