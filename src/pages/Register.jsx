@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/api/supabaseClient";
+import { obtenerEstadoInicialFinca } from "@/lib/activacionFinca";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,22 +53,19 @@ export default function Register() {
       const authUser = signInData.user;
 
       // 3. Crear la finca + el usuario admin.
-      // estado/fecha_activacion/fecha_vencimiento se fijan explícitamente
-      // aquí (en vez de confiar en un default de la columna en Supabase)
-      // para garantizar que el trial de 24h sí expire y AccountStatusGate
-      // pueda bloquear el acceso cuando corresponda.
+      // estado/fecha_activacion/fecha_vencimiento NO se fijan a mano: los
+      // calcula obtenerEstadoInicialFinca según si este email ya pagó antes
+      // de registrarse (pagos_pendientes) — si no hay pago, devuelve el
+      // trial de 24h de siempre.
       const fincaId = crypto.randomUUID();
-      const ahora = new Date();
-      const vencimiento = new Date(ahora.getTime() + 24 * 60 * 60 * 1000);
+      const estadoInicial = await obtenerEstadoInicialFinca(authUser.email);
       const { error: fincaError } = await supabase
         .from("fincas")
         .insert([{
           id: fincaId,
           nombre: nombreFinca.trim(),
           email_contacto: authUser.email,
-          estado: "trial",
-          fecha_activacion: ahora.toISOString(),
-          fecha_vencimiento: vencimiento.toISOString(),
+          ...estadoInicial,
         }]);
       if (fincaError) throw fincaError;
 

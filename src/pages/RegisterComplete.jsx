@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/api/supabaseClient";
+import { obtenerEstadoInicialFinca } from "@/lib/activacionFinca";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
@@ -13,6 +14,7 @@ import AuthLayout from "@/components/AuthLayout";
 export default function RegisterComplete() {
   const [status, setStatus] = useState("loading"); // loading | success | error
   const [error, setError] = useState("");
+  const [esActivo, setEsActivo] = useState(false); // true si ya pagó antes de registrarse
 
   useEffect(() => {
     const completeRegistration = async () => {
@@ -49,20 +51,18 @@ export default function RegisterComplete() {
             authUser.user_metadata?.full_name?.trim() ||
             "Mi Finca";
 
-          // estado/fecha_activacion/fecha_vencimiento se fijan explícitamente
-          // aquí (igual que en Register.jsx) para que el trial de 24h sí
-          // expire sin depender de un default de columna en Supabase.
-          const ahora = new Date();
-          const vencimiento = new Date(ahora.getTime() + 24 * 60 * 60 * 1000);
+          // estado/fecha_activacion/fecha_vencimiento NO se fijan a mano
+          // (igual que en Register.jsx): obtenerEstadoInicialFinca revisa si
+          // este email ya pagó antes de registrarse (pagos_pendientes) y
+          // activa directo 30 días, o devuelve el trial de 24h por defecto.
+          const estadoInicial = await obtenerEstadoInicialFinca(authUser.email);
           const { error: fincaError } = await supabase
             .from("fincas")
             .insert([{
               id: fincaId,
               nombre: nombreFinca,
               email_contacto: authUser.email,
-              estado: "trial",
-              fecha_activacion: ahora.toISOString(),
-              fecha_vencimiento: vencimiento.toISOString(),
+              ...estadoInicial,
             }]);
           if (fincaError) throw fincaError;
 
@@ -70,6 +70,18 @@ export default function RegisterComplete() {
             .from("users")
             .insert([{ id: authUser.id, email: authUser.email, role: "admin", finca_id: fincaId }]);
           if (userError) throw userError;
+
+          setEsActivo(estadoInicial.estado === "activo");
+        } else {
+          // Usuario ya provisionado antes (p. ej. abrió el link dos veces):
+          // consultamos el estado real de su finca para mostrar el mensaje
+          // correcto (no asumimos "trial").
+          const { data: fincaExistente } = await supabase
+            .from("fincas")
+            .select("estado")
+            .eq("email_contacto", authUser.email)
+            .maybeSingle();
+          setEsActivo(fincaExistente?.estado === "activo");
         }
 
         setStatus("success");
@@ -107,11 +119,13 @@ export default function RegisterComplete() {
     <AuthLayout
       icon={CheckCircle2}
       title="¡Cuenta activada!"
-      subtitle="Tu prueba gratuita de 24 horas ya comenzó"
+      subtitle={esActivo ? "Tu suscripción ya está activa" : "Tu prueba gratuita de 24 horas ya comenzó"}
     >
       <p className="text-sm text-muted-foreground text-center mb-6">
-        Tienes acceso completo durante las próximas 24 horas. Cuando termine, podrás
-        activar tu plan desde la pantalla de estado de cuenta.
+        {esActivo
+          ? "Detectamos tu pago y activamos tu cuenta directo, sin trial. Ya tienes acceso completo."
+          : "Tienes acceso completo durante las próximas 24 horas. Cuando termine, podrás " +
+            "activar tu plan desde la pantalla de estado de cuenta."}
       </p>
       <Button className="w-full h-12 font-medium" onClick={() => (window.location.href = "/")}>
         Entrar a la app
