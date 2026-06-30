@@ -1,6 +1,12 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { produccion, produccionSemanal, produccionCajasPalet, produccionVisibilidad } from "@/api/supabaseClient";
+import {
+  produccion,
+  produccionSemanal,
+  produccionCajasPalet,
+  produccionVisibilidad,
+  calidadesProduccion,
+} from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,18 +16,12 @@ import { toast } from "sonner";
 import { calcularDatosProceso } from "@/lib/produccionCalc";
 import { exportStyledWorkbook } from "@/utils/excelExport";
 import { useAuth } from "@/lib/AuthContext";
-import {
-  CODIGOS_SEMANA,
-  CALIDAD_LABEL,
-  CODIGO_CORTO,
-  CAJ_DEFAULT,
-} from "@/lib/produccionConstantes";
 
 // --- Tablas semanales (migradas desde la antigua página "Inventario
 // Semanal", ahora integradas aquí en "Ingresar Datos") ---
-// CODIGOS_SEMANA, CALIDAD_LABEL, CODIGO_CORTO y CAJ_DEFAULT viven en
-// produccionConstantes.js para que "Configuración" pueda generar sus
-// botones de mostrar/ocultar sobre la misma lista, sin duplicarla.
+// Las calidades (antes CODIGOS_SEMANA/CALIDAD_LABEL/CODIGO_CORTO/CAJ_DEFAULT
+// fijas en produccionConstantes.js) ahora viven en la tabla Supabase
+// calidades_produccion y son editables desde "Configuración".
 
 // Área total de la finca (en acres), usada como denominador de
 // "% Área Cosecha Día" = Área Cosecha Día / ÁREA_TOTAL_FINCA_ACRES.
@@ -184,12 +184,25 @@ export default function ProduccionIngresar() {
       .filter((v) => v.grupo === "ingresar_calidades" && v.visible === false)
       .map((v) => v.clave)
   );
-  const codigosVisibles = CODIGOS_SEMANA.filter((c) => !codigosOcultos.has(c));
+
+  // Calidades de "Ingresar Datos" — antes lista fija (CODIGOS_SEMANA), ahora
+  // editable desde Configuración (tabla calidades_produccion).
+  const { data: calidades = [] } = useQuery({
+    queryKey: ["calidades-produccion"],
+    queryFn: async () => {
+      const { data, error } = await calidadesProduccion.list();
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const calidadPorCodigo = Object.fromEntries(calidades.map((c) => [c.codigo, c]));
+  const todosCodigos = calidades.map((c) => c.codigo);
+  const codigosVisibles = todosCodigos.filter((c) => !codigosOcultos.has(c));
 
   const [valoresGrid, setValoresGrid] = useState({});
   useEffect(() => {
     const inicial = {};
-    CODIGOS_SEMANA.forEach((codigo) => {
+    todosCodigos.forEach((codigo) => {
       const fila = filasSemana.find((f) => f.codigo_producto === codigo);
       inicial[codigo] = {
         id: fila?.id ?? null,
@@ -212,7 +225,7 @@ export default function ProduccionIngresar() {
       };
     });
     setValoresGrid(inicial);
-  }, [filasSemana, semana]);
+  }, [filasSemana, semana, calidades]);
 
   const [valoresCajasPalet, setValoresCajasPalet] = useState({});
   useEffect(() => {
@@ -311,14 +324,14 @@ export default function ProduccionIngresar() {
     DIAS_SEMANA.reduce((suma, { key }) => suma + numeroSemana(valoresGrid[codigo]?.[key]), 0);
 
   const totalPorDia = (diaKey) =>
-    CODIGOS_SEMANA.reduce((suma, codigo) => suma + numeroSemana(valoresGrid[codigo]?.[diaKey]), 0);
+    todosCodigos.reduce((suma, codigo) => suma + numeroSemana(valoresGrid[codigo]?.[diaKey]), 0);
 
-  const granTotalSemana = CODIGOS_SEMANA.reduce((suma, codigo) => suma + totalPorCodigo(codigo), 0);
+  const granTotalSemana = todosCodigos.reduce((suma, codigo) => suma + totalPorCodigo(codigo), 0);
 
   // Total de Caj.Prog del día (tabla "Resumen de Producción"). Independiente
   // de totalPorDia, que suma la columna "Total".
   const totalCajProgPorDia = (diaKey) =>
-    CODIGOS_SEMANA.reduce(
+    todosCodigos.reduce(
       (suma, codigo) => suma + numeroSemana(valoresGrid[codigo]?.[`caj_prog_${diaKey}`]),
       0
     );
@@ -654,12 +667,12 @@ export default function ProduccionIngresar() {
                 <tbody>
                   {codigosVisibles.map((codigo) => (
                     <tr key={codigo} className="border-b last:border-0">
-                      <td className="py-1.5 px-3 font-medium whitespace-nowrap">{CALIDAD_LABEL[codigo] ?? codigo}</td>
+                      <td className="py-1.5 px-3 font-medium whitespace-nowrap">{calidadPorCodigo[codigo]?.label ?? codigo}</td>
                       <td className="py-1.5 px-2 text-center text-muted-foreground">
-                        {CAJ_DEFAULT[codigo] ?? "—"}
+                        {calidadPorCodigo[codigo]?.caj_default ?? "—"}
                       </td>
                       <td className="py-1.5 px-2 text-center text-muted-foreground">
-                        {CODIGO_CORTO[codigo] ?? "—"}
+                        {calidadPorCodigo[codigo]?.codigo_corto ?? "—"}
                       </td>
                       <td className="py-1 px-1">
                         <input
@@ -878,9 +891,9 @@ export default function ProduccionIngresar() {
                             />
                           </td>
                           <td className="py-1.5 px-3 font-medium whitespace-nowrap">
-                            {CODIGO_CORTO[calidad] ?? "—"}
+                            {calidadPorCodigo[calidad]?.codigo_corto ?? "—"}
                           </td>
-                          <td className="py-1.5 px-3 whitespace-nowrap">{CALIDAD_LABEL[calidad] ?? calidad}</td>
+                          <td className="py-1.5 px-3 whitespace-nowrap">{calidadPorCodigo[calidad]?.label ?? calidad}</td>
                           <td className="py-1.5 px-2 text-center font-semibold">{total || "—"}</td>
                           <td className="py-1.5 px-2 text-center">{dif || "—"}</td>
                         </tr>
