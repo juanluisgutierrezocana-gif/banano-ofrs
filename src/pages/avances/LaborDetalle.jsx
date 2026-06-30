@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 // FIXED: importar seccionAgricola (tabla: seccion_agricola, columnas: nombre, acres, minifinca, activa)
@@ -59,6 +59,7 @@ export default function LaborDetalle() {
   const acresRef = useRef(null);
   const cicloRef = useRef(null);
   const btnRef = useRef(null);
+  const prefilledRef = useRef(false); // evita re-precargar al refetch de registros
 
   const focusNext = (nextRef) => {
     setTimeout(() => nextRef?.current?.focus(), 50);
@@ -104,6 +105,19 @@ export default function LaborDetalle() {
     },
     enabled: !!laborId,
   });
+
+  // Pre-llenar Sección y Ciclo con los valores del último registro al entrar a la página.
+  // prefilledRef garantiza que solo ocurra una vez por montaje, aunque registros haga refetch.
+  useEffect(() => {
+    if (prefilledRef.current || registros.length === 0) return;
+    prefilledRef.current = true;
+    const last = registros[0]; // ordenado por -fecha → [0] es el más reciente
+    setEntry(prev => ({
+      ...prev,
+      seccion_id: last.seccion_id || "",
+      ciclo: last.ciclo ? String(last.ciclo) : "",
+    }));
+  }, [registros]);
 
   const seccionMap = useMemo(() => {
     const m = {};
@@ -188,7 +202,8 @@ export default function LaborDetalle() {
     }
     queryClient.invalidateQueries({ queryKey: ["registros-labor", laborId] });
     playSuccessSound();
-    setEntry({ fecha: entry.fecha, seccion_id: "", ciclo: "", acres_realizados: "", unidad_extra_valor: "" });
+    // Conservar sección y ciclo para agilizar la entrada de múltiples registros
+    setEntry({ fecha: entry.fecha, seccion_id: entry.seccion_id, ciclo: entry.ciclo, acres_realizados: "", unidad_extra_valor: "" });
     setSaving(false);
     setTimeout(() => seccionRef?.current?.focus(), 50);
   };
