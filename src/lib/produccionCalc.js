@@ -203,3 +203,52 @@ export function calcularDatosProcesoAgregado(registros) {
     desperdicioGeneral,
   };
 }
+
+// Agrega un grupo de filas de produccion_resumen (una semana o un mes) para
+// la tabla "Producción" de Reportería. produccion_resumen se llena a mano
+// (sin fórmula) con los mismos nombres de campo que calcularDatosProceso
+// devuelve (racimos_cosechados, factor_general, peso_racimo, etc.), así que
+// para Semanal/Mensual se suman los campos de conteo (racimos, cajas,
+// quintales) y se VUELVEN A CALCULAR factor/peso racimo/desperdicio sobre
+// esas sumas — mismo criterio "recalcular sobre sumas" que ya usa
+// calcularDatosProcesoAgregado() arriba. Así el resultado no depende de la
+// escala en que el usuario haya tecleado manualmente esos campos día por día.
+export function calcularResumenAgregado(filas) {
+  const sum = (campo) => filas.reduce((acc, f) => acc + (Number(f[campo]) || 0), 0);
+
+  const racimosCosechados = sum("racimos_cosechados");
+  const racimosRechazados = sum("racimos_rechazados");
+  const racimosProcesados = racimosCosechados - racimosRechazados;
+  const cajasPrimera = sum("cajas_primera");
+  const cajasSegunda = sum("cajas_segunda");
+  const cajasTercera = sum("cajas_tercera");
+  const quintalesRechazo = sum("quintales_rechazo");
+
+  const pesoTotalCajas =
+    (cajasSegunda + cajasPrimera) * 41.5 + cajasTercera * 42.5 + quintalesRechazo * 100;
+  const pesoRacimo = racimosCosechados > 0 ? pesoTotalCajas / racimosCosechados : 0;
+  const factorPrimera = racimosProcesados > 0 ? cajasPrimera / racimosProcesados : 0;
+  const factorGeneral = racimosProcesados > 0 ? (cajasPrimera + cajasSegunda) / racimosProcesados : 0;
+  const factorPotencial = pesoRacimo / 41.5;
+  const pesoBueno = (cajasPrimera + cajasSegunda) * 41.5;
+  const pesoPotencial = pesoRacimo * racimosProcesados;
+  const desperdicioMonte = pesoPotencial > 0 ? (pesoPotencial - pesoBueno) / pesoPotencial : 0;
+  const pesoRechazo = cajasTercera * 42.5 + quintalesRechazo * 100;
+  const desperdicioGeneral = pesoTotalCajas > 0 ? pesoRechazo / pesoTotalCajas : 0;
+
+  return {
+    racimos_cosechados: racimosCosechados,
+    racimos_rechazados: racimosRechazados,
+    racimos_procesados: racimosProcesados,
+    cajas_primera: cajasPrimera,
+    cajas_segunda: cajasSegunda,
+    cajas_tercera: cajasTercera,
+    quintales_rechazo: quintalesRechazo,
+    factor_primera: factorPrimera,
+    factor_general: factorGeneral,
+    factor_potencial: factorPotencial,
+    peso_racimo: pesoRacimo,
+    desperdicio_monte: desperdicioMonte,
+    desperdicio_general: desperdicioGeneral,
+  };
+}

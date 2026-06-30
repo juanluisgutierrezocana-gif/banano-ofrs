@@ -1,6 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { produccion, produccionCajasPalet, produccionCostos } from "@/api/supabaseClient";
+import {
+  produccion,
+  produccionCajasPalet,
+  produccionCostos,
+  produccionResumen,
+  produccionVisibilidad,
+} from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,10 +14,15 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { BarChart3, Download, Pencil, Trash2 } from "lucide-react";
+import { BarChart3, Download, Pencil, Trash2, Factory } from "lucide-react";
 import { toast } from "sonner";
-import { calcularDatosProceso, calcularDatosProcesoAgregado } from "@/lib/produccionCalc";
-import { exportStyledExcel } from "@/utils/excelExport";
+import {
+  calcularDatosProceso,
+  calcularDatosProcesoAgregado,
+  calcularResumenAgregado,
+} from "@/lib/produccionCalc";
+import { exportStyledWorkbook } from "@/utils/excelExport";
+import { CAMPOS_RESUMEN } from "@/lib/produccionConstantes";
 
 // Reportería v2: UNA sola tabla (esquema de 18 columnas confirmado por el
 // cliente) que se "transforma" entre Diario / Semanal / Mensual según el
@@ -118,6 +129,85 @@ function agruparPorMes(registros, filasCajasPalet, anio) {
   };
 
   return { filas, totalAno };
+}
+
+// ============================================================
+// TABLA "PRODUCCIÓN" (segunda tabla, paralela a la de arriba — alimentada
+// por produccion_resumen, la tabla independiente de la página "Producción".
+// NO se mezcla con la tabla de "Ingresar Datos": son dos tablas separadas
+// en cada ventana (Diario/Semanal/Mensual), decisión confirmada con el
+// cliente.
+// ============================================================
+
+// Agrupa filas de produccion_resumen por semana (lunes a sábado), igual
+// criterio de semana que agruparPorSemana() arriba.
+function agruparResumenPorSemana(filas) {
+  const grupos = {};
+  filas.forEach((f) => {
+    if (!f.fecha) return;
+    const lunes = lunesDeSemanaDe(f.fecha);
+    if (!grupos[lunes]) grupos[lunes] = [];
+    grupos[lunes].push(f);
+  });
+
+  return Object.entries(grupos)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([lunes, filasSemana]) => ({
+      lunes,
+      semanaNum: numeroSemanaISO(lunes),
+      ...calcularResumenAgregado(filasSemana),
+    }));
+}
+
+// Agrupa filas de produccion_resumen por mes calendario de `anio`. Igual
+// criterio que agruparPorMes() arriba: siempre los 12 meses + fila TOTAL.
+function agruparResumenPorMes(filas, anio) {
+  const anioStr = String(anio);
+  const filasDelAno = filas.filter((f) => f.fecha?.slice(0, 4) === anioStr);
+
+  const meses = MESES.map((nombre, idx) => {
+    const mesNum = idx + 1;
+    const mesStr = String(mesNum).padStart(2, "0");
+    const filasDelMes = filasDelAno.filter((f) => f.fecha.slice(5, 7) === mesStr);
+    return {
+      mes: nombre,
+      mesNum,
+      anio: anioStr,
+      ...calcularResumenAgregado(filasDelMes),
+    };
+  });
+
+  const totalAno = {
+    mes: "TOTAL",
+    mesNum: null,
+    anio: anioStr,
+    ...calcularResumenAgregado(filasDelAno),
+  };
+
+  return { filas: meses, totalAno };
+}
+
+// Campos que en Semanal/Mensual se recalculan por fórmula (no son suma
+// directa): se formatean como decimal o porcentaje. El resto son conteos.
+const CAMPOS_FACTOR_RESUMEN = new Set(["factor_primera", "factor_general", "factor_potencial", "peso_racimo"]);
+const CAMPOS_PCT_RESUMEN = new Set(["desperdicio_monte", "desperdicio_general"]);
+
+// Formatea una celda de la tabla "Producción". En Diario se muestra el
+// valor tal cual lo escribió el usuario en la página "Producción" (esa
+// tabla es 100% manual, sin convención de escala fija para factor/peso/
+// desperdicio). En Semanal/Mensual el valor ya viene recalculado por
+// calcularResumenAgregado() a partir de conteos reales, así que ahí sí se
+// puede aplicar con seguridad el mismo formato pct/decimal que el resto de
+// Reportería.
+function formatearCampoResumen(valor, field, esAgregado) {
+  if (valor === null || valor === undefined || valor === "" || Number.isNaN(Number(valor))) return "—";
+  const n = Number(valor);
+  if (!esAgregado) {
+    return Number.isInteger(n) ? n.toLocaleString("es-EC") : n.toFixed(2);
+  }
+  if (CAMPOS_PCT_RESUMEN.has(field)) return (n * 100).toFixed(2) + "%";
+  if (CAMPOS_FACTOR_RESUMEN.has(field)) return n.toFixed(2);
+  return Math.round(n).toLocaleString("es-EC");
 }
 
 // ============================================================
@@ -348,6 +438,31 @@ export default function ProduccionReporteria() {
     },
   });
 
+  // Tabla "Producción" (segunda tabla, paralela — produccion_resumen).
+  const { data: resumenHistorial = [], isLoading: cargandoResumen } = useQuery({
+    queryKey: ["produccion-resumen-historial"],
+    queryFn: async () => {
+      const { data, error } = await produccionResumen.list("-fecha");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: visibilidadColumnas = [] } = useQuery({
+    queryKey: ["produccion-visibilidad"],
+    queryFn: async () => {
+      const { data, error } = await produccionVisibilidad.list();
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const camposResumenOcultos = new Set(
+    visibilidadColumnas
+      .filter((v) => v.grupo === "produccion_columnas" && v.visible === false)
+      .map((v) => v.clave)
+  );
+  const camposResumenVisibles = CAMPOS_RESUMEN.filter((c) => !camposResumenOcultos.has(c.field));
+
   const [vista, setVista] = useState("diario"); // "diario" | "semanal" | "mensual"
 
   // Edición/borrado de filas Diario (1 fila = 1 registro real en
@@ -457,32 +572,75 @@ export default function ProduccionReporteria() {
   const filasActuales = vista === "diario" ? filasDiario : vista === "semanal" ? filasSemanal : filasMensual;
   const etiquetaCol = vista === "diario" ? "Fecha" : vista === "semanal" ? "Semana" : "Mes";
 
+  // Tabla "Producción" (paralela) — mismas 3 vistas, mismo año seleccionado.
+  const resumenSemanalProduccion = useMemo(
+    () => agruparResumenPorSemana(resumenHistorial),
+    [resumenHistorial]
+  );
+  const resumenMensualProduccion = useMemo(
+    () => agruparResumenPorMes(resumenHistorial, anioSeleccionado),
+    [resumenHistorial, anioSeleccionado]
+  );
+  const filasProduccionActuales =
+    vista === "diario" ? resumenHistorial
+    : vista === "semanal" ? resumenSemanalProduccion
+    : resumenMensualProduccion.filas;
+  const labelProduccion = (f) =>
+    vista === "diario" ? f.fecha : vista === "semanal" ? `Sem ${f.semanaNum}` : f.mes;
+
   const handleExportar = () => {
-    if (filasActuales.length === 0) {
+    if (filasActuales.length === 0 && filasProduccionActuales.length === 0) {
       toast.error("No hay datos para exportar");
       return;
     }
-    const headers = [etiquetaCol, ...COLUMNAS.map((c) => c.label)];
-    const filasExport = vista === "mensual" ? [...filasActuales, filaTotalMensual] : filasActuales;
-    const rows = filasExport.map((f) => [
-      f.label,
-      ...COLUMNAS.map((c) => {
-        if (c.key === "costoCaja") return f.esTotal || f.costoCaja === "" || f.costoCaja == null ? "" : f.costoCaja;
-        const valor = f[c.key];
-        if (valor === null || valor === undefined) return "";
-        if (c.formato === "pct") return (Number(valor) * 100).toFixed(2) + "%";
-        if (c.formato === "int") return Math.round(Number(valor));
-        if (c.formato === "dec1") return Number(valor).toFixed(1);
-        if (c.formato === "dec2") return Number(valor).toFixed(2);
-        return valor;
-      }),
-    ]);
-    exportStyledExcel({
-      title: `Reportería de Producción — ${vista === "diario" ? "Histórico Diario" : vista === "semanal" ? "Resumen Semanal" : "Resumen Mensual"}`,
-      headers,
-      rows,
-      sheetName: "Reporteria",
+    const tituloVista = vista === "diario" ? "Histórico Diario" : vista === "semanal" ? "Resumen Semanal" : "Resumen Mensual";
+    const sheets = [];
+
+    if (filasActuales.length > 0) {
+      const headers = [etiquetaCol, ...COLUMNAS.map((c) => c.label)];
+      const filasExport = vista === "mensual" ? [...filasActuales, filaTotalMensual] : filasActuales;
+      const rows = filasExport.map((f) => [
+        f.label,
+        ...COLUMNAS.map((c) => {
+          if (c.key === "costoCaja") return f.esTotal || f.costoCaja === "" || f.costoCaja == null ? "" : f.costoCaja;
+          const valor = f[c.key];
+          if (valor === null || valor === undefined) return "";
+          if (c.formato === "pct") return (Number(valor) * 100).toFixed(2) + "%";
+          if (c.formato === "int") return Math.round(Number(valor));
+          if (c.formato === "dec1") return Number(valor).toFixed(1);
+          if (c.formato === "dec2") return Number(valor).toFixed(2);
+          return valor;
+        }),
+      ]);
+      sheets.push({
+        sheetName: "Ingresar Datos",
+        title: `Reportería — Ingresar Datos — ${tituloVista}`,
+        headers,
+        rows,
+      });
+    }
+
+    if (filasProduccionActuales.length > 0) {
+      const headers = [etiquetaCol, ...camposResumenVisibles.map((c) => c.label)];
+      const esAgregado = vista !== "diario";
+      const filasExport = vista === "mensual"
+        ? [...filasProduccionActuales, resumenMensualProduccion.totalAno]
+        : filasProduccionActuales;
+      const rows = filasExport.map((f) => [
+        labelProduccion(f),
+        ...camposResumenVisibles.map((c) => formatearCampoResumen(f[c.field], c.field, esAgregado)),
+      ]);
+      sheets.push({
+        sheetName: "Produccion",
+        title: `Reportería — Producción — ${tituloVista}`,
+        headers,
+        rows,
+      });
+    }
+
+    exportStyledWorkbook({
       fileName: `reporteria_produccion_${vista}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      sheets,
     });
   };
 
@@ -600,6 +758,68 @@ export default function ProduccionReporteria() {
                         col.key === "costoCaja"
                           ? <td key={col.key} className="py-2 px-2">—</td>
                           : <td key={col.key} className="py-2 px-2">{formatearColumna(filaTotalMensual[col.key], col.formato, col.key)}</td>
+                      ))}
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Segunda tabla, paralela a la de arriba — alimentada por
+          produccion_resumen (página "Producción"). NO se mezcla con la
+          tabla de "Ingresar Datos": son dos tablas separadas, decisión
+          confirmada con el cliente. Es de solo lectura aquí: se edita
+          desde la página "Producción". */}
+      <Card className="mt-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Factory className="w-4 h-4" />
+            Producción
+            {vista === "diario" && ` (${filasProduccionActuales.length})`}
+            {vista === "semanal" && ` — Resumen Semanal (${filasProduccionActuales.length} semanas)`}
+            {vista === "mensual" && " — Resumen Mensual"}
+          </CardTitle>
+          <p className="text-xs text-muted-foreground pt-1">
+            Datos de la página "Producción" (tabla independiente). Se edita desde ahí.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {cargandoResumen ? (
+            <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
+          ) : filasProduccionActuales.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-8">No hay datos aún.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-center text-muted-foreground border-b bg-muted/30 text-xs">
+                    <th className="py-2 px-2 whitespace-nowrap text-left">{etiquetaCol}</th>
+                    {camposResumenVisibles.map((c) => (
+                      <th key={c.field} className="py-2 px-2 whitespace-nowrap">{c.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filasProduccionActuales.map((f, idx) => (
+                    <tr key={f.id ?? f.lunes ?? f.mes ?? idx} className="border-b last:border-0 hover:bg-muted/30 text-center">
+                      <td className="py-2 px-2 font-medium text-left whitespace-nowrap">{labelProduccion(f)}</td>
+                      {camposResumenVisibles.map((c) => (
+                        <td key={c.field} className="py-2 px-2">
+                          {formatearCampoResumen(f[c.field], c.field, vista !== "diario")}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                  {vista === "mensual" && (
+                    <tr className="text-center font-semibold bg-muted/40 border-t-2">
+                      <td className="py-2 px-2 text-left">TOTAL</td>
+                      {camposResumenVisibles.map((c) => (
+                        <td key={c.field} className="py-2 px-2">
+                          {formatearCampoResumen(resumenMensualProduccion.totalAno[c.field], c.field, true)}
+                        </td>
                       ))}
                     </tr>
                   )}
