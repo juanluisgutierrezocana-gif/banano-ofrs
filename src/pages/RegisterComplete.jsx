@@ -127,7 +127,7 @@ export default function RegisterComplete() {
           : "Tienes acceso completo durante las próximas 24 horas. Cuando termine, podrás " +
             "activar tu plan desde la pantalla de estado de cuenta."}
       </p>
-      <Button className="w-full h-12 font-medium" onClick={() => (window.location.href = "/")}>
+      <Button className="w-full h-12 font-medium" onClick={() => (window.location.href = "/landing")}>
         Entrar a la app
       </Button>
       <p className="text-center text-sm text-muted-foreground mt-4">

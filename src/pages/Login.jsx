@@ -24,7 +24,7 @@ export default function Login() {
         password 
       });
       if (signInError) throw signInError;
-      window.location.href = "/";
+      window.location.href = "/landing";
     } catch (err) {
       setError(err.message || "Invalid email or password");
     } finally {
