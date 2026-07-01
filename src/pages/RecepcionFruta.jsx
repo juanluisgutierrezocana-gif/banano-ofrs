@@ -40,6 +40,19 @@ export default function RecepcionFruta() {
   const handleSave = (trenada) => { setSavedTrenada(trenada); setStep(3); };
   const handleNueva = () => { setTrenadaInfo(null); setSavedTrenada(null); setStep(1); };
 
+  // DEBUG TEMPORAL — borrar después de confirmar
+  console.log("[RecepcionFruta] debug", {
+    isLoadingAuth,
+    isAdmin,
+    isEditor,
+    isViewer,
+    necesitaVerificar,
+    loadingPermisos,
+    freshPermisos,
+    currentUserId: currentUser?.id,
+    currentUserRole: currentUser?.role,
+  });
+
   // Esperar auth inicial (evita flash de contenido)
   if (isLoadingAuth) return null;
 
