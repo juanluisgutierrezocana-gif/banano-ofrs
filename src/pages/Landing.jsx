@@ -60,7 +60,7 @@ export default function Landing() {
               le activó 'recepcion_fruta' en Configuraciones→Usuarios. */}
           {(isAdmin || hasPermiso("recepcion_fruta")) && (
           <Link
-            to="/recepcion"
+            to="/"
             className="w-full flex items-center justify-between gap-3 py-4 px-6 rounded-2xl font-semibold text-lg transition-all duration-200 shadow-xl active:scale-95"
             style={{ background: "linear-gradient(135deg, #16a34a, #15803d)", color: "white" }}
           >
