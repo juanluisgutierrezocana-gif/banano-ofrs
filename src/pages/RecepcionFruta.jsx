@@ -70,7 +70,10 @@ export default function RecepcionFruta() {
   // Editor: esperar verificación DB, luego decidir
   if (necesitaVerificar) {
     if (loadingPermisos) return null;
-    if (!freshPermisos?.recepcion_fruta) return <Navigate to="/landing" replace />;
+    if (!freshPermisos?.recepcion_fruta) {
+      window.location.replace("/landing");
+      return null;
+    }
   }
 
   return (

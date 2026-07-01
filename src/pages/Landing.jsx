@@ -55,9 +55,12 @@ export default function Landing() {
 
         {/* Botones */}
         <div className="flex flex-col gap-4 w-full">
-          {/* Botón Recibir Fruta */}
+          {/* Botón Recibir Fruta: gateado por permiso granular.
+              Admin/Dueño siempre lo ven; un Editor solo si el admin
+              le activó 'recepcion_fruta' en Configuraciones→Usuarios. */}
+          {(isAdmin || hasPermiso("recepcion_fruta")) && (
           <Link
-            to="/"
+            to="/recepcion"
             className="w-full flex items-center justify-between gap-3 py-4 px-6 rounded-2xl font-semibold text-lg transition-all duration-200 shadow-xl active:scale-95"
             style={{ background: "linear-gradient(135deg, #16a34a, #15803d)", color: "white" }}
           >
@@ -67,6 +70,7 @@ export default function Landing() {
             </div>
             <ChevronRight className="w-5 h-5 opacity-80" />
           </Link>
+          )}
 
           {/* Botón Avances Agrícolas: gateado por permiso granular.
               Admin/Dueño siempre lo ven; un Editor (role==='user') solo si
