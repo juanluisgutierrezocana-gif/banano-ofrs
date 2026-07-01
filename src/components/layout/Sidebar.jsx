@@ -63,6 +63,7 @@ export default function Sidebar() {
 
   const navItems = allNavItems.filter((item) => {
     // Caso especial resuelto por permiso granular (no por minRole):
+    if (item.path === "/recepcion") return isAdmin || hasPermiso("recepcion_fruta");
     if (item.path === "/configuraciones") return isAdmin || hasAnyConfigPermiso;
     if (item.minRole === "owner") return isOwner;
     if (item.minRole === "admin") return isAdmin;

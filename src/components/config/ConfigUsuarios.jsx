@@ -37,6 +37,7 @@ const PERMISOS = [
   { key: "config_finca", label: "Finca" },
   { key: "avances_agricolas", label: "Avances Agrícolas" },
   { key: "produccion", label: "Producción" },
+  { key: "recepcion_fruta", label: "Recibir Fruta" },
 ];
 
 export default function ConfigUsuarios() {

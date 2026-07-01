@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Navigate } from "react-router-dom";
 import StepInicio from "@/components/recepcion/StepInicio";
 import StepConteo from "@/components/recepcion/StepConteo";
 import StepConfirmacion from "@/components/recepcion/StepConfirmacion";
@@ -6,7 +7,7 @@ import { useRole } from "@/hooks/useRole";
 import { ShieldOff } from "lucide-react";
 
 export default function RecepcionFruta() {
-  const { isViewer } = useRole();
+  const { isAdmin, isEditor, isViewer, hasPermiso } = useRole();
   const [step, setStep] = useState(1);
   const [trenadaInfo, setTrenadaInfo] = useState(null);
   const [savedTrenada, setSavedTrenada] = useState(null);
@@ -26,6 +27,11 @@ export default function RecepcionFruta() {
     setSavedTrenada(null);
     setStep(1);
   };
+
+  // Editor sin permiso recepcion_fruta → redirige a pantalla inicial
+  if (isEditor && !isAdmin && !hasPermiso("recepcion_fruta")) {
+    return <Navigate to="/landing" replace />;
+  }
 
   if (isViewer) return (
     <div className="max-w-2xl mx-auto">

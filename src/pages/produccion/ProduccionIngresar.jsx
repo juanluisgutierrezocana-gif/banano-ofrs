@@ -427,7 +427,7 @@ export default function ProduccionIngresar() {
           ["Factor 1ra", redondear(calculado?.factorPrimera) ?? ""],
           ["Factor General", redondear(calculado?.factorGeneral) ?? ""],
           ["Factor Potencial", redondear(calculado?.factorPotencial) ?? ""],
-          ["Desperdicio del Monte", porcentaje(calculado?.desperdicioMonte) ?? ""],
+          ["DESPERDICIO REC. RECH.", porcentaje(calculado?.desperdicioMonte) ?? ""],
           ["Desperdicio Real", porcentaje(calculado?.desperdicioGeneral) ?? ""],
           ["Peso Pinzote", ultimo.peso_pinzote ?? ""],
           ["Peso Racimo", redondear(calculado?.pesoRacimo) ?? ""],
@@ -802,7 +802,7 @@ export default function ProduccionIngresar() {
                 <FilaProceso label="Factor 1ra" valor={redondear(calculado?.factorPrimera)} />
                 <FilaProceso label="Factor General" valor={redondear(calculado?.factorGeneral)} />
                 <FilaProceso label="Factor Potencial" valor={redondear(calculado?.factorPotencial)} />
-                <FilaProceso label="Desperdicio del Monte" valor={porcentaje(calculado?.desperdicioMonte)} />
+                <FilaProceso label="DESPERDICIO REC. RECH." valor={porcentaje(calculado?.desperdicioMonte)} />
                 <FilaProceso label="Desperdicio Real" valor={porcentaje(calculado?.desperdicioGeneral)} />
                 <FilaProceso label="Peso Pinzote" valor={ultimo.peso_pinzote} />
                 <FilaProceso label="Peso Racimo" valor={redondear(calculado?.pesoRacimo)} />

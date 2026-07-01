@@ -18,7 +18,7 @@ export const CAMPOS_RESUMEN = [
   { field: "factor_general", label: "Factor General" },
   { field: "factor_potencial", label: "Factor Potencial" },
   { field: "peso_racimo", label: "Peso Racimo" },
-  { field: "desperdicio_monte", label: "Desperdicio del Monte" },
+  { field: "desperdicio_monte", label: "DESPERDICIO REC. RECH." },
   { field: "desperdicio_general", label: "Desperdicio General" },
 ];
 
