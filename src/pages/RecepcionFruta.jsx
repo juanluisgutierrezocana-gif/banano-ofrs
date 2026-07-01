@@ -1,37 +1,47 @@
 import React, { useState } from "react";
 import { Navigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import StepInicio from "@/components/recepcion/StepInicio";
 import StepConteo from "@/components/recepcion/StepConteo";
 import StepConfirmacion from "@/components/recepcion/StepConfirmacion";
 import { useRole } from "@/hooks/useRole";
+import { useAuth } from "@/lib/AuthContext";
+import { supabase } from "@/api/supabaseClient";
 import { ShieldOff } from "lucide-react";
 
 export default function RecepcionFruta() {
-  const { isAdmin, isEditor, isViewer, hasPermiso } = useRole();
+  const { user: currentUser, isLoadingAuth } = useAuth();
+  const { isAdmin, isEditor, isViewer } = useRole();
   const [step, setStep] = useState(1);
   const [trenadaInfo, setTrenadaInfo] = useState(null);
   const [savedTrenada, setSavedTrenada] = useState(null);
 
-  const handleIniciar = (info) => {
-    setTrenadaInfo(info);
-    setStep(2);
-  };
+  // Para Editors (no admins): verifica el permiso recepcion_fruta directamente
+  // en DB —no desde el cache de AuthContext— porque ese cache se carga al login
+  // y no se actualiza si el admin cambia permisos mientras el editor está activo.
+  // staleTime: 0 garantiza que cada visita a esta página re-consulta DB.
+  const necesitaVerificar = isEditor && !isAdmin;
+  const { data: freshPermisos, isLoading: loadingPermisos } = useQuery({
+    queryKey: ["permiso-recepcion", currentUser?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users")
+        .select("permisos")
+        .eq("id", currentUser.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.permisos ?? {};
+    },
+    enabled: necesitaVerificar && !!currentUser?.id,
+    staleTime: 0, // siempre re-fetch: refleja cambios de permiso de inmediato
+  });
 
-  const handleSave = (trenada) => {
-    setSavedTrenada(trenada);
-    setStep(3);
-  };
+  const handleIniciar = (info) => { setTrenadaInfo(info); setStep(2); };
+  const handleSave = (trenada) => { setSavedTrenada(trenada); setStep(3); };
+  const handleNueva = () => { setTrenadaInfo(null); setSavedTrenada(null); setStep(1); };
 
-  const handleNueva = () => {
-    setTrenadaInfo(null);
-    setSavedTrenada(null);
-    setStep(1);
-  };
-
-  // Editor sin permiso recepcion_fruta → redirige a pantalla inicial
-  if (isEditor && !isAdmin && !hasPermiso("recepcion_fruta")) {
-    return <Navigate to="/landing" replace />;
-  }
+  // Esperar auth inicial (evita flash de contenido)
+  if (isLoadingAuth) return null;
 
   if (isViewer) return (
     <div className="max-w-2xl mx-auto">
@@ -43,6 +53,12 @@ export default function RecepcionFruta() {
       </div>
     </div>
   );
+
+  // Editor: esperar verificación DB, luego decidir
+  if (necesitaVerificar) {
+    if (loadingPermisos) return null;
+    if (!freshPermisos?.recepcion_fruta) return <Navigate to="/landing" replace />;
+  }
 
   return (
     <div className="max-w-2xl mx-auto">
