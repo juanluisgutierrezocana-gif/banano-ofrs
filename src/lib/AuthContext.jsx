@@ -24,6 +24,14 @@ export const AuthProvider = ({ children }) => {
       .eq('id', authUser.id)
       .maybeSingle();
 
+    // Si existe en Auth pero no en `users`, el registro no se completó
+    // (p. ej. se auto-registró pero nunca confirmó el correo / llegó a
+    // /registro-completado). En vez de dejarlo entrar como viewer sin finca,
+    // devolvemos un error que App.jsx maneja con UserNotRegisteredError.
+    if (!userRecord) {
+      throw Object.assign(new Error('Usuario sin perfil'), { type: 'user_not_registered' });
+    }
+
     // El dueño puede "entrar" a operar dentro de cualquier finca (ver
     // PanelDueno.jsx -> enterFincaMutation), pero eso SOLO actualiza
     // owner_active_finca — nunca el finca_id propio del dueño en `users`.
@@ -103,7 +111,10 @@ export const AuthProvider = ({ children }) => {
       setAuthChecked(true);
     } catch (err) {
       console.error('Auth check failed:', err);
-      setAuthError(err.message);
+      // Si el error tiene `type` (p. ej. 'user_not_registered'), se propaga
+      // como objeto para que App.jsx pueda verificar authError.type.
+      // De lo contrario se guarda solo el mensaje (string) como antes.
+      setAuthError(err.type ? { type: err.type, message: err.message } : err.message);
       // Si quedamos en un estado dudoso (timeout o sesión corrupta), no
       // dejamos al usuario autenticado a medias: tratamos como sesión inválida
       // para que pueda volver a iniciar sesión en vez de quedar atascado.
