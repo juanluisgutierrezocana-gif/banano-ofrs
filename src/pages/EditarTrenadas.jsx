@@ -94,13 +94,35 @@ export default function EditarTrenadas() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
-      // FIXED: igual que updateMutation, faltaba destructurar { error } y lanzarlo.
+      // 1. Obtener la trenada para saber qué racimos revertir
+      const { data: t, error: fetchError } = await trenadas.get(id);
+      if (fetchError) throw fetchError;
+
+      // 2. Revertir cosechado en cada embolse afectado
+      if (t?.racimos?.length) {
+        const { data: embolseList, error: embolseError } = await inventory.list();
+        if (embolseError) throw embolseError;
+
+        await Promise.all(
+          t.racimos.map(async r => {
+            if (!r.embolse_id || !r.count) return;
+            const embolse = (embolseList || []).find(e => e.id === r.embolse_id);
+            if (!embolse) return;
+            const newCosechado = Math.max(0, (embolse.cosechado || 0) - r.count);
+            const newSaldo = embolse.total - newCosechado - (embolse.perdidas || 0);
+            await inventory.update(r.embolse_id, { cosechado: newCosechado, saldo: newSaldo });
+          })
+        );
+      }
+
+      // 3. Borrar la trenada
       const { error } = await trenadas.delete(id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trenadas-edit", fecha] });
       queryClient.invalidateQueries({ queryKey: ["trenadas", fecha] });
+      queryClient.invalidateQueries({ queryKey: ["embolses"] });
       toast.success("Trenada eliminada");
     },
     onError: (error) => {
