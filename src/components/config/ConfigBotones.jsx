@@ -43,10 +43,12 @@ export default function ConfigBotones() {
     },
   });
 
-  const embolsesDisponibles = embolses.filter(e => {
-    const saldo = e.saldo ?? (e.total - (e.cosechado || 0) - (e.perdidas || 0));
-    return saldo > 0;
-  });
+  const embolsesDisponibles = embolses
+    .filter(e => {
+      const saldo = e.saldo ?? (e.total - (e.cosechado || 0) - (e.perdidas || 0));
+      return saldo > 0;
+    })
+    .sort((a, b) => parseInt(a.semana) - parseInt(b.semana));
 
   const selectedEmbolse = embolsesDisponibles.find(e => e.id === embolseId);
 
