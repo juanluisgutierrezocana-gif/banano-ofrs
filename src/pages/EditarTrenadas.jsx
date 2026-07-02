@@ -37,9 +37,45 @@ export default function EditarTrenadas() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }) => {
-      // FIXED: no destructuraba { error } de Supabase — trenadas.update()
-      // siempre resuelve (nunca rechaza), así que un fallo (ej. RLS) se
-      // ignoraba y onSuccess se disparaba igual mostrando "éxito" en falso.
+      // 1. Leer racimos ANTERIORES para revertir su cosechado en inventario
+      const { data: old, error: fetchError } = await trenadas.get(id);
+      if (fetchError) throw fetchError;
+
+      const { data: embolseList, error: embolseError } = await inventory.list();
+      if (embolseError) throw embolseError;
+
+      // 2. Revertir cosechado de los racimos viejos
+      if (old?.racimos?.length) {
+        await Promise.all(
+          old.racimos.map(async r => {
+            if (!r.embolse_id || !r.count) return;
+            const embolse = (embolseList || []).find(e => e.id === r.embolse_id);
+            if (!embolse) return;
+            const newCosechado = Math.max(0, (embolse.cosechado || 0) - r.count);
+            const newSaldo = embolse.total - newCosechado - (embolse.perdidas || 0);
+            await inventory.update(r.embolse_id, { cosechado: newCosechado, saldo: newSaldo });
+          })
+        );
+      }
+
+      // 3. Aplicar cosechado de los racimos NUEVOS (re-fetch para valores ya revertidos)
+      const newRacimos = data.racimos || [];
+      if (newRacimos.length) {
+        const { data: freshEmbolses, error: freshError } = await inventory.list();
+        if (freshError) throw freshError;
+        await Promise.all(
+          newRacimos.map(async r => {
+            if (!r.embolse_id || !r.count) return;
+            const embolse = (freshEmbolses || []).find(e => e.id === r.embolse_id);
+            if (!embolse) return;
+            const newCosechado = (embolse.cosechado || 0) + Number(r.count);
+            const newSaldo = embolse.total - newCosechado - (embolse.perdidas || 0);
+            await inventory.update(r.embolse_id, { cosechado: newCosechado, saldo: newSaldo });
+          })
+        );
+      }
+
+      // 4. Guardar la trenada actualizada
       const { error } = await trenadas.update(id, data);
       if (error) throw error;
     },
