@@ -46,7 +46,7 @@ export default function StepConteo({ info, onSave, onBack }) {
       .map(bc => {
         // FIXED: bc.color_id es FK al color_id del embolse (categoría de color),
         // NO al id propio de la fila de inventario — por eso nunca aparecían botones.
-        const embolse = embolses.find(e => e.color_id === bc.color_id);
+        const embolse = embolses.find(e => e.id === bc.embolse_id);
         if (!embolse) return null;
         const saldo = embolse.saldo ?? (embolse.total - (embolse.cosechado || 0) - (embolse.perdidas || 0));
         if (saldo <= 0) return null;

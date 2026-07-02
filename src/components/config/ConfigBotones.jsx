@@ -73,6 +73,7 @@ export default function ConfigBotones() {
         color_name: selectedEmbolse.color_name,
         color_hex: selectedEmbolse.color_hex,
         week_age: weekAge ? parseInt(weekAge) : parseInt(selectedEmbolse.semana),
+        embolse_id: selectedEmbolse.id,
         active: true,
       });
       if (error) throw error;
@@ -186,7 +187,7 @@ export default function ConfigBotones() {
                 <p className="font-bold">{b.color_name}</p>
                 <p className="text-xs opacity-80">Sem. {b.week_age}</p>
                 {(() => {
-                  const emb = embolses.find(e => e.id === b.color_id);
+                  const emb = embolses.find(e => e.id === b.embolse_id);
                   const saldo = emb ? (emb.saldo ?? (emb.total - (emb.cosechado || 0) - (emb.perdidas || 0))) : null;
                   return saldo !== null ? (
                     <p className="text-xs opacity-60 mt-0.5">Saldo: {saldo}</p>
