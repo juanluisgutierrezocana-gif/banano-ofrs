@@ -328,6 +328,18 @@ export default function ProduccionIngresar() {
 
   const granTotalSemana = todosCodigos.reduce((suma, codigo) => suma + totalPorCodigo(codigo), 0);
 
+  // TOTAL PALETAS por calidad = Total Cajas / Cajas por Paleta (caj_default)
+  const totalPaletasPorCodigo = (codigo) => {
+    const total = totalPorCodigo(codigo);
+    const cajDefault = Number(calidadPorCodigo[codigo]?.caj_default);
+    if (!cajDefault) return null;
+    return total / cajDefault;
+  };
+  const granTotalPaletas = codigosVisibles.reduce(
+    (s, c) => s + (totalPaletasPorCodigo(c) ?? 0),
+    0
+  );
+
   // Total de Caj.Prog del día (tabla "Resumen de Producción"). Independiente
   // de totalPorDia, que suma la columna "Total".
   const totalCajProgPorDia = (diaKey) =>
@@ -427,7 +439,7 @@ export default function ProduccionIngresar() {
           ["Factor 1ra", redondear(calculado?.factorPrimera) ?? ""],
           ["Factor General", redondear(calculado?.factorGeneral) ?? ""],
           ["Factor Potencial", redondear(calculado?.factorPotencial) ?? ""],
-          ["DESPERDICIO REC. RECH.", porcentaje(calculado?.desperdicioMonte) ?? ""],
+          ["DESPERDICIO RAC. RECH.", porcentaje(calculado?.desperdicioMonte) ?? ""],
           ["Desperdicio Real", porcentaje(calculado?.desperdicioGeneral) ?? ""],
           ["Peso Pinzote", ultimo.peso_pinzote ?? ""],
           ["Peso Racimo", redondear(calculado?.pesoRacimo) ?? ""],
@@ -446,7 +458,7 @@ export default function ProduccionIngresar() {
       sheets.push({
         sheetName: "Produccion Semanal",
         title: `Producción Semanal por Código — semana del ${semana}`,
-        headers: ["Código", diaActualLabel, "Total Semana"],
+        headers: ["Código", diaActualLabel, "TOTAL CAJAS"],
         rows: codigosVisibles.map((codigo) => [
           codigo,
           valoresGrid[codigo]?.[diaActual] ?? "",
@@ -658,10 +670,11 @@ export default function ProduccionIngresar() {
                 <thead>
                   <tr className="text-center text-muted-foreground border-b bg-muted/30">
                     <th className="py-2 px-3 text-left whitespace-nowrap">Calidad</th>
-                    <th className="py-2 px-2 whitespace-nowrap">Caj.</th>
+                    <th className="py-2 px-2 whitespace-nowrap">CAJAS PALETA</th>
                     <th className="py-2 px-2 whitespace-nowrap">Cod</th>
                     <th className="py-2 px-2 whitespace-nowrap">{diaActualLabel}</th>
-                    <th className="py-2 px-3 whitespace-nowrap">Total Semana</th>
+                    <th className="py-2 px-3 whitespace-nowrap">TOTAL CAJAS</th>
+                    <th className="py-2 px-3 whitespace-nowrap">TOTAL PALETAS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -686,12 +699,19 @@ export default function ProduccionIngresar() {
                         />
                       </td>
                       <td className="py-1.5 px-3 text-center font-semibold">{totalPorCodigo(codigo) || "—"}</td>
+                      <td className="py-1.5 px-3 text-center">
+                        {(() => {
+                          const p = totalPaletasPorCodigo(codigo);
+                          return p !== null && p > 0 ? p.toFixed(2) : "—";
+                        })()}
+                      </td>
                     </tr>
                   ))}
                   <tr className="border-t-2 font-semibold bg-muted/30">
                     <td className="py-2 px-3 whitespace-nowrap" colSpan={3}>TOTAL</td>
                     <td className="py-2 px-2 text-center">{totalPorDia(diaActual) || "—"}</td>
                     <td className="py-2 px-3 text-center">{granTotalSemana || "—"}</td>
+                    <td className="py-2 px-3 text-center">{granTotalPaletas > 0 ? granTotalPaletas.toFixed(2) : "—"}</td>
                   </tr>
                 </tbody>
               </table>
@@ -705,68 +725,6 @@ export default function ProduccionIngresar() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Cajas / Palet por Día</CardTitle>
-          <p className="text-xs text-muted-foreground pt-1">
-            {diaActualLabel
-              ? `Mostrando: ${diaActualLabel} — según la fecha de arriba.`
-              : "La fecha seleccionada cae en domingo, día sin fila en esta tabla."}
-          </p>
-        </CardHeader>
-        <CardContent>
-          {cargandoCajasPalet ? (
-            <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
-          ) : !diaActual ? (
-            <p className="text-muted-foreground text-sm text-center py-8">
-              Elige una fecha de lunes a sábado para ver esta tabla.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="text-sm border-collapse">
-                <thead>
-                  <tr className="text-center text-muted-foreground border-b bg-muted/30">
-                    <th className="py-2 px-3 text-left whitespace-nowrap">Día</th>
-                    <th className="py-2 px-3 whitespace-nowrap">Cajas</th>
-                    <th className="py-2 px-3 whitespace-nowrap">Palet</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b last:border-0">
-                    <td className="py-1.5 px-3 font-medium whitespace-nowrap">{diaActualLabel}</td>
-                    <td className="py-1 px-2">
-                      <input
-                        type="number"
-                        step="1"
-                        className={inputClaseSemana}
-                        value={valoresCajasPalet[diaActual]?.cajas ?? ""}
-                        onChange={(e) => handleChangeCajasPalet(diaActual, "cajas", e.target.value)}
-                        onBlur={() => handleBlurCajasPalet(diaActual, "cajas")}
-                        placeholder="—"
-                      />
-                    </td>
-                    <td className="py-1 px-2">
-                      <input
-                        type="number"
-                        step="1"
-                        className={inputClaseSemana}
-                        value={valoresCajasPalet[diaActual]?.palet ?? ""}
-                        onChange={(e) => handleChangeCajasPalet(diaActual, "palet", e.target.value)}
-                        onBlur={() => handleBlurCajasPalet(diaActual, "palet")}
-                        placeholder="—"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-          <p className="text-xs text-muted-foreground mt-3">
-            Se escribe a mano (sin fórmula confirmada todavía) y se guarda automáticamente
-            al salir del campo.
-          </p>
-        </CardContent>
-      </Card>
       </div>
 
       <div className="space-y-6">
@@ -802,7 +760,7 @@ export default function ProduccionIngresar() {
                 <FilaProceso label="Factor 1ra" valor={redondear(calculado?.factorPrimera)} />
                 <FilaProceso label="Factor General" valor={redondear(calculado?.factorGeneral)} />
                 <FilaProceso label="Factor Potencial" valor={redondear(calculado?.factorPotencial)} />
-                <FilaProceso label="DESPERDICIO REC. RECH." valor={porcentaje(calculado?.desperdicioMonte)} />
+                <FilaProceso label="DESPERDICIO RAC. RECH." valor={porcentaje(calculado?.desperdicioMonte)} />
                 <FilaProceso label="Desperdicio Real" valor={porcentaje(calculado?.desperdicioGeneral)} />
                 <FilaProceso label="Peso Pinzote" valor={ultimo.peso_pinzote} />
                 <FilaProceso label="Peso Racimo" valor={redondear(calculado?.pesoRacimo)} />
@@ -850,8 +808,8 @@ export default function ProduccionIngresar() {
                 <td className="py-1.5 px-3">{currentUser?.finca?.nombre || "—"}</td>
               </tr>
               <tr>
-                <td className="py-1.5 px-3 font-semibold w-28">Semana</td>
-                <td className="py-1.5 px-3">Semana del {semana}</td>
+                <td className="py-1.5 px-3 font-semibold w-28">Fecha</td>
+                <td className="py-1.5 px-3">{fechaSeleccionada}</td>
               </tr>
             </tbody>
           </table>
@@ -921,7 +879,7 @@ export default function ProduccionIngresar() {
                   <FilaProceso label="% Área Cosecha Día" valor={porcentaje(areaCosechaPct) ?? "—"} />
                   <FilaProceso label="Factor Primera" valor={redondear(calculado?.factorPrimera)} />
                   <FilaProceso label="Factor General" valor={redondear(calculado?.factorGeneral)} />
-                  <FilaProceso label="Desperdicio DM" valor={porcentaje(calculado?.desperdicioMonte)} />
+                  <FilaProceso label="DESPERDICIO RAC. RECH." valor={porcentaje(calculado?.desperdicioMonte)} />
                   <FilaProceso label="Desperdicio Real" valor={porcentaje(calculado?.desperdicioGeneral)} />
                   <FilaProceso label="Rechazo en Camión (Quintal)" valor={ultimo?.quintales_rechazo ?? "—"} />
                 </tbody>

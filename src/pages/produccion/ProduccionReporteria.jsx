@@ -6,6 +6,9 @@ import {
   produccionCostos,
   produccionResumen,
   produccionVisibilidad,
+  produccionSemanal,
+  calidadesProduccion,
+  settings,
 } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -60,7 +63,8 @@ function diaKeyDeFecha(fechaStr) {
 
 // Agrupa los registros diarios por semana (lunes a sábado) y suma el
 // Total Palet correspondiente desde produccion_cajas_palet.
-function agruparPorSemana(registros, filasCajasPalet) {
+// areaTotalFinca: para recalcular % Recorrido = sum(acres) / areaTotalFinca.
+function agruparPorSemana(registros, filasCajasPalet, areaTotalFinca = 260.6) {
   const grupos = {};
   registros.forEach((r) => {
     if (!r.fecha) return;
@@ -75,11 +79,14 @@ function agruparPorSemana(registros, filasCajasPalet) {
       const totalPalet = filasCajasPalet
         .filter((cp) => cp.fecha_semana === lunes)
         .reduce((acc, cp) => acc + (Number(cp.palet) || 0), 0);
+      const sumAcres = filas.reduce((acc, r) => acc + (Number(r.acres) || 0), 0);
+      const pctRecorrido = areaTotalFinca > 0 ? sumAcres / areaTotalFinca : 0;
       return {
         lunes,
         semanaNum: numeroSemanaISO(lunes),
         totalPalet,
         ...calcularDatosProcesoAgregado(filas),
+        pctRecorrido,
       };
     });
 }
@@ -93,7 +100,8 @@ const MESES = [
 // devuelve los 12 meses (en cero si no hay datos todavía), más una fila
 // TOTAL recalculada sobre el año completo (no es la suma de los factores
 // mensuales — mismo criterio "recalcular sobre sumas" del resto del archivo).
-function agruparPorMes(registros, filasCajasPalet, anio) {
+// areaTotalFinca: para recalcular % Recorrido = sum(acres) / areaTotalFinca.
+function agruparPorMes(registros, filasCajasPalet, anio, areaTotalFinca = 260.6) {
   const anioStr = String(anio);
   const registrosDelAno = registros.filter((r) => r.fecha?.slice(0, 4) === anioStr);
 
@@ -101,18 +109,18 @@ function agruparPorMes(registros, filasCajasPalet, anio) {
     const mesNum = idx + 1;
     const mesStr = String(mesNum).padStart(2, "0");
     const registrosDelMes = registrosDelAno.filter((r) => r.fecha.slice(5, 7) === mesStr);
-    // Total Palet del mes: semanas cuyo lunes (fecha_semana) cae en este
-    // mes/año (una semana que cruza fin de mes se atribuye completa al
-    // mes de su lunes — mismo criterio simplificado de Ingresar Datos).
     const totalPalet = filasCajasPalet
       .filter((cp) => cp.fecha_semana?.slice(0, 4) === anioStr && cp.fecha_semana?.slice(5, 7) === mesStr)
       .reduce((acc, cp) => acc + (Number(cp.palet) || 0), 0);
+    const sumAcres = registrosDelMes.reduce((acc, r) => acc + (Number(r.acres) || 0), 0);
+    const pctRecorrido = areaTotalFinca > 0 ? sumAcres / areaTotalFinca : 0;
     return {
       mes: nombre,
       mesNum,
       anio: anioStr,
       totalPalet,
       ...calcularDatosProcesoAgregado(registrosDelMes),
+      pctRecorrido,
     };
   });
 
@@ -120,12 +128,15 @@ function agruparPorMes(registros, filasCajasPalet, anio) {
     .filter((cp) => cp.fecha_semana?.slice(0, 4) === anioStr)
     .reduce((acc, cp) => acc + (Number(cp.palet) || 0), 0);
 
+  const sumAcresAno = registrosDelAno.reduce((acc, r) => acc + (Number(r.acres) || 0), 0);
+  const pctRecorridoAno = areaTotalFinca > 0 ? sumAcresAno / areaTotalFinca : 0;
   const totalAno = {
     mes: "TOTAL",
     mesNum: null,
     anio: anioStr,
     totalPalet: totalPaletAno,
     ...calcularDatosProcesoAgregado(registrosDelAno),
+    pctRecorrido: pctRecorridoAno,
   };
 
   return { filas, totalAno };
@@ -272,8 +283,11 @@ const CAMPOS_EDITAR_DIARIO = [
 ];
 
 // Construye la fila normalizada (mismas 18 claves) para cada granularidad.
-function normalizarDiario(r, filasCajasPalet, costosMap) {
+// areaTotalFinca: para % Recorrido = acres / areaTotalFinca (corrección cliente).
+function normalizarDiario(r, filasCajasPalet, costosMap, areaTotalFinca = 260.6) {
   const c = calcularDatosProceso(r);
+  // Sobreescribir pctRecorrido con la fórmula correcta del cliente
+  const pctRecorrido = areaTotalFinca > 0 ? (Number(r.acres) || 0) / areaTotalFinca : 0;
   const lunes = r.fecha ? lunesDeSemanaDe(r.fecha) : null;
   const diaKey = r.fecha ? diaKeyDeFecha(r.fecha) : null;
   const filaPalet = filasCajasPalet.find((cp) => cp.fecha_semana === lunes && cp.dia === diaKey);
@@ -285,7 +299,7 @@ function normalizarDiario(r, filasCajasPalet, costosMap) {
     label: r.fecha,
     racimosCosechados: Number(r.racimos_cosechados) || 0,
     racimosRechazados: Number(r.racimos_rechazados) || 0,
-    pctRecorrido: c.pctRecorrido,
+    pctRecorrido,
     cajasTotal: c.cajasTotal,
     cajasPrimera: Number(r.cajas_primera) || 0,
     cajasSegunda: Number(r.cajas_segunda) || 0,
@@ -456,6 +470,36 @@ export default function ProduccionReporteria() {
       return data ?? [];
     },
   });
+
+  // Total acres finca (configurable desde Configuraciones, fallback 260.6).
+  const { data: acresConfig } = useQuery({
+    queryKey: ["settings-acres-finca-reporteria"],
+    queryFn: async () => {
+      const { data } = await settings.filter({ key: "area_total_finca_acres" });
+      return data?.[0] ?? null;
+    },
+  });
+  const areaTotalFinca = acresConfig ? Number(acresConfig.value) : 260.6;
+
+  // Datos de produccion_semanal (para la tabla PRODUCCIÓN DE CALIDADES).
+  const { data: semanalHistorial = [] } = useQuery({
+    queryKey: ["produccion-semanal-historial"],
+    queryFn: async () => {
+      const { data, error } = await produccionSemanal.list();
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  // Calidades activas.
+  const { data: calidades = [] } = useQuery({
+    queryKey: ["calidades-produccion"],
+    queryFn: async () => {
+      const { data, error } = await calidadesProduccion.list();
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const camposResumenOcultos = new Set(
     visibilidadColumnas
       .filter((v) => v.grupo === "produccion_columnas" && v.visible === false)
@@ -463,7 +507,42 @@ export default function ProduccionReporteria() {
   );
   const camposResumenVisibles = CAMPOS_RESUMEN.filter((c) => !camposResumenOcultos.has(c.field));
 
-  const [vista, setVista] = useState("diario"); // "diario" | "semanal" | "mensual"
+  const [vista, setVista] = useState("diario"); // "diario" | "semanal" | "mensual" | "calidades"
+
+  // ── PRODUCCIÓN DE CALIDADES ──────────────────────────────────────────────
+  // Tabla horizontal: meses como filas, calidades como columnas.
+  // Fuente: produccion_semanal (fecha_semana + codigo_producto + lunes..sabado).
+  const tablaCalidades = useMemo(() => {
+    const anioActual = String(new Date().getFullYear());
+    return MESES.map((mes, idx) => {
+      const mesNum = idx + 1;
+      const mesStr = String(mesNum).padStart(2, "0");
+      const fila = { mes };
+      let totalMes = 0;
+      calidades.forEach(({ codigo }) => {
+        // Filas de produccion_semanal cuya fecha_semana cae en este mes/año
+        const filasDelMes = semanalHistorial.filter(
+          (f) =>
+            f.codigo_producto === codigo &&
+            f.fecha_semana?.slice(0, 4) === anioActual &&
+            f.fecha_semana?.slice(5, 7) === mesStr
+        );
+        const totalCodigo = filasDelMes.reduce(
+          (acc, f) =>
+            acc +
+            ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado"].reduce(
+              (s, d) => s + (Number(f[d]) || 0),
+              0
+            ),
+          0
+        );
+        fila[codigo] = totalCodigo;
+        totalMes += totalCodigo;
+      });
+      fila._total = totalMes;
+      return fila;
+    });
+  }, [semanalHistorial, calidades]);
 
   // Edición/borrado de filas Diario (1 fila = 1 registro real en
   // registros_produccion). Semanal y Mensual son agregados, no se editan.
@@ -523,8 +602,8 @@ export default function ProduccionReporteria() {
   };
 
   const resumenSemanal = useMemo(
-    () => agruparPorSemana(registros, filasCajasPalet),
-    [registros, filasCajasPalet]
+    () => agruparPorSemana(registros, filasCajasPalet, areaTotalFinca),
+    [registros, filasCajasPalet, areaTotalFinca]
   );
 
   // Años con datos (más el año actual, para que siempre haya algo que
@@ -538,8 +617,8 @@ export default function ProduccionReporteria() {
   const [anioSeleccionado, setAnioSeleccionado] = useState(() => String(new Date().getFullYear()));
 
   const resumenMensual = useMemo(
-    () => agruparPorMes(registros, filasCajasPalet, anioSeleccionado),
-    [registros, filasCajasPalet, anioSeleccionado]
+    () => agruparPorMes(registros, filasCajasPalet, anioSeleccionado, areaTotalFinca),
+    [registros, filasCajasPalet, anioSeleccionado, areaTotalFinca]
   );
 
   const costosMap = useMemo(() => {
@@ -553,8 +632,8 @@ export default function ProduccionReporteria() {
   const recargarCostos = () => queryClient.invalidateQueries({ queryKey: ["produccion-costos"] });
 
   const filasDiario = useMemo(
-    () => registros.map((r) => normalizarDiario(r, filasCajasPalet, costosMap)),
-    [registros, filasCajasPalet, costosMap]
+    () => registros.map((r) => normalizarDiario(r, filasCajasPalet, costosMap, areaTotalFinca)),
+    [registros, filasCajasPalet, costosMap, areaTotalFinca]
   );
   const filasSemanal = useMemo(
     () => resumenSemanal.map((s) => normalizarSemana(s, costosMap)),
@@ -688,7 +767,10 @@ export default function ProduccionReporteria() {
           <div>
             <h1 className="text-2xl font-heading font-bold text-foreground">Reportería de Producción</h1>
             <p className="text-muted-foreground text-sm">
-              {vista === "diario" ? "Histórico diario" : vista === "semanal" ? "Resumen semanal" : "Resumen mensual"}
+              {vista === "diario" ? "Datos Proceso Planta Empacadora — diario"
+                : vista === "semanal" ? "Resumen semanal"
+                : vista === "mensual" ? "Resumen mensual"
+                : "Producción de Calidades — anual"}
             </p>
           </div>
         </div>
@@ -698,9 +780,9 @@ export default function ProduccionReporteria() {
         </Button>
       </div>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4">
         <Button size="sm" variant={vista === "diario" ? "default" : "outline"} onClick={() => setVista("diario")}>
-          Diario
+          Datos Proceso Planta
         </Button>
         <Button size="sm" variant={vista === "semanal" ? "default" : "outline"} onClick={() => setVista("semanal")}>
           Resumen Semanal
@@ -708,111 +790,176 @@ export default function ProduccionReporteria() {
         <Button size="sm" variant={vista === "mensual" ? "default" : "outline"} onClick={() => setVista("mensual")}>
           Resumen Mensual
         </Button>
+        <Button size="sm" variant={vista === "calidades" ? "default" : "outline"} onClick={() => setVista("calidades")}>
+          Producción de Calidades
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3 flex flex-row items-center justify-between flex-wrap gap-2">
-          <CardTitle className="text-base">
-            {vista === "diario" && `Registros (${filasActuales.length})`}
-            {vista === "semanal" && `Resumen Semanal (${filasActuales.length} semanas)`}
-            {vista === "mensual" && "Resumen Mensual"}
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            {vista === "mensual" && (
-              <select
-                className="rounded-md border border-input bg-background px-2 py-1 text-sm"
-                value={anioSeleccionado}
-                onChange={(e) => setAnioSeleccionado(e.target.value)}
-              >
-                {aniosDisponibles.map((anio) => (
-                  <option key={anio} value={anio}>{anio}</option>
-                ))}
-              </select>
-            )}
-            <Button size="sm" variant="outline" onClick={handleExportarIngresar}>
-              <Download className="w-3.5 h-3.5" />
-              Exportar
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
-          ) : filasActuales.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-8">No hay datos aún.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-center text-muted-foreground border-b bg-muted/30 text-xs">
-                    <th className="py-2 px-2 whitespace-nowrap text-left">{etiquetaCol}</th>
-                    {COLUMNAS.map((col) => (
-                      <th key={col.key} className="py-2 px-2 whitespace-nowrap">{col.label}</th>
+      {vista === "calidades" ? (
+        /* ── PRODUCCIÓN DE CALIDADES ─────────────────────────────────── */
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">
+              Producción de Calidades — {new Date().getFullYear()}
+            </CardTitle>
+            <p className="text-xs text-muted-foreground pt-1">
+              Totales de cajas por calidad, agrupados por mes. Fuente: Producción Semanal de Ingresar Datos.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {calidades.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-8">No hay calidades configuradas.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-center text-muted-foreground border-b bg-muted/30 text-xs">
+                      <th className="py-2 px-3 whitespace-nowrap text-left">Mes</th>
+                      {calidades.map((c) => (
+                        <th key={c.codigo} className="py-2 px-2 whitespace-nowrap">{c.codigo_corto || c.codigo}</th>
+                      ))}
+                      <th className="py-2 px-3 whitespace-nowrap font-semibold">TOTAL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tablaCalidades.map((fila) => (
+                      <tr key={fila.mes} className="border-b last:border-0 hover:bg-muted/30">
+                        <td className="py-2 px-3 font-medium whitespace-nowrap">{fila.mes}</td>
+                        {calidades.map((c) => (
+                          <td key={c.codigo} className="py-2 px-2 text-center">
+                            {fila[c.codigo] ? fila[c.codigo].toLocaleString("es-EC") : "—"}
+                          </td>
+                        ))}
+                        <td className="py-2 px-3 text-center font-semibold">
+                          {fila._total ? fila._total.toLocaleString("es-EC") : "—"}
+                        </td>
+                      </tr>
                     ))}
-                    {vista === "diario" && (
-                      <th className="py-2 px-2 whitespace-nowrap">Acciones</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filasActuales.map((f) => (
-                    <tr key={f.id} className="border-b last:border-0 hover:bg-muted/30 text-center">
-                      <td className="py-2 px-2 font-medium text-left whitespace-nowrap">{f.label}</td>
+                    {/* Fila TOTAL anual */}
+                    <tr className="border-t-2 font-semibold bg-muted/40">
+                      <td className="py-2 px-3 whitespace-nowrap">TOTAL</td>
+                      {calidades.map((c) => {
+                        const total = tablaCalidades.reduce((acc, f) => acc + (f[c.codigo] || 0), 0);
+                        return (
+                          <td key={c.codigo} className="py-2 px-2 text-center">
+                            {total ? total.toLocaleString("es-EC") : "—"}
+                          </td>
+                        );
+                      })}
+                      <td className="py-2 px-3 text-center">
+                        {tablaCalidades.reduce((acc, f) => acc + (f._total || 0), 0).toLocaleString("es-EC")}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        /* ── DATOS PROCESO PLANTA EMPACADORA / SEMANAL / MENSUAL ──── */
+        <Card>
+          <CardHeader className="pb-3 flex flex-row items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-base">
+              {vista === "diario" && `Datos Proceso Planta Empacadora (${filasActuales.length})`}
+              {vista === "semanal" && `Resumen Semanal (${filasActuales.length} semanas)`}
+              {vista === "mensual" && "Resumen Mensual"}
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {vista === "mensual" && (
+                <select
+                  className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                  value={anioSeleccionado}
+                  onChange={(e) => setAnioSeleccionado(e.target.value)}
+                >
+                  {aniosDisponibles.map((anio) => (
+                    <option key={anio} value={anio}>{anio}</option>
+                  ))}
+                </select>
+              )}
+              <Button size="sm" variant="outline" onClick={handleExportarIngresar}>
+                <Download className="w-3.5 h-3.5" />
+                Exportar
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
+            ) : filasActuales.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-8">No hay datos aún.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-center text-muted-foreground border-b bg-muted/30 text-xs">
+                      <th className="py-2 px-2 whitespace-nowrap text-left">{etiquetaCol}</th>
                       {COLUMNAS.map((col) => (
-                        col.key === "costoCaja"
-                          ? <CostoCajaCell key={col.key} fila={f} onGuardado={recargarCostos} />
-                          : <td key={col.key} className="py-2 px-2">{formatearColumna(f[col.key], col.formato, col.key)}</td>
+                        <th key={col.key} className="py-2 px-2 whitespace-nowrap">{col.label}</th>
                       ))}
                       {vista === "diario" && (
-                        <td className="py-2 px-2">
-                          <div className="flex items-center justify-center gap-1">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              title="Editar"
-                              onClick={() => abrirEditar(f._raw)}
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              title="Eliminar"
-                              disabled={borrandoId === f.id}
-                              onClick={() => handleBorrarDiario(f._raw)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </td>
+                        <th className="py-2 px-2 whitespace-nowrap">Acciones</th>
                       )}
                     </tr>
-                  ))}
-                  {vista === "mensual" && (
-                    <tr className="text-center font-semibold bg-muted/40 border-t-2">
-                      <td className="py-2 px-2 text-left">{filaTotalMensual.label}</td>
-                      {COLUMNAS.map((col) => (
-                        col.key === "costoCaja"
-                          ? <td key={col.key} className="py-2 px-2">—</td>
-                          : <td key={col.key} className="py-2 px-2">{formatearColumna(filaTotalMensual[col.key], col.formato, col.key)}</td>
-                      ))}
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  </thead>
+                  <tbody>
+                    {filasActuales.map((f) => (
+                      <tr key={f.id} className="border-b last:border-0 hover:bg-muted/30 text-center">
+                        <td className="py-2 px-2 font-medium text-left whitespace-nowrap">{f.label}</td>
+                        {COLUMNAS.map((col) => (
+                          col.key === "costoCaja"
+                            ? <CostoCajaCell key={col.key} fila={f} onGuardado={recargarCostos} />
+                            : <td key={col.key} className="py-2 px-2">{formatearColumna(f[col.key], col.formato, col.key)}</td>
+                        ))}
+                        {vista === "diario" && (
+                          <td className="py-2 px-2">
+                            <div className="flex items-center justify-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
+                                title="Editar"
+                                onClick={() => abrirEditar(f._raw)}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                title="Eliminar"
+                                disabled={borrandoId === f.id}
+                                onClick={() => handleBorrarDiario(f._raw)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                    {vista === "mensual" && (
+                      <tr className="text-center font-semibold bg-muted/40 border-t-2">
+                        <td className="py-2 px-2 text-left">{filaTotalMensual.label}</td>
+                        {COLUMNAS.map((col) => (
+                          col.key === "costoCaja"
+                            ? <td key={col.key} className="py-2 px-2">—</td>
+                            : <td key={col.key} className="py-2 px-2">{formatearColumna(filaTotalMensual[col.key], col.formato, col.key)}</td>
+                        ))}
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Segunda tabla, paralela a la de arriba — alimentada por
-          produccion_resumen (página "Producción"). NO se mezcla con la
-          tabla de "Ingresar Datos": son dos tablas separadas, decisión
-          confirmada con el cliente. Es de solo lectura aquí: se edita
-          desde la página "Producción". */}
-      <Card className="mt-6">
+          produccion_resumen (página "Producción"). Solo visible en vistas
+          Diario/Semanal/Mensual, no en Calidades. */}
+      {vista !== "calidades" && <Card className="mt-6">
         <CardHeader className="pb-3 flex flex-row items-start justify-between flex-wrap gap-2">
           <div>
             <CardTitle className="text-base flex items-center gap-2">
@@ -873,7 +1020,7 @@ export default function ProduccionReporteria() {
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Modal de edición — solo para filas de la vista Diario (1 fila =
           1 registro real en registros_produccion). */}

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { produccionVisibilidad, calidadesProduccion } from "@/api/supabaseClient";
+import { produccionVisibilidad, calidadesProduccion, settings } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Settings, Eye, EyeOff, Pencil, Plus } from "lucide-react";
+import { Settings, Eye, EyeOff, Pencil, Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useRole } from "@/hooks/useRole";
 import AdminOnlyMessage from "@/components/avances/AdminOnlyMessage";
@@ -55,6 +55,47 @@ export default function ProduccionConfiguraciones() {
   const [formEdit, setFormEdit] = useState({ label: "", codigo_corto: "", caj_default: "" });
   const [guardandoEdit, setGuardandoEdit] = useState(false);
 
+  // TOTAL ACRES FINCA — editable desde aquí, guardado en la tabla settings.
+  const [acresFinca, setAcresFinca] = useState("");
+  const [guardandoAcres, setGuardandoAcres] = useState(false);
+
+  const { data: acresConfig } = useQuery({
+    queryKey: ["settings-acres-finca"],
+    queryFn: async () => {
+      const { data } = await settings.filter({ key: "area_total_finca_acres" });
+      return data?.[0] ?? null;
+    },
+  });
+
+  // Sincronizar el input con el valor guardado cuando carga la query
+  useEffect(() => {
+    if (acresConfig !== undefined) {
+      setAcresFinca(String(acresConfig?.value ?? 260.6));
+    }
+  }, [acresConfig]);
+
+  const handleGuardarAcres = async () => {
+    const valor = parseFloat(acresFinca);
+    if (isNaN(valor) || valor <= 0) {
+      toast.error("Ingresa un valor válido mayor a 0");
+      return;
+    }
+    setGuardandoAcres(true);
+    let result;
+    if (acresConfig?.id) {
+      result = await settings.update(acresConfig.id, { value: valor });
+    } else {
+      result = await settings.create({ key: "area_total_finca_acres", value: valor });
+    }
+    setGuardandoAcres(false);
+    if (result.error) {
+      toast.error("No se pudo guardar: " + result.error.message);
+      return;
+    }
+    toast.success("Total acres guardado");
+    queryClient.invalidateQueries({ queryKey: ["settings-acres-finca"] });
+  };
+
   // Alta de una calidad nueva.
   const [agregando, setAgregando] = useState(false);
   const [formNueva, setFormNueva] = useState({ label: "", codigo_corto: "", caj_default: "" });
@@ -94,6 +135,18 @@ export default function ProduccionConfiguraciones() {
     toast.success("Calidad actualizada");
     queryClient.invalidateQueries({ queryKey: ["calidades-produccion"] });
     setEditando(null);
+  };
+
+  // Eliminar una calidad existente (irreversible).
+  const handleEliminarCalidad = async (calidad) => {
+    if (!confirm(`¿Eliminar la calidad "${calidad.label}"? Esta acción no se puede deshacer.`)) return;
+    const { error } = await calidadesProduccion.delete(calidad.id);
+    if (error) {
+      toast.error("No se pudo eliminar: " + error.message);
+      return;
+    }
+    toast.success("Calidad eliminada");
+    queryClient.invalidateQueries({ queryKey: ["calidades-produccion"] });
   };
 
   // El código interno nace igual al nombre escrito (en mayúsculas): es el
@@ -198,6 +251,37 @@ export default function ProduccionConfiguraciones() {
         </CardContent>
       </Card>
 
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Total Acres Finca</CardTitle>
+          <p className="text-xs text-muted-foreground pt-1">
+            Número total de acres de la finca. Se usa para calcular % Área Cosecha Día y % Recorrido en Reportería.
+            Valor por defecto: 260.6 acres.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3 max-w-xs">
+            <Label htmlFor="acres-finca" className="text-sm font-medium whitespace-nowrap">
+              TOTAL ACRES FINCA
+            </Label>
+            <Input
+              id="acres-finca"
+              type="number"
+              step="0.1"
+              min="0"
+              placeholder="260.6"
+              value={acresFinca}
+              onChange={(e) => setAcresFinca(e.target.value)}
+              className="w-32"
+            />
+            <Button size="sm" onClick={handleGuardarAcres} disabled={guardandoAcres}>
+              <Save className="w-3.5 h-3.5" />
+              {guardandoAcres ? "Guardando..." : "Guardar"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Calidades de "Ingresar Datos"</CardTitle>
@@ -224,6 +308,16 @@ export default function ProduccionConfiguraciones() {
                     onClick={() => abrirEditar(calidad)}
                   >
                     <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    title="Eliminar calidad"
+                    onClick={() => handleEliminarCalidad(calidad)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
               ))}
