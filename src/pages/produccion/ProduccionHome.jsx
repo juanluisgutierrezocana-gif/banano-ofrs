@@ -1,25 +1,18 @@
-import { useState, useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { produccionResumen, produccionVisibilidad, produccionSemanal, calidadesProduccion } from "@/api/supabaseClient";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  produccion,
+  produccionCajasPalet,
+  produccionSemanal,
+  calidadesProduccion,
+  produccionVisibilidad,
+} from "@/api/supabaseClient";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Factory, Save, Download, Trash2, BarChart2 } from "lucide-react";
-import { toast } from "sonner";
-import { exportStyledExcel } from "@/utils/excelExport";
-import { CAMPOS_RESUMEN as CAMPOS } from "@/lib/produccionConstantes";
-
-// Tabla 100% independiente, tal cual la pidió el cliente (imagen de
-// referencia): sin valores predefinidos, sin fórmulas, sin enlace a
-// "Ingresar Datos" ni a registros_produccion. Cada campo se llena a
-// mano y se guarda en su propia tabla (produccion_resumen), un
-// registro por fecha. La lista de columnas vive en produccionConstantes.js
-// (CAMPOS_RESUMEN) para que "Configuración" pueda generar sus botones de
-// mostrar/ocultar sobre la misma lista, sin duplicarla.
-
-const formularioVacio = () =>
-  CAMPOS.reduce((acc, { field }) => ({ ...acc, [field]: "" }), {});
+import { useState } from "react";
+import { Factory, FileSpreadsheet, ListTree } from "lucide-react";
+import { calcularDatosProceso } from "@/lib/produccionCalc";
 
 // Helpers de semana (mismo criterio que Ingresar Datos)
 function lunesDeSemanaDe(fechaStr) {
@@ -36,100 +29,26 @@ function diaKeyDeFecha(fechaStr) {
   return DIA_A_CLAVE[new Date(fechaStr + "T00:00:00").getDay()] ?? null;
 }
 
-// Genera sectores de un pie chart SVG simple a partir de un array { label, value, color }
-function PieChart({ datos, size = 160 }) {
-  const total = datos.reduce((s, d) => s + d.value, 0);
-  if (total === 0) return <p className="text-muted-foreground text-xs text-center py-4">Sin datos</p>;
-  const r = size / 2 - 6;
-  const cx = size / 2;
-  const cy = size / 2;
-  let startAngle = -Math.PI / 2;
-  const COLORES = ["#16a34a","#2563eb","#dc2626","#d97706","#7c3aed","#0891b2","#be185d","#059669","#4f46e5","#b45309"];
-  const sectores = datos.map((d, i) => {
-    const angle = (d.value / total) * 2 * Math.PI;
-    const x1 = cx + r * Math.cos(startAngle);
-    const y1 = cy + r * Math.sin(startAngle);
-    const endAngle = startAngle + angle;
-    const x2 = cx + r * Math.cos(endAngle);
-    const y2 = cy + r * Math.sin(endAngle);
-    const largeArc = angle > Math.PI ? 1 : 0;
-    const path = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
-    const sector = { path, color: d.color || COLORES[i % COLORES.length], label: d.label, value: d.value };
-    startAngle = endAngle;
-    return sector;
-  });
-  return (
-    <div className="flex flex-col items-center gap-3">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {sectores.map((s, i) => (
-          <path key={i} d={s.path} fill={s.color} stroke="white" strokeWidth="1" />
-        ))}
-      </svg>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 justify-center">
-        {sectores.map((s, i) => (
-          <div key={i} className="flex items-center gap-1 text-xs">
-            <span className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: s.color }} />
-            <span>{s.label}: {s.value.toLocaleString("es-EC")}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// Fila de solo lectura reutilizable para el panel de estadísticas
+const FilaStat = ({ label, valor }) => (
+  <tr className="border-b last:border-0">
+    <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap text-sm">{label}</td>
+    <td className="py-1.5 text-right font-medium text-sm">{valor ?? "—"}</td>
+  </tr>
+);
 
 export default function ProduccionHome() {
-  const queryClient = useQueryClient();
-  const [guardando, setGuardando] = useState(false);
-  const [borrando, setBorrando] = useState(false);
-
-  // Fecha que controla esta tabla. Cambiarla muestra el registro guardado
-  // de ese día (si existe) o la tabla vacía y rellenable (si no existe).
+  // Fecha que controla toda la vista del Home
   const [fechaSeleccionada, setFechaSeleccionada] = useState(
     () => new Date().toISOString().slice(0, 10)
   );
 
-  const { data: filasFecha = [], isLoading } = useQuery({
-    queryKey: ["produccion-resumen", fechaSeleccionada],
-    queryFn: async () => {
-      const { data, error } = await produccionResumen.filter({ fecha: fechaSeleccionada });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  // Historial completo, solo para el botón "Exportar a Excel".
-  const { data: historial = [] } = useQuery({
-    queryKey: ["produccion-resumen-historial"],
-    queryFn: async () => {
-      const { data, error } = await produccionResumen.list("-fecha");
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  // Columnas ocultadas desde Configuración (produccion_visibilidad, grupo
-  // 'produccion_columnas'). Solo afecta qué se muestra/exporta — los datos
-  // ya guardados de una columna oculta no se borran ni dejan de cargarse.
-  const { data: visibilidad = [] } = useQuery({
-    queryKey: ["produccion-visibilidad"],
-    queryFn: async () => {
-      const { data, error } = await produccionVisibilidad.list();
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-  const ocultos = new Set(
-    visibilidad
-      .filter((v) => v.grupo === "produccion_columnas" && v.visible === false)
-      .map((v) => v.clave)
-  );
-  const camposVisibles = CAMPOS.filter((c) => !ocultos.has(c.field));
-
-  // Semana y día para las tablas de calidades
   const semana = lunesDeSemanaDe(fechaSeleccionada);
   const diaActual = diaKeyDeFecha(fechaSeleccionada);
 
-  // Calidades configuradas
+  // --- Consultas Supabase ---
+
+  // Calidades configuradas (fuente de verdad de las filas del Resumen)
   const { data: calidades = [] } = useQuery({
     queryKey: ["calidades-produccion"],
     queryFn: async () => {
@@ -139,8 +58,8 @@ export default function ProduccionHome() {
     },
   });
 
-  // Producción semanal de la semana seleccionada (para tabla de calidades)
-  const { data: filasSemana = [] } = useQuery({
+  // Producción semanal: contiene las cajas por día y los campos caj_prog_XXX
+  const { data: filasSemana = [], isLoading: cargandoSemana } = useQuery({
     queryKey: ["produccion-semanal-home", semana],
     queryFn: async () => {
       const { data, error } = await produccionSemanal.filter({ fecha_semana: semana });
@@ -149,238 +68,189 @@ export default function ProduccionHome() {
     },
   });
 
+  // Registro diario (produccion) de la fecha seleccionada → calcula estadísticas
+  const { data: registros = [] } = useQuery({
+    queryKey: ["produccion-registros-home"],
+    queryFn: async () => {
+      const { data, error } = await produccion.list("-fecha");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const ultimo = registros.find((r) => r.fecha === fechaSeleccionada) ?? null;
+  const calculado = ultimo ? calcularDatosProceso(ultimo) : null;
+
+  // Cajas/palet del día (produccion_cajas_palet)
+  const { data: filasCajasPalet = [] } = useQuery({
+    queryKey: ["produccion-cajas-palet-home", semana],
+    queryFn: async () => {
+      const { data, error } = await produccionCajasPalet.filter({ fecha_semana: semana });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const cajasPaletHoy = diaActual
+    ? (filasCajasPalet.find((f) => f.dia === diaActual) ?? null)
+    : null;
+
+  // Visibilidad de calidades (grupo 'ingresar_calidades')
+  const { data: visibilidad = [] } = useQuery({
+    queryKey: ["produccion-visibilidad"],
+    queryFn: async () => {
+      const { data, error } = await produccionVisibilidad.list();
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const codigosOcultos = new Set(
+    visibilidad
+      .filter((v) => v.grupo === "ingresar_calidades" && v.visible === false)
+      .map((v) => v.clave)
+  );
+  const codigosVisibles = calidades
+    .map((c) => c.codigo)
+    .filter((c) => !codigosOcultos.has(c));
   const calidadPorCodigo = Object.fromEntries(calidades.map((c) => [c.codigo, c]));
 
-  // Datos para la tabla y pie chart: valor del día actual por calidad
-  const datosCalidades = useMemo(() => {
-    if (!diaActual) return [];
-    return calidades.map((c) => {
-      const fila = filasSemana.find((f) => f.codigo_producto === c.codigo);
-      return {
-        codigo: c.codigo,
-        label: c.label,
-        codigo_corto: c.codigo_corto,
-        caj_default: c.caj_default,
-        valor: Number(fila?.[diaActual]) || 0,
-        total_semana: ["lunes","martes","miercoles","jueves","viernes","sabado"].reduce(
-          (s, d) => s + (Number(fila?.[d]) || 0), 0
-        ),
-      };
-    }).filter((d) => d.total_semana > 0 || d.valor > 0);
-  }, [calidades, filasSemana, diaActual]);
+  // --- Helpers de cálculo ---
 
-  const filaActual = filasFecha[0] ?? null;
-
-  // Valores locales del formulario. Se llenan con la fila guardada de la
-  // fecha elegida, o quedan vacíos si esa fecha todavía no tiene datos.
-  const [valores, setValores] = useState(formularioVacio());
-
-  useEffect(() => {
-    if (filaActual) {
-      const inicial = {};
-      CAMPOS.forEach(({ field }) => {
-        inicial[field] = filaActual[field] ?? "";
-      });
-      setValores(inicial);
-    } else {
-      setValores(formularioVacio());
-    }
-  }, [filaActual?.id, fechaSeleccionada]);
-
-  const handleChange = (field, value) => {
-    setValores((prev) => ({ ...prev, [field]: value }));
+  // Valor de cajas del día actual para un código (desde producción_semanal)
+  const getValorDia = (codigo) => {
+    if (!diaActual) return 0;
+    const fila = filasSemana.find((f) => f.codigo_producto === codigo);
+    return Number(fila?.[diaActual]) || 0;
   };
 
-  // Guardado explícito (botón), no automático al salir del campo: el
-  // cliente pidió un botón de Guardar que funcione para esta tabla.
-  const handleGuardar = async () => {
-    setGuardando(true);
-    const payload = { fecha: fechaSeleccionada };
-    CAMPOS.forEach(({ field }) => {
-      const raw = valores[field];
-      payload[field] = raw === "" || raw === null || raw === undefined ? null : parseFloat(raw);
-    });
-
-    const { error } = filaActual
-      ? await produccionResumen.update(filaActual.id, payload)
-      : await produccionResumen.create(payload);
-
-    setGuardando(false);
-    if (error) {
-      toast.error("No se pudo guardar: " + error.message);
-      return;
-    }
-    toast.success("Datos guardados");
-    queryClient.invalidateQueries({ queryKey: ["produccion-resumen", fechaSeleccionada] });
-    queryClient.invalidateQueries({ queryKey: ["produccion-resumen-historial"] });
+  // Cajas programadas del día actual (caj_prog)
+  const getCajProg = (codigo) => {
+    if (!diaActual) return 0;
+    const fila = filasSemana.find((f) => f.codigo_producto === codigo);
+    return Number(fila?.[`caj_prog_${diaActual}`]) || 0;
   };
 
-  // Borra el resumen guardado de la fecha seleccionada (produccion_resumen).
-  // Acción irreversible: se confirma antes de ejecutar.
-  const handleBorrar = async () => {
-    if (!filaActual) return;
-    if (!confirm(`¿Eliminar el resumen de producción del ${fechaSeleccionada}? Esta acción no se puede deshacer.`)) {
-      return;
-    }
-    setBorrando(true);
-    const { error } = await produccionResumen.delete(filaActual.id);
-    setBorrando(false);
-    if (error) {
-      toast.error("No se pudo eliminar: " + error.message);
-      return;
-    }
-    toast.success("Registro eliminado");
-    queryClient.invalidateQueries({ queryKey: ["produccion-resumen", fechaSeleccionada] });
-    queryClient.invalidateQueries({ queryKey: ["produccion-resumen-historial"] });
-  };
+  // Totales del día
+  const totalCajasHoy = useMemo(
+    () => codigosVisibles.reduce((s, c) => s + getValorDia(c), 0),
+    [codigosVisibles, filasSemana, diaActual]
+  );
+  const totalCajProgHoy = useMemo(
+    () => codigosVisibles.reduce((s, c) => s + getCajProg(c), 0),
+    [codigosVisibles, filasSemana, diaActual]
+  );
 
-  const handleExportar = () => {
-    if (historial.length === 0) {
-      toast.error("No hay datos guardados para exportar");
-      return;
-    }
-    const headers = ["Fecha", ...camposVisibles.map((c) => c.label)];
-    const rows = historial.map((fila) => [
-      fila.fecha,
-      ...camposVisibles.map((c) => fila[c.field] ?? ""),
-    ]);
-    exportStyledExcel({
-      title: "Producción — Resumen por Día",
-      headers,
-      rows,
-      sheetName: "Produccion",
-      fileName: `produccion_resumen_${new Date().toISOString().slice(0, 10)}.xlsx`,
-    });
-  };
+  // Helpers de formateo
+  const redondear = (v) =>
+    v === null || v === undefined || Number.isNaN(v)
+      ? null
+      : Math.round(v * 100) / 100;
+  const porcentaje = (v) =>
+    v === null || v === undefined || Number.isNaN(v)
+      ? null
+      : `${(v * 100).toFixed(2)}%`;
 
   return (
     <div>
+      {/* Encabezado */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}>
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center"
+          style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}
+        >
           <Factory className="w-6 h-6 text-white" />
         </div>
         <div>
           <h1 className="text-2xl font-heading font-bold text-foreground">Producción</h1>
-          <p className="text-muted-foreground text-sm">Tabla de resumen por día</p>
+          <p className="text-muted-foreground text-sm">Resumen del día</p>
         </div>
       </div>
 
+      {/* Selector de fecha */}
       <Card className="mb-6">
         <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-          <Label htmlFor="fecha-produccion" className="text-sm font-medium whitespace-nowrap">
+          <Label htmlFor="fecha-home" className="text-sm font-medium whitespace-nowrap">
             Fecha
           </Label>
           <Input
-            id="fecha-produccion"
+            id="fecha-home"
             type="date"
             className="sm:w-48"
             value={fechaSeleccionada}
             onChange={(e) => setFechaSeleccionada(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Cambia la fecha para ver el resumen guardado de ese día. Si no tiene datos
-            guardados, la tabla aparece vacía y lista para llenar.
+            Cambia la fecha para ver el resumen de ese día.
           </p>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-center text-muted-foreground border-b bg-muted/30">
-                  {camposVisibles.map(({ field, label }) => (
-                    <th key={field} className="py-2 px-3 whitespace-nowrap">{label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  {camposVisibles.map(({ field }) => (
-                    <td key={field} className="py-1 px-2">
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="w-24 text-center rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                        value={valores[field] ?? ""}
-                        onChange={(e) => handleChange(field, e.target.value)}
-                        placeholder="—"
-                        disabled={isLoading}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Layout 2 columnas: Resumen de Producción | Datos de Proceso */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
-      <div className="flex flex-wrap gap-3 mt-4">
-        <Button onClick={handleGuardar} disabled={guardando}>
-          <Save className="w-4 h-4" />
-          {guardando ? "Guardando..." : "Guardar"}
-        </Button>
-        <Button
-          variant="destructive"
-          onClick={handleBorrar}
-          disabled={!filaActual || borrando}
-        >
-          <Trash2 className="w-4 h-4" />
-          {borrando ? "Eliminando..." : "Borrar Registro"}
-        </Button>
-        <Button variant="outline" onClick={handleExportar}>
-          <Download className="w-4 h-4" />
-          Exportar a Excel
-        </Button>
-      </div>
-
-      {/* ── Tabla de calidades + pie chart ──────────────────────────── */}
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Columna 1: Resumen de Producción (Caj.Prog / Calidad / Total / Dif) */}
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <BarChart2 className="w-4 h-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold">
-                Producción de Calidades
-                {diaActual ? ` — ${fechaSeleccionada}` : ""}
-              </h2>
-            </div>
-            {!diaActual ? (
-              <p className="text-muted-foreground text-xs text-center py-6">
-                Selecciona una fecha de lunes a sábado.
-              </p>
-            ) : datosCalidades.length === 0 ? (
-              <p className="text-muted-foreground text-xs text-center py-6">
-                Sin datos para esta semana.
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileSpreadsheet className="w-4 h-4" />
+              Resumen de Producción
+            </CardTitle>
+            <p className="text-xs text-muted-foreground pt-1">
+              {diaActual
+                ? `Fecha: ${fechaSeleccionada}`
+                : "Selecciona una fecha de lunes a sábado."}
+            </p>
+          </CardHeader>
+          <CardContent>
+            {cargandoSemana ? (
+              <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
+            ) : !diaActual ? (
+              <p className="text-muted-foreground text-sm text-center py-8">
+                Elige una fecha de lunes a sábado para ver el resumen.
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="text-sm border-collapse w-full">
                   <thead>
-                    <tr className="text-muted-foreground border-b bg-muted/30 text-xs">
+                    <tr className="text-center text-muted-foreground border-b bg-muted/30">
+                      <th className="py-2 px-2 whitespace-nowrap">Caj.Prog</th>
+                      <th className="py-2 px-3 text-left whitespace-nowrap">Código</th>
                       <th className="py-2 px-3 text-left whitespace-nowrap">Calidad</th>
-                      <th className="py-2 px-2 text-center whitespace-nowrap">Cajas Día</th>
-                      <th className="py-2 px-2 text-center whitespace-nowrap">Total Semana</th>
+                      <th className="py-2 px-2 whitespace-nowrap">Total</th>
+                      <th className="py-2 px-2 whitespace-nowrap">Dif</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {datosCalidades.map((d) => (
-                      <tr key={d.codigo} className="border-b last:border-0">
-                        <td className="py-1.5 px-3 font-medium whitespace-nowrap">{d.label}</td>
-                        <td className="py-1.5 px-2 text-center">{d.valor || "—"}</td>
-                        <td className="py-1.5 px-2 text-center font-semibold">{d.total_semana || "—"}</td>
-                      </tr>
-                    ))}
+                    {codigosVisibles.map((codigo) => {
+                      const total = getValorDia(codigo);
+                      const cajProg = getCajProg(codigo);
+                      const dif = total - cajProg;
+                      return (
+                        <tr key={codigo} className="border-b last:border-0">
+                          <td className="py-1.5 px-2 text-center text-muted-foreground">
+                            {cajProg || "—"}
+                          </td>
+                          <td className="py-1.5 px-3 font-medium whitespace-nowrap">
+                            {calidadPorCodigo[codigo]?.codigo_corto ?? "—"}
+                          </td>
+                          <td className="py-1.5 px-3 whitespace-nowrap">
+                            {calidadPorCodigo[codigo]?.label ?? codigo}
+                          </td>
+                          <td className="py-1.5 px-2 text-center font-semibold">
+                            {total || "—"}
+                          </td>
+                          <td className="py-1.5 px-2 text-center">
+                            {dif !== 0 ? dif : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
                     <tr className="border-t-2 font-semibold bg-muted/30">
-                      <td className="py-2 px-3">TOTAL</td>
+                      <td className="py-2 px-2 text-center">{totalCajProgHoy || "—"}</td>
+                      <td className="py-2 px-3" colSpan={2}>TOTAL</td>
+                      <td className="py-2 px-2 text-center">{totalCajasHoy || "—"}</td>
                       <td className="py-2 px-2 text-center">
-                        {datosCalidades.reduce((s, d) => s + d.valor, 0) || "—"}
-                      </td>
-                      <td className="py-2 px-2 text-center">
-                        {datosCalidades.reduce((s, d) => s + d.total_semana, 0) || "—"}
+                        {totalCajasHoy - totalCajProgHoy !== 0
+                          ? totalCajasHoy - totalCajProgHoy
+                          : "—"}
                       </td>
                     </tr>
                   </tbody>
@@ -390,25 +260,64 @@ export default function ProduccionHome() {
           </CardContent>
         </Card>
 
+        {/* Columna 2: Datos de Proceso (readonly, calculados del registro diario) */}
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <BarChart2 className="w-4 h-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold">Distribución Calidades (semana)</h2>
-            </div>
-            {datosCalidades.length === 0 ? (
-              <p className="text-muted-foreground text-xs text-center py-6">Sin datos.</p>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ListTree className="w-4 h-4" />
+              Datos de Proceso
+            </CardTitle>
+            <p className="text-xs text-muted-foreground pt-1">
+              {ultimo
+                ? `Registro del ${ultimo.fecha}`
+                : "Sin registro para esta fecha."}
+            </p>
+          </CardHeader>
+          <CardContent>
+            {!ultimo ? (
+              <p className="text-muted-foreground text-sm text-center py-8">
+                No hay registro guardado para esta fecha. Ingresa datos en "Ingresar Datos".
+              </p>
             ) : (
-              <PieChart
-                datos={datosCalidades.map((d) => ({
-                  label: d.codigo_corto || d.codigo,
-                  value: d.total_semana,
-                }))}
-                size={180}
-              />
+              <table className="w-full text-sm">
+                <tbody>
+                  <FilaStat label="Total Cajas" valor={redondear(calculado?.cajasTotal)} />
+                  <FilaStat
+                    label="Total Paletas"
+                    valor={cajasPaletHoy?.palet ?? "—"}
+                  />
+                  <FilaStat label="Cajas Tercera" valor={ultimo.cajas_tercera} />
+                  <FilaStat label="Rac. Cosechados" valor={ultimo.racimos_cosechados} />
+                  <FilaStat label="Racimos Rechazados" valor={ultimo.racimos_rechazados} />
+                  <FilaStat label="Racimos Procesados" valor={calculado?.racimosProcesados} />
+                  <FilaStat label="Área Cosecha Día" valor={ultimo.acres} />
+                  <FilaStat label="Factor Primera" valor={redondear(calculado?.factorPrimera)} />
+                  <FilaStat label="Factor General" valor={redondear(calculado?.factorGeneral)} />
+                  <FilaStat
+                    label="DESPERDICIO RAC. RECH."
+                    valor={porcentaje(calculado?.desperdicioMonte)}
+                  />
+                  <FilaStat
+                    label="Desperdicio Real"
+                    valor={porcentaje(calculado?.desperdicioGeneral)}
+                  />
+                  <FilaStat
+                    label="Rechazo en Camión (Quintal)"
+                    valor={ultimo.quintales_rechazo}
+                  />
+                  <FilaStat label="Calibre" valor={ultimo.calibre} />
+                  <FilaStat label="Cuadrilla" valor={ultimo.cuadrilla} />
+                  <FilaStat label="Empaque" valor={ultimo.empaque} />
+                  <FilaStat label="Hrs. Trabajadas" valor={redondear(calculado?.horasTrabajadas)} />
+                  <FilaStat label="Cajas Hora" valor={redondear(calculado?.cajasHora)} />
+                  <FilaStat label="Cajas Persona" valor={redondear(calculado?.cajasPersona)} />
+                  <FilaStat label="Peso Racimo" valor={redondear(calculado?.pesoRacimo)} />
+                </tbody>
+              </table>
             )}
           </CardContent>
         </Card>
+
       </div>
     </div>
   );

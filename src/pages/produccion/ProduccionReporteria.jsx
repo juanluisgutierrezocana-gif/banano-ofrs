@@ -6,8 +6,6 @@ import {
   produccionCostos,
   produccionResumen,
   produccionVisibilidad,
-  produccionSemanal,
-  calidadesProduccion,
   settings,
 } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -481,25 +479,6 @@ export default function ProduccionReporteria() {
   });
   const areaTotalFinca = acresConfig ? Number(acresConfig.value) : 260.6;
 
-  // Datos de produccion_semanal (para la tabla PRODUCCIÓN DE CALIDADES).
-  const { data: semanalHistorial = [] } = useQuery({
-    queryKey: ["produccion-semanal-historial"],
-    queryFn: async () => {
-      const { data, error } = await produccionSemanal.list();
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  // Calidades activas.
-  const { data: calidades = [] } = useQuery({
-    queryKey: ["calidades-produccion"],
-    queryFn: async () => {
-      const { data, error } = await calidadesProduccion.list();
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
   const camposResumenOcultos = new Set(
     visibilidadColumnas
       .filter((v) => v.grupo === "produccion_columnas" && v.visible === false)
@@ -507,42 +486,7 @@ export default function ProduccionReporteria() {
   );
   const camposResumenVisibles = CAMPOS_RESUMEN.filter((c) => !camposResumenOcultos.has(c.field));
 
-  const [vista, setVista] = useState("diario"); // "diario" | "semanal" | "mensual" | "calidades"
-
-  // ── PRODUCCIÓN DE CALIDADES ──────────────────────────────────────────────
-  // Tabla horizontal: meses como filas, calidades como columnas.
-  // Fuente: produccion_semanal (fecha_semana + codigo_producto + lunes..sabado).
-  const tablaCalidades = useMemo(() => {
-    const anioActual = String(new Date().getFullYear());
-    return MESES.map((mes, idx) => {
-      const mesNum = idx + 1;
-      const mesStr = String(mesNum).padStart(2, "0");
-      const fila = { mes };
-      let totalMes = 0;
-      calidades.forEach(({ codigo }) => {
-        // Filas de produccion_semanal cuya fecha_semana cae en este mes/año
-        const filasDelMes = semanalHistorial.filter(
-          (f) =>
-            f.codigo_producto === codigo &&
-            f.fecha_semana?.slice(0, 4) === anioActual &&
-            f.fecha_semana?.slice(5, 7) === mesStr
-        );
-        const totalCodigo = filasDelMes.reduce(
-          (acc, f) =>
-            acc +
-            ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado"].reduce(
-              (s, d) => s + (Number(f[d]) || 0),
-              0
-            ),
-          0
-        );
-        fila[codigo] = totalCodigo;
-        totalMes += totalCodigo;
-      });
-      fila._total = totalMes;
-      return fila;
-    });
-  }, [semanalHistorial, calidades]);
+  const [vista, setVista] = useState("diario"); // "diario" | "semanal" | "mensual"
 
   // Edición/borrado de filas Diario (1 fila = 1 registro real en
   // registros_produccion). Semanal y Mensual son agregados, no se editan.
@@ -769,8 +713,7 @@ export default function ProduccionReporteria() {
             <p className="text-muted-foreground text-sm">
               {vista === "diario" ? "Datos Proceso Planta Empacadora — diario"
                 : vista === "semanal" ? "Resumen semanal"
-                : vista === "mensual" ? "Resumen mensual"
-                : "Producción de Calidades — anual"}
+                : "Resumen mensual"}
             </p>
           </div>
         </div>
@@ -782,7 +725,7 @@ export default function ProduccionReporteria() {
 
       <div className="flex flex-wrap gap-2 mb-4">
         <Button size="sm" variant={vista === "diario" ? "default" : "outline"} onClick={() => setVista("diario")}>
-          Datos Proceso Planta
+          Diario
         </Button>
         <Button size="sm" variant={vista === "semanal" ? "default" : "outline"} onClick={() => setVista("semanal")}>
           Resumen Semanal
@@ -790,75 +733,10 @@ export default function ProduccionReporteria() {
         <Button size="sm" variant={vista === "mensual" ? "default" : "outline"} onClick={() => setVista("mensual")}>
           Resumen Mensual
         </Button>
-        <Button size="sm" variant={vista === "calidades" ? "default" : "outline"} onClick={() => setVista("calidades")}>
-          Producción de Calidades
-        </Button>
       </div>
 
-      {vista === "calidades" ? (
-        /* ── PRODUCCIÓN DE CALIDADES ─────────────────────────────────── */
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              Producción de Calidades — {new Date().getFullYear()}
-            </CardTitle>
-            <p className="text-xs text-muted-foreground pt-1">
-              Totales de cajas por calidad, agrupados por mes. Fuente: Producción Semanal de Ingresar Datos.
-            </p>
-          </CardHeader>
-          <CardContent>
-            {calidades.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-8">No hay calidades configuradas.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-center text-muted-foreground border-b bg-muted/30 text-xs">
-                      <th className="py-2 px-3 whitespace-nowrap text-left">Mes</th>
-                      {calidades.map((c) => (
-                        <th key={c.codigo} className="py-2 px-2 whitespace-nowrap">{c.codigo_corto || c.codigo}</th>
-                      ))}
-                      <th className="py-2 px-3 whitespace-nowrap font-semibold">TOTAL</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tablaCalidades.map((fila) => (
-                      <tr key={fila.mes} className="border-b last:border-0 hover:bg-muted/30">
-                        <td className="py-2 px-3 font-medium whitespace-nowrap">{fila.mes}</td>
-                        {calidades.map((c) => (
-                          <td key={c.codigo} className="py-2 px-2 text-center">
-                            {fila[c.codigo] ? fila[c.codigo].toLocaleString("es-EC") : "—"}
-                          </td>
-                        ))}
-                        <td className="py-2 px-3 text-center font-semibold">
-                          {fila._total ? fila._total.toLocaleString("es-EC") : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                    {/* Fila TOTAL anual */}
-                    <tr className="border-t-2 font-semibold bg-muted/40">
-                      <td className="py-2 px-3 whitespace-nowrap">TOTAL</td>
-                      {calidades.map((c) => {
-                        const total = tablaCalidades.reduce((acc, f) => acc + (f[c.codigo] || 0), 0);
-                        return (
-                          <td key={c.codigo} className="py-2 px-2 text-center">
-                            {total ? total.toLocaleString("es-EC") : "—"}
-                          </td>
-                        );
-                      })}
-                      <td className="py-2 px-3 text-center">
-                        {tablaCalidades.reduce((acc, f) => acc + (f._total || 0), 0).toLocaleString("es-EC")}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        /* ── DATOS PROCESO PLANTA EMPACADORA / SEMANAL / MENSUAL ──── */
-        <Card>
+      {/* ── DATOS PROCESO PLANTA EMPACADORA / SEMANAL / MENSUAL ──── */}
+      <Card>
           <CardHeader className="pb-3 flex flex-row items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-base">
               {vista === "diario" && `Datos Proceso Planta Empacadora (${filasActuales.length})`}
@@ -954,12 +832,10 @@ export default function ProduccionReporteria() {
             )}
           </CardContent>
         </Card>
-      )}
 
       {/* Segunda tabla, paralela a la de arriba — alimentada por
-          produccion_resumen (página "Producción"). Solo visible en vistas
-          Diario/Semanal/Mensual, no en Calidades. */}
-      {vista !== "calidades" && <Card className="mt-6">
+          produccion_resumen (página "Producción"). */}
+      <Card className="mt-6">
         <CardHeader className="pb-3 flex flex-row items-start justify-between flex-wrap gap-2">
           <div>
             <CardTitle className="text-base flex items-center gap-2">
@@ -1020,7 +896,7 @@ export default function ProduccionReporteria() {
             </div>
           )}
         </CardContent>
-      </Card>}
+      </Card>
 
       {/* Modal de edición — solo para filas de la vista Diario (1 fila =
           1 registro real en registros_produccion). */}

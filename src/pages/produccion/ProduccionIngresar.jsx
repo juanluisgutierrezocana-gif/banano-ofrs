@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ClipboardList, Trash2, Plus, ListTree, Download, FileSpreadsheet } from "lucide-react";
+import { ClipboardList, Trash2, Plus, ListTree, Download, FileSpreadsheet, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { calcularDatosProceso } from "@/lib/produccionCalc";
 import { exportStyledWorkbook } from "@/utils/excelExport";
@@ -96,6 +96,9 @@ export default function ProduccionIngresar() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  // modoEdicion: true mientras el usuario edita un registro ya guardado.
+  // false = lectura (formulario deshabilitado, botones Editar+Eliminar visibles).
+  const [modoEdicion, setModoEdicion] = useState(false);
 
   // Fecha única que controla TODA la sección "Ingresar Datos": el registro
   // diario, la producción semanal por código y cajas/palet por día. Antes
@@ -132,6 +135,8 @@ export default function ProduccionIngresar() {
     } else {
       setForm(emptyForm);
     }
+    // Salir de modo edición al cambiar de fecha (el registro cambia).
+    setModoEdicion(false);
   }, [ultimo?.id, fechaSeleccionada]);
 
   // % Área Cosecha Día = Área Cosecha Día (acres) / área total de la finca.
@@ -373,6 +378,7 @@ export default function ProduccionIngresar() {
       return;
     }
     toast.success(ultimo ? "Registro actualizado" : "Registro de producción guardado");
+    setModoEdicion(false);
     queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
   };
 
@@ -388,6 +394,7 @@ export default function ProduccionIngresar() {
       return;
     }
     toast.success("Registro eliminado");
+    setModoEdicion(false);
     queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
   };
 
@@ -458,13 +465,13 @@ export default function ProduccionIngresar() {
       sheets.push({
         sheetName: "Produccion Semanal",
         title: `Producción Semanal por Código — semana del ${semana}`,
-        headers: ["Código", diaActualLabel, "TOTAL CAJAS"],
+        headers: ["Código", "TOTAL CAJAS", "TOTAL PALETAS"],
         rows: codigosVisibles.map((codigo) => [
           codigo,
           valoresGrid[codigo]?.[diaActual] ?? "",
-          totalPorCodigo(codigo) || "",
+          totalPaletasPorCodigo(codigo) || "",
         ]),
-        totalsRow: ["TOTAL", totalPorDia(diaActual) || "", granTotalSemana || ""],
+        totalsRow: ["TOTAL", totalPorDia(diaActual) || "", granTotalPaletas > 0 ? granTotalPaletas.toFixed(2) : ""],
       });
 
       sheets.push({
@@ -543,15 +550,18 @@ export default function ProduccionIngresar() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 items-start">
       <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
-            {ultimo ? "Editar Registro Diario" : "Nuevo Registro Diario"}
+            {ultimo && !modoEdicion ? "Registro Diario (solo lectura)" : "Nuevo Registro Diario"}
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Wrapper de solo lectura: deshabilita todos los inputs cuando hay
+              un registro guardado y el usuario no ha pulsado Editar. */}
+          <div className={ultimo && !modoEdicion ? "pointer-events-none opacity-60 select-none" : ""}>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             <div className="space-y-1.5">
               <Label htmlFor="hora_inicio" className="text-xs">Hora Inicio</Label>
@@ -629,20 +639,39 @@ export default function ProduccionIngresar() {
                 value={form.cajas_segunda} onChange={handleChange} />
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={handleSave} disabled={saving || !fechaSeleccionada} className="w-full sm:w-auto">
-              <Plus className="w-4 h-4" />
-              {saving ? "Guardando..." : ultimo ? "Actualizar Registro" : "Guardar Registro"}
-            </Button>
-            <Button
-              variant="destructive"
-              className="w-full sm:w-auto"
-              onClick={() => handleDelete(ultimo.id)}
-              disabled={!ultimo || deletingId === ultimo?.id}
-            >
-              <Trash2 className="w-4 h-4" />
-              {deletingId === ultimo?.id ? "Eliminando..." : "Borrar Registro"}
-            </Button>
+          </div>{/* fin wrapper solo-lectura */}
+
+          {/* Botones: Guardar (solo cuando no hay registro o estamos editando),
+              Editar (solo cuando existe un registro en readonly) y
+              Eliminar (solo cuando existe un registro). */}
+          <div className="flex flex-wrap gap-2 mt-2">
+            {(!ultimo || modoEdicion) && (
+              <Button onClick={handleSave} disabled={saving || !fechaSeleccionada} className="w-full sm:w-auto">
+                <Plus className="w-4 h-4" />
+                {saving ? "Guardando..." : "Guardar Registro"}
+              </Button>
+            )}
+            {ultimo && !modoEdicion && (
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => setModoEdicion(true)}
+              >
+                <Pencil className="w-4 h-4" />
+                Editar
+              </Button>
+            )}
+            {ultimo && (
+              <Button
+                variant="destructive"
+                className="w-full sm:w-auto"
+                onClick={() => handleDelete(ultimo.id)}
+                disabled={deletingId === ultimo?.id}
+              >
+                <Trash2 className="w-4 h-4" />
+                {deletingId === ultimo?.id ? "Eliminando..." : "Eliminar"}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -672,8 +701,7 @@ export default function ProduccionIngresar() {
                     <th className="py-2 px-3 text-left whitespace-nowrap">Calidad</th>
                     <th className="py-2 px-2 whitespace-nowrap">CAJAS PALETA</th>
                     <th className="py-2 px-2 whitespace-nowrap">Cod</th>
-                    <th className="py-2 px-2 whitespace-nowrap">{diaActualLabel}</th>
-                    <th className="py-2 px-3 whitespace-nowrap">TOTAL CAJAS</th>
+                    <th className="py-2 px-2 whitespace-nowrap">TOTAL CAJAS</th>
                     <th className="py-2 px-3 whitespace-nowrap">TOTAL PALETAS</th>
                   </tr>
                 </thead>
@@ -698,7 +726,6 @@ export default function ProduccionIngresar() {
                           placeholder="—"
                         />
                       </td>
-                      <td className="py-1.5 px-3 text-center font-semibold">{totalPorCodigo(codigo) || "—"}</td>
                       <td className="py-1.5 px-3 text-center">
                         {(() => {
                           const p = totalPaletasPorCodigo(codigo);
@@ -710,7 +737,6 @@ export default function ProduccionIngresar() {
                   <tr className="border-t-2 font-semibold bg-muted/30">
                     <td className="py-2 px-3 whitespace-nowrap" colSpan={3}>TOTAL</td>
                     <td className="py-2 px-2 text-center">{totalPorDia(diaActual) || "—"}</td>
-                    <td className="py-2 px-3 text-center">{granTotalSemana || "—"}</td>
                     <td className="py-2 px-3 text-center">{granTotalPaletas > 0 ? granTotalPaletas.toFixed(2) : "—"}</td>
                   </tr>
                 </tbody>
@@ -718,10 +744,54 @@ export default function ProduccionIngresar() {
             </div>
           )}
           <p className="text-xs text-muted-foreground mt-3">
-            La celda de {diaActualLabel ?? "cada día"} se escribe a mano y se
-            guarda automáticamente al salir del campo. Total Semana y TOTAL se calculan sobre
-            los 6 días de la semana, aunque aquí solo se vea uno a la vez.
+            La celda de TOTAL CAJAS se escribe a mano y se guarda automáticamente al salir del campo.
+            TOTAL PALETAS = TOTAL CAJAS ÷ CAJAS PALETA (semana acumulada).
           </p>
+
+          {/* Mini tabla: Cajas / Paletas por día (semana completa, editable) */}
+          <div className="mt-5 border-t pt-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              Cajas / Paletas por Día
+            </p>
+            <div className="overflow-x-auto">
+              <table className="text-sm border-collapse">
+                <thead>
+                  <tr className="text-center text-muted-foreground border-b bg-muted/30">
+                    <th className="py-1.5 px-3 text-left whitespace-nowrap">Día</th>
+                    <th className="py-1.5 px-3 whitespace-nowrap">Cajas</th>
+                    <th className="py-1.5 px-3 whitespace-nowrap">Paletas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {DIAS_SEMANA.map(({ key, label }) => (
+                    <tr key={key} className="border-b last:border-0">
+                      <td className="py-1 px-3 font-medium whitespace-nowrap">{label}</td>
+                      <td className="py-1 px-2">
+                        <input
+                          type="number"
+                          className={inputClaseSemana}
+                          value={valoresCajasPalet[key]?.cajas ?? ""}
+                          onChange={(e) => handleChangeCajasPalet(key, "cajas", e.target.value)}
+                          onBlur={() => handleBlurCajasPalet(key, "cajas")}
+                          placeholder="—"
+                        />
+                      </td>
+                      <td className="py-1 px-2">
+                        <input
+                          type="number"
+                          className={inputClaseSemana}
+                          value={valoresCajasPalet[key]?.palet ?? ""}
+                          onChange={(e) => handleChangeCajasPalet(key, "palet", e.target.value)}
+                          onBlur={() => handleBlurCajasPalet(key, "palet")}
+                          placeholder="—"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -782,6 +852,10 @@ export default function ProduccionIngresar() {
         </CardContent>
       </Card>
 
+      </div>
+
+      {/* Columna 3: Resumen de Producción */}
+      <div className="space-y-6">
       {/* Tabla "FINCA / SEMANA" estilo reporte (boceto Excel, hoja LA
           GRACIA12). CAJ.PROG y DIF quedan pendientes a propósito: el Excel
           no tiene fórmula para CAJ.PROG (se escribe a mano) y la app
