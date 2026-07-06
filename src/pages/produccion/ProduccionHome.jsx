@@ -4,7 +4,10 @@ import { resumenHome, produccionResumen, settings } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Factory, FileSpreadsheet, ClipboardList } from "lucide-react";
+import { Factory, FileSpreadsheet, ClipboardList, BarChart2 } from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LISTA FIJA DE CALIDADES — 100 % independiente de calidades_produccion,
@@ -177,6 +180,17 @@ export default function ProduccionHome() {
     return ((acres / totalAcresFinca) * 100).toFixed(1) + "%";
   }, [statsHoy, totalAcresFinca]);
 
+  // ── Datos para gráfica de calidades ──────────────────────────────────────
+  const datosGrafica = useMemo(
+    () =>
+      FILAS_HOME.map(({ codigo, codigoCorto }) => ({
+        nombre: codigoCorto,
+        "Prog.": Number(resumenPorCodigo[codigo]?.caj_prog) || 0,
+        "Total": Number(resumenPorCodigo[codigo]?.total)    || 0,
+      })),
+    [resumenPorCodigo]
+  );
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div>
@@ -344,6 +358,45 @@ export default function ProduccionHome() {
 
       </div>{/* cierra flex min-w-max */}
       </div>{/* cierra overflow-x-auto */}
+
+      {/* ── Gráfica de Calidades ── */}
+      <Card className="mt-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BarChart2 className="w-4 h-4" />
+            Cajas por Calidad
+          </CardTitle>
+          <p className="text-xs text-muted-foreground pt-1">
+            Cajas programadas vs. producidas por calidad · {fechaSeleccionada}
+          </p>
+        </CardHeader>
+        <CardContent>
+          {cargandoResumen ? (
+            <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart
+                data={datosGrafica}
+                margin={{ top: 8, right: 16, left: 0, bottom: 48 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis
+                  dataKey="nombre"
+                  tick={{ fontSize: 11 }}
+                  angle={-40}
+                  textAnchor="end"
+                  interval={0}
+                />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip />
+                <Legend verticalAlign="top" height={28} />
+                <Bar dataKey="Prog." fill="#16a34a" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="Total" fill="#86efac" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
