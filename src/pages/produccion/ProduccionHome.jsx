@@ -217,8 +217,9 @@ export default function ProduccionHome() {
         </CardContent>
       </Card>
 
-      {/* Layout 2 columnas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      {/* Layout horizontal siempre — 2 columnas lado a lado */}
+      <div className="overflow-x-auto pb-2">
+      <div className="flex gap-6 items-start min-w-max">
 
         {/* ── Col 1: Resumen de Producción — lista fija FILAS_HOME ── */}
         <Card>
@@ -341,7 +342,8 @@ export default function ProduccionHome() {
           </CardContent>
         </Card>
 
-      </div>
+      </div>{/* cierra flex min-w-max */}
+      </div>{/* cierra overflow-x-auto */}
     </div>
   );
 }

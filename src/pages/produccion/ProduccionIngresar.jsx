@@ -798,11 +798,6 @@ export default function ProduccionIngresar() {
               </tbody>
             </table>
           )}
-          <p className="text-xs text-muted-foreground mt-3">
-            Día: <span className="font-medium text-foreground">{ultimo?.fecha ?? "—"}</span>.
-            Todos los valores de "Datos de Proceso" se calculan automáticamente a partir de
-            los datos básicos ingresados arriba.
-          </p>
         </CardContent>
       </Card>
 
@@ -915,11 +910,6 @@ export default function ProduccionIngresar() {
             </>
           )}
 
-          <p className="text-xs text-muted-foreground mt-3">
-            Caj.Prog se guarda por día (lunes a sábado) y Dif = Total - Caj.Prog. El resto sigue
-            las fórmulas reales de "INF. PROCESO E INVENTARIOS" y se calcula con los datos que ya
-            cargas arriba.
-          </p>
         </CardContent>
       </Card>
       </div>
