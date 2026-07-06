@@ -2,47 +2,58 @@ import { useState, useMemo, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   resumenHome,
+  produccionResumen,
   calidadesProduccion,
-  produccionVisibilidad,
+  settings,
 } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Factory, FileSpreadsheet, BarChart2 } from "lucide-react";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
+import { Factory, FileSpreadsheet, ClipboardList } from "lucide-react";
 
-// Paleta de colores para el gráfico de calidades
-const COLORES = [
-  "#16a34a", "#22c55e", "#4ade80", "#f59e0b",
-  "#ef4444", "#3b82f6", "#8b5cf6", "#ec4899",
-  "#06b6d4", "#d97706", "#84cc16", "#f97316",
-  "#6366f1",
-];
-
-// Clase compartida para los inputs editables de la tabla
-const INPUT_CLASE =
+// ── Clase compartida para celdas editables de ambas tablas ────────────────
+const INP =
   "w-16 text-center text-sm h-7 px-1 rounded border border-transparent " +
   "focus:border-input bg-transparent hover:bg-muted/50 focus:bg-background " +
   "transition-colors [appearance:textfield] " +
   "[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
+// ── Filas de la tabla de estadísticas (imagen 2) ──────────────────────────
+// campo: nombre de columna en produccion_resumen
+// label: texto a mostrar
+// tipo: "num" | "pct" | "calc" (no editable, se calcula)
+const STATS_FILAS = [
+  { campo: "total_cajas",         label: "TOTAL CAJAS" },
+  { campo: "total_paletas",       label: "TOTAL PALETAS" },
+  { campo: "cajas_tercera",       label: "CAJAS TERCERA" },
+  { campo: "racimos_cosechados",  label: "RAC. COSECHADOS" },
+  { campo: "racimos_rechazados",  label: "RACIMOS RECHAZADOS" },
+  { campo: "racimos_procesados",  label: "RACIMOS PROCESADOS" },
+  { campo: "area_acres",          label: "AREA COSECHA DIA ACRES" },
+  { campo: "_pct_area",           label: "% AREA COSECHA DIA", calc: true },
+  { campo: "factor_primera",      label: "FACTOR PRIMERA" },
+  { campo: "factor_general",      label: "FACTOR GENERAL" },
+  { campo: "desperdicio_monte",   label: "DESPERDICIO DM" },
+  { campo: "desperdicio_general", label: "DESPERDICIO REAL" },
+  { campo: "quintales_rechazo",   label: "RECHAZO EN CAMION QUINTAL" },
+];
+
 export default function ProduccionHome() {
-  // Fecha activa — controla toda la vista
+  // Fecha activa
   const [fechaSeleccionada, setFechaSeleccionada] = useState(
     () => new Date().toISOString().slice(0, 10)
   );
-  // Estado local de edición (antes de hacer blur → guardar)
-  const [valoresLocales, setValoresLocales] = useState({});
+
+  // Estado local de edición antes de blur (tabla 1)
+  const [localesResumen, setLocalesResumen] = useState({});
+  // Estado local de edición antes de blur (tabla 2 — stats)
+  const [localesStats, setLocalesStats] = useState({});
+
   const queryClient = useQueryClient();
 
-  // ── Calidades configuradas (fuente de verdad de las filas) ────────────────
+  // ── Calidades (fuente de verdad de las filas de imagen 1) ────────────────
+  // NOTA: NO se filtra por visibilidad — las tablas de Producción son
+  //       independientes y no deben ser afectadas por Configuraciones.
   const { data: calidades = [] } = useQuery({
     queryKey: ["calidades-produccion"],
     queryFn: async () => {
@@ -51,37 +62,24 @@ export default function ProduccionHome() {
       return data ?? [];
     },
   });
-
-  // ── Visibilidad (qué calidades están ocultas en "ingresar_calidades") ─────
-  const { data: visibilidad = [] } = useQuery({
-    queryKey: ["produccion-visibilidad"],
-    queryFn: async () => {
-      const { data, error } = await produccionVisibilidad.list();
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const codigosOcultos = useMemo(
-    () =>
-      new Set(
-        visibilidad
-          .filter((v) => v.grupo === "ingresar_calidades" && v.visible === false)
-          .map((v) => v.clave)
-      ),
-    [visibilidad]
-  );
-  const codigosVisibles = useMemo(
-    () => calidades.map((c) => c.codigo).filter((c) => !codigosOcultos.has(c)),
-    [calidades, codigosOcultos]
-  );
+  const codigosVisibles = calidades.map((c) => c.codigo);
   const calidadPorCodigo = useMemo(
     () => Object.fromEntries(calidades.map((c) => [c.codigo, c])),
     [calidades]
   );
 
-  // ── Datos del Resumen (tabla resumen_home — 100 % independiente) ──────────
-  const { data: filasResumen = [], isLoading: cargando } = useQuery({
+  // ── Total acres finca (para % Área Cosecha) ──────────────────────────────
+  const { data: acresConfig } = useQuery({
+    queryKey: ["settings-acres-finca"],
+    queryFn: async () => {
+      const { data } = await settings.filter({ key: "area_total_finca_acres" });
+      return data?.[0] ?? null;
+    },
+  });
+  const totalAcresFinca = acresConfig ? Number(acresConfig.value) : 260.6;
+
+  // ── Imagen 1: datos de resumen_home (por fecha+codigo) ───────────────────
+  const { data: filasResumen = [], isLoading: cargandoResumen } = useQuery({
     queryKey: ["resumen-home", fechaSeleccionada],
     queryFn: async () => {
       const { data, error } = await resumenHome.filter({ fecha: fechaSeleccionada });
@@ -90,91 +88,100 @@ export default function ProduccionHome() {
     },
     staleTime: 0,
   });
-
   const resumenPorCodigo = useMemo(
     () => Object.fromEntries(filasResumen.map((f) => [f.codigo, f])),
     [filasResumen]
   );
 
-  // ── Helpers de valor (estado local tiene prioridad sobre servidor) ────────
-  const getValor = (codigo, campo) => {
-    const key = `${codigo}_${campo}`;
-    return valoresLocales[key] !== undefined
-      ? valoresLocales[key]
+  // ── Imagen 2: datos de produccion_resumen (por fecha, una fila) ──────────
+  const { data: filasStats = [], isLoading: cargandoStats } = useQuery({
+    queryKey: ["produccion-resumen-home", fechaSeleccionada],
+    queryFn: async () => {
+      const { data, error } = await produccionResumen.filter({ fecha: fechaSeleccionada });
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 0,
+  });
+  const statsHoy = filasStats[0] ?? null;
+
+  // ── Helpers de valor ─────────────────────────────────────────────────────
+  const getR = (codigo, campo) => {
+    const k = `${codigo}_${campo}`;
+    return localesResumen[k] !== undefined
+      ? localesResumen[k]
       : (resumenPorCodigo[codigo]?.[campo] ?? "");
   };
-
-  const handleChange = (codigo, campo, valor) => {
-    setValoresLocales((prev) => ({ ...prev, [`${codigo}_${campo}`]: valor }));
+  const getS = (campo) => {
+    return localesStats[campo] !== undefined
+      ? localesStats[campo]
+      : (statsHoy?.[campo] ?? "");
   };
 
-  // Al salir del campo: upsert a Supabase y refrescar
-  const handleBlur = useCallback(
+  // ── Handlers Imagen 1 (resumen_home) ─────────────────────────────────────
+  const handleChangeR = (codigo, campo, valor) => {
+    setLocalesResumen((prev) => ({ ...prev, [`${codigo}_${campo}`]: valor }));
+  };
+  const handleBlurR = useCallback(
     async (codigo, campo) => {
-      const key = `${codigo}_${campo}`;
-      if (valoresLocales[key] === undefined) return; // sin cambios
+      const k = `${codigo}_${campo}`;
+      if (localesResumen[k] === undefined) return;
 
-      const rawCajProg =
-        campo === "caj_prog"
-          ? valoresLocales[key]
-          : (resumenPorCodigo[codigo]?.caj_prog ?? null);
-      const rawTotal =
-        campo === "total"
-          ? valoresLocales[key]
-          : (resumenPorCodigo[codigo]?.total ?? null);
+      const rawCaj = campo === "caj_prog"
+        ? localesResumen[k]
+        : (resumenPorCodigo[codigo]?.caj_prog ?? null);
+      const rawTot = campo === "total"
+        ? localesResumen[k]
+        : (resumenPorCodigo[codigo]?.total ?? null);
 
-      const cajProg = rawCajProg === "" || rawCajProg === null ? null : Number(rawCajProg);
-      const total = rawTotal === "" || rawTotal === null ? null : Number(rawTotal);
+      const cajProg = rawCaj === "" || rawCaj === null ? null : Number(rawCaj);
+      const total = rawTot === "" || rawTot === null ? null : Number(rawTot);
 
       await resumenHome.upsert(fechaSeleccionada, codigo, cajProg, total);
 
-      // Limpiar valor local ya procesado
-      setValoresLocales((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-
+      setLocalesResumen((prev) => { const n = { ...prev }; delete n[k]; return n; });
       queryClient.invalidateQueries({ queryKey: ["resumen-home", fechaSeleccionada] });
     },
-    [valoresLocales, resumenPorCodigo, fechaSeleccionada, queryClient]
+    [localesResumen, resumenPorCodigo, fechaSeleccionada, queryClient]
   );
 
-  // ── Totales de la fila de totales ─────────────────────────────────────────
+  // ── Handlers Imagen 2 (produccion_resumen) ───────────────────────────────
+  const handleChangeS = (campo, valor) => {
+    setLocalesStats((prev) => ({ ...prev, [campo]: valor }));
+  };
+  const handleBlurS = useCallback(
+    async (campo) => {
+      if (localesStats[campo] === undefined) return;
+      const raw = localesStats[campo];
+      const valor = raw === "" ? null : Number(raw);
+
+      if (statsHoy) {
+        await produccionResumen.update(statsHoy.id, { [campo]: valor });
+      } else {
+        await produccionResumen.create({ fecha: fechaSeleccionada, [campo]: valor });
+      }
+
+      setLocalesStats((prev) => { const n = { ...prev }; delete n[campo]; return n; });
+      queryClient.invalidateQueries({ queryKey: ["produccion-resumen-home", fechaSeleccionada] });
+    },
+    [localesStats, statsHoy, fechaSeleccionada, queryClient]
+  );
+
+  // ── Totales fila resumen (imagen 1) ───────────────────────────────────────
   const totalCajProg = useMemo(
-    () =>
-      codigosVisibles.reduce(
-        (s, c) => s + (Number(resumenPorCodigo[c]?.caj_prog) || 0),
-        0
-      ),
+    () => codigosVisibles.reduce((s, c) => s + (Number(resumenPorCodigo[c]?.caj_prog) || 0), 0),
     [codigosVisibles, resumenPorCodigo]
   );
   const totalTotal = useMemo(
-    () =>
-      codigosVisibles.reduce(
-        (s, c) => s + (Number(resumenPorCodigo[c]?.total) || 0),
-        0
-      ),
+    () => codigosVisibles.reduce((s, c) => s + (Number(resumenPorCodigo[c]?.total) || 0), 0),
     [codigosVisibles, resumenPorCodigo]
   );
 
-  // ── Datos para el gráfico de calidades ───────────────────────────────────
-  const datosGrafico = useMemo(
-    () =>
-      codigosVisibles
-        .map((codigo) => ({
-          name: calidadPorCodigo[codigo]?.codigo_corto ?? codigo,
-          value: Number(resumenPorCodigo[codigo]?.total) || 0,
-        }))
-        .filter((d) => d.value > 0),
-    [codigosVisibles, resumenPorCodigo, calidadPorCodigo]
-  );
-
-  // ── Helpers de formateo de diferencia ────────────────────────────────────
+  // ── Formateo de DIF con color ─────────────────────────────────────────────
   const renderDif = (total, cajProg) => {
     if (!cajProg && !total) return <span className="text-muted-foreground">—</span>;
-    const dif = total - cajProg;
-    if (dif === 0) return <span className="text-muted-foreground">—</span>;
+    const dif = Number(total) - Number(cajProg);
+    if (dif === 0) return <span className="text-muted-foreground">0</span>;
     return (
       <span className={dif < 0 ? "text-red-500 font-medium" : "text-green-600 font-medium"}>
         {dif > 0 ? `+${dif}` : dif}
@@ -182,7 +189,14 @@ export default function ProduccionHome() {
     );
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Calcular % Área ────────────────────────────────────────────────────────
+  const pctArea = useMemo(() => {
+    const acres = Number(statsHoy?.area_acres) || 0;
+    if (!acres || !totalAcresFinca) return null;
+    return ((acres / totalAcresFinca) * 100).toFixed(1) + "%";
+  }, [statsHoy, totalAcresFinca]);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div>
       {/* Encabezado */}
@@ -212,7 +226,8 @@ export default function ProduccionHome() {
             value={fechaSeleccionada}
             onChange={(e) => {
               setFechaSeleccionada(e.target.value);
-              setValoresLocales({}); // limpiar ediciones pendientes al cambiar fecha
+              setLocalesResumen({});
+              setLocalesStats({});
             }}
           />
           <p className="text-xs text-muted-foreground">
@@ -221,10 +236,10 @@ export default function ProduccionHome() {
         </CardContent>
       </Card>
 
-      {/* Layout 2 columnas: Resumen editable | Gráfico de calidades */}
+      {/* Layout 2 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
-        {/* ── Col 1: Resumen de Producción (editable, independiente) ── */}
+        {/* ── Columna 1: Resumen de Producción (imagen 1) ── */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -232,22 +247,22 @@ export default function ProduccionHome() {
               Resumen de Producción
             </CardTitle>
             <p className="text-xs text-muted-foreground pt-1">
-              Edita los valores directamente — no afectan otras tablas ni secciones.
+              Datos independientes — no afectan ni son afectados por otras secciones.
             </p>
           </CardHeader>
           <CardContent>
-            {cargando ? (
+            {cargandoResumen ? (
               <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="text-sm border-collapse w-full">
                   <thead>
                     <tr className="text-muted-foreground border-b bg-muted/30">
-                      <th className="py-2 px-2 text-center whitespace-nowrap">Caj.Prog</th>
-                      <th className="py-2 px-3 text-left whitespace-nowrap">Código</th>
-                      <th className="py-2 px-3 text-left whitespace-nowrap">Calidad</th>
-                      <th className="py-2 px-2 text-center whitespace-nowrap">Total</th>
-                      <th className="py-2 px-2 text-center whitespace-nowrap">Dif</th>
+                      <th className="py-2 px-2 text-center whitespace-nowrap">CAJ. PROG</th>
+                      <th className="py-2 px-3 text-left whitespace-nowrap">CODIGO</th>
+                      <th className="py-2 px-3 text-left whitespace-nowrap">CALIDAD</th>
+                      <th className="py-2 px-2 text-center whitespace-nowrap">TOTAL</th>
+                      <th className="py-2 px-2 text-center whitespace-nowrap">DIF</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -256,29 +271,29 @@ export default function ProduccionHome() {
                       const total = Number(resumenPorCodigo[codigo]?.total) || 0;
                       return (
                         <tr key={codigo} className="border-b last:border-0 hover:bg-muted/20">
-                          <td className="py-1 px-1 text-center">
+                          <td className="py-0.5 px-1 text-center">
                             <input
                               type="number"
-                              className={INPUT_CLASE}
-                              value={getValor(codigo, "caj_prog")}
-                              onChange={(e) => handleChange(codigo, "caj_prog", e.target.value)}
-                              onBlur={() => handleBlur(codigo, "caj_prog")}
+                              className={INP}
+                              value={getR(codigo, "caj_prog")}
+                              onChange={(e) => handleChangeR(codigo, "caj_prog", e.target.value)}
+                              onBlur={() => handleBlurR(codigo, "caj_prog")}
                               placeholder="—"
                             />
                           </td>
-                          <td className="py-1.5 px-3 font-medium whitespace-nowrap">
+                          <td className="py-1.5 px-3 font-semibold whitespace-nowrap">
                             {calidadPorCodigo[codigo]?.codigo_corto ?? "—"}
                           </td>
-                          <td className="py-1.5 px-3 whitespace-nowrap text-muted-foreground">
+                          <td className="py-1.5 px-3 whitespace-nowrap">
                             {calidadPorCodigo[codigo]?.label ?? codigo}
                           </td>
-                          <td className="py-1 px-1 text-center">
+                          <td className="py-0.5 px-1 text-center">
                             <input
                               type="number"
-                              className={INPUT_CLASE}
-                              value={getValor(codigo, "total")}
-                              onChange={(e) => handleChange(codigo, "total", e.target.value)}
-                              onBlur={() => handleBlur(codigo, "total")}
+                              className={INP}
+                              value={getR(codigo, "total")}
+                              onChange={(e) => handleChangeR(codigo, "total", e.target.value)}
+                              onBlur={() => handleBlurR(codigo, "total")}
                               placeholder="—"
                             />
                           </td>
@@ -304,49 +319,57 @@ export default function ProduccionHome() {
           </CardContent>
         </Card>
 
-        {/* ── Col 2: Gráfico de calidades ── */}
+        {/* ── Columna 2: Estadísticas del día (imagen 2) ── */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <BarChart2 className="w-4 h-4" />
-              Distribución de Calidades
+              <ClipboardList className="w-4 h-4" />
+              Datos del Día
             </CardTitle>
             <p className="text-xs text-muted-foreground pt-1">
-              Distribución del total de cajas por calidad para {fechaSeleccionada}.
+              Datos independientes — edita directamente cada celda.
             </p>
           </CardHeader>
           <CardContent>
-            {datosGrafico.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-12">
-                Ingresa valores en "Total" para ver el gráfico.
-              </p>
+            {cargandoStats ? (
+              <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
             ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={datosGrafico}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    dataKey="value"
-                    label={({ name, percent }) =>
-                      `${name} ${(percent * 100).toFixed(0)}%`
+              <table className="w-full text-sm">
+                <tbody>
+                  {STATS_FILAS.map(({ campo, label, calc }) => {
+                    // % Área es calculada (solo lectura)
+                    if (calc) {
+                      return (
+                        <tr key={campo} className="border-b last:border-0">
+                          <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">
+                            {label}
+                          </td>
+                          <td className="py-1.5 text-right font-medium">
+                            {pctArea ?? "—"}
+                          </td>
+                        </tr>
+                      );
                     }
-                    labelLine
-                  >
-                    {datosGrafico.map((_, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORES[index % COLORES.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value, name) => [`${value} cajas`, name]}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+                    return (
+                      <tr key={campo} className="border-b last:border-0 hover:bg-muted/20">
+                        <td className="py-1 pr-3 text-muted-foreground whitespace-nowrap">
+                          {label}
+                        </td>
+                        <td className="py-1 text-right">
+                          <input
+                            type="number"
+                            className={`${INP} w-24`}
+                            value={getS(campo)}
+                            onChange={(e) => handleChangeS(campo, e.target.value)}
+                            onBlur={() => handleBlurS(campo)}
+                            placeholder="—"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
           </CardContent>
         </Card>

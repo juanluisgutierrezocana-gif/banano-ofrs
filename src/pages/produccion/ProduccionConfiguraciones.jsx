@@ -286,8 +286,8 @@ export default function ProduccionConfiguraciones() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Calidades de "Ingresar Datos"</CardTitle>
           <p className="text-xs text-muted-foreground pt-1">
-            Apaga un botón para ocultar esa calidad en las tablas "Producción Semanal por
-            Código" y "Resumen de Producción", y en el Excel exportado. Los TOTALES siguen
+            Apaga un botón para ocultar esa calidad en las tablas de "Ingresar Datos"
+            ("Producción Semanal por Código" y "Resumen de Producción"). Los TOTALES siguen
             sumando todas las calidades, aunque estén ocultas.
           </p>
         </CardHeader>

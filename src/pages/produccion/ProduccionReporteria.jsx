@@ -488,6 +488,10 @@ export default function ProduccionReporteria() {
 
   const [vista, setVista] = useState("diario"); // "diario" | "semanal" | "mensual"
 
+  // Filtros de fecha por vista
+  const [filtroDiario, setFiltroDiario] = useState(""); // fecha exacta YYYY-MM-DD
+  const [filtroSemana, setFiltroSemana] = useState(""); // semana (lunes) YYYY-MM-DD
+
   // Edición/borrado de filas Diario (1 fila = 1 registro real en
   // registros_produccion). Semanal y Mensual son agregados, no se editan.
   const [editando, setEditando] = useState(null); // registro crudo en edición, o null
@@ -592,7 +596,15 @@ export default function ProduccionReporteria() {
     [resumenMensual, costosMap]
   );
 
-  const filasActuales = vista === "diario" ? filasDiario : vista === "semanal" ? filasSemanal : filasMensual;
+  // Aplicar filtros de fecha a Diario y Semanal
+  const filasDiarioFiltradas = filtroDiario
+    ? filasDiario.filter((f) => f.label === filtroDiario)
+    : filasDiario;
+  const filasSemanalFiltradas = filtroSemana
+    ? filasSemanal.filter((f) => f.periodoKey === filtroSemana)
+    : filasSemanal;
+
+  const filasActuales = vista === "diario" ? filasDiarioFiltradas : vista === "semanal" ? filasSemanalFiltradas : filasMensual;
   const etiquetaCol = vista === "diario" ? "Fecha" : vista === "semanal" ? "Semana" : "Mes";
 
   // Tabla "Producción" (paralela) — mismas 3 vistas, mismo año seleccionado.
@@ -743,7 +755,41 @@ export default function ProduccionReporteria() {
               {vista === "semanal" && `Resumen Semanal (${filasActuales.length} semanas)`}
               {vista === "mensual" && "Resumen Mensual"}
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {vista === "diario" && (
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-muted-foreground whitespace-nowrap">Fecha:</label>
+                  <input
+                    type="date"
+                    className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                    value={filtroDiario}
+                    onChange={(e) => setFiltroDiario(e.target.value)}
+                  />
+                  {filtroDiario && (
+                    <button
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setFiltroDiario("")}
+                    >✕</button>
+                  )}
+                </div>
+              )}
+              {vista === "semanal" && (
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-muted-foreground whitespace-nowrap">Semana (lunes):</label>
+                  <input
+                    type="date"
+                    className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                    value={filtroSemana}
+                    onChange={(e) => setFiltroSemana(e.target.value)}
+                  />
+                  {filtroSemana && (
+                    <button
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setFiltroSemana("")}
+                    >✕</button>
+                  )}
+                </div>
+              )}
               {vista === "mensual" && (
                 <select
                   className="rounded-md border border-input bg-background px-2 py-1 text-sm"
@@ -832,71 +878,6 @@ export default function ProduccionReporteria() {
             )}
           </CardContent>
         </Card>
-
-      {/* Segunda tabla, paralela a la de arriba — alimentada por
-          produccion_resumen (página "Producción"). */}
-      <Card className="mt-6">
-        <CardHeader className="pb-3 flex flex-row items-start justify-between flex-wrap gap-2">
-          <div>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Factory className="w-4 h-4" />
-              Producción
-              {vista === "diario" && ` (${filasProduccionActuales.length})`}
-              {vista === "semanal" && ` — Resumen Semanal (${filasProduccionActuales.length} semanas)`}
-              {vista === "mensual" && " — Resumen Mensual"}
-            </CardTitle>
-            <p className="text-xs text-muted-foreground pt-1">
-              Datos de la página "Producción" (tabla independiente). Se edita desde ahí.
-            </p>
-          </div>
-          <Button size="sm" variant="outline" onClick={handleExportarProduccion}>
-            <Download className="w-3.5 h-3.5" />
-            Exportar
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {cargandoResumen ? (
-            <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
-          ) : filasProduccionActuales.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-8">No hay datos aún.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-center text-muted-foreground border-b bg-muted/30 text-xs">
-                    <th className="py-2 px-2 whitespace-nowrap text-left">{etiquetaCol}</th>
-                    {camposResumenVisibles.map((c) => (
-                      <th key={c.field} className="py-2 px-2 whitespace-nowrap">{c.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filasProduccionActuales.map((f, idx) => (
-                    <tr key={f.id ?? f.lunes ?? f.mes ?? idx} className="border-b last:border-0 hover:bg-muted/30 text-center">
-                      <td className="py-2 px-2 font-medium text-left whitespace-nowrap">{labelProduccion(f)}</td>
-                      {camposResumenVisibles.map((c) => (
-                        <td key={c.field} className="py-2 px-2">
-                          {formatearCampoResumen(f[c.field], c.field, vista !== "diario")}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                  {vista === "mensual" && (
-                    <tr className="text-center font-semibold bg-muted/40 border-t-2">
-                      <td className="py-2 px-2 text-left">TOTAL</td>
-                      {camposResumenVisibles.map((c) => (
-                        <td key={c.field} className="py-2 px-2">
-                          {formatearCampoResumen(resumenMensualProduccion.totalAno[c.field], c.field, true)}
-                        </td>
-                      ))}
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Modal de edición — solo para filas de la vista Diario (1 fila =
           1 registro real en registros_produccion). */}

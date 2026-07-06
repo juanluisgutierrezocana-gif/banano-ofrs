@@ -550,11 +550,11 @@ export default function ProduccionIngresar() {
         </CardContent>
       </Card>
 
-      {/* overflow-x-auto aquí para que la página scrollee horizontalmente
-          cuando la pantalla sea angosta, en vez de cada tabla por separado. */}
+      {/* overflow-x-auto aquí para que la página scrollee horizontalmente;
+          cada columna flex toma el ancho que necesita su tabla. */}
       <div className="overflow-x-auto pb-2">
-      <div className="grid grid-cols-3 gap-6 mb-8 items-start min-w-[1080px]">
-      <div className="space-y-6">
+      <div className="flex gap-6 mb-8 items-start">
+      <div className="space-y-6 flex-shrink-0">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
@@ -746,61 +746,12 @@ export default function ProduccionIngresar() {
               </table>
             </div>
           )}
-          <p className="text-xs text-muted-foreground mt-3">
-            La celda de TOTAL CAJAS se escribe a mano y se guarda automáticamente al salir del campo.
-            TOTAL PALETAS = TOTAL CAJAS ÷ CAJAS PALETA (semana acumulada).
-          </p>
-
-          {/* Mini tabla: Cajas / Paletas por día (semana completa, editable) */}
-          <div className="mt-5 border-t pt-4">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-              Cajas / Paletas por Día
-            </p>
-            <div>
-              <table className="text-sm border-collapse">
-                <thead>
-                  <tr className="text-center text-muted-foreground border-b bg-muted/30">
-                    <th className="py-1.5 px-3 text-left whitespace-nowrap">Día</th>
-                    <th className="py-1.5 px-3 whitespace-nowrap">Cajas</th>
-                    <th className="py-1.5 px-3 whitespace-nowrap">Paletas</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {DIAS_SEMANA.map(({ key, label }) => (
-                    <tr key={key} className="border-b last:border-0">
-                      <td className="py-1 px-3 font-medium whitespace-nowrap">{label}</td>
-                      <td className="py-1 px-2">
-                        <input
-                          type="number"
-                          className={inputClaseSemana}
-                          value={valoresCajasPalet[key]?.cajas ?? ""}
-                          onChange={(e) => handleChangeCajasPalet(key, "cajas", e.target.value)}
-                          onBlur={() => handleBlurCajasPalet(key, "cajas")}
-                          placeholder="—"
-                        />
-                      </td>
-                      <td className="py-1 px-2">
-                        <input
-                          type="number"
-                          className={inputClaseSemana}
-                          value={valoresCajasPalet[key]?.palet ?? ""}
-                          onChange={(e) => handleChangeCajasPalet(key, "palet", e.target.value)}
-                          onBlur={() => handleBlurCajasPalet(key, "palet")}
-                          placeholder="—"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </CardContent>
       </Card>
 
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-6 flex-shrink-0">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -858,7 +809,7 @@ export default function ProduccionIngresar() {
       </div>
 
       {/* Columna 3: Resumen de Producción */}
-      <div className="space-y-6">
+      <div className="space-y-6 flex-shrink-0">
       {/* Tabla "FINCA / SEMANA" estilo reporte (boceto Excel, hoja LA
           GRACIA12). CAJ.PROG y DIF quedan pendientes a propósito: el Excel
           no tiene fórmula para CAJ.PROG (se escribe a mano) y la app
