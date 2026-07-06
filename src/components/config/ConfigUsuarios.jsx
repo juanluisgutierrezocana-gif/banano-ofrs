@@ -223,7 +223,9 @@ export default function ConfigUsuarios() {
                 ? { label: "Dueño", icon: Crown, color: "text-secondary" }
                 : (ROLES[u.role] || ROLES.user);
               const RoleIcon = roleInfo.icon;
-              const mostrarPermisos = isTrueAdmin && u.role === "user";
+              // Mostrar panel de permisos para Editor Y Lector (viewer).
+              // Admin/Dueño tienen acceso total sin necesitar permisos granulares.
+              const mostrarPermisos = isTrueAdmin && (u.role === "user" || u.role === "viewer");
               const expanded = expandedId === u.id;
               return (
                 <div key={u.id}>
@@ -251,7 +253,7 @@ export default function ConfigUsuarios() {
                         <button
                           onClick={() => setExpandedId(expanded ? null : u.id)}
                           className="flex items-center gap-0.5 p-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
-                          title="Permisos de este editor"
+                          title={u.role === "viewer" ? "Permisos de este lector" : "Permisos de este editor"}
                         >
                           <Shield className="w-4 h-4" />
                           <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
