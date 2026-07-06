@@ -119,6 +119,24 @@ export const produccion = createEntity('registros_produccion');
  *  fórmulas ni enlace a registros_produccion) → produccion_resumen */
 export const produccionResumen = createEntity('produccion_resumen');
 
+/** ResumenHome — tabla editable en ProduccionHome, completamente independiente.
+ *  Una fila por (fecha, codigo); se guarda con upsert.
+ *  NO está vinculada a produccionSemanal ni a registros_produccion. */
+const resumenHomeBase = createEntity('resumen_home');
+export const resumenHome = {
+  ...resumenHomeBase,
+  async upsert(fecha, codigo, cajProg, total) {
+    return await supabase
+      .from('resumen_home')
+      .upsert(
+        { fecha, codigo, caj_prog: cajProg, total },
+        { onConflict: 'fecha,codigo' }
+      )
+      .select()
+      .single();
+  },
+};
+
 /** ProduccionSemanal (grid semanal por código de producto, días lunes-sábado) → produccion_semanal */
 export const produccionSemanal = createEntity('produccion_semanal');
 

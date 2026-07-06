@@ -550,7 +550,10 @@ export default function ProduccionIngresar() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 items-start">
+      {/* overflow-x-auto aquí para que la página scrollee horizontalmente
+          cuando la pantalla sea angosta, en vez de cada tabla por separado. */}
+      <div className="overflow-x-auto pb-2">
+      <div className="grid grid-cols-3 gap-6 mb-8 items-start min-w-[1080px]">
       <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
@@ -694,7 +697,7 @@ export default function ProduccionIngresar() {
               Elige una fecha de lunes a sábado para ver esta tabla.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <div>
               <table className="text-sm border-collapse">
                 <thead>
                   <tr className="text-center text-muted-foreground border-b bg-muted/30">
@@ -753,7 +756,7 @@ export default function ProduccionIngresar() {
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
               Cajas / Paletas por Día
             </p>
-            <div className="overflow-x-auto">
+            <div>
               <table className="text-sm border-collapse">
                 <thead>
                   <tr className="text-center text-muted-foreground border-b bg-muted/30">
@@ -894,7 +897,7 @@ export default function ProduccionIngresar() {
             </p>
           ) : (
             <>
-              <div className="overflow-x-auto mb-4">
+              <div className="mb-4">
                 <table className="text-sm border-collapse w-full">
                   <thead>
                     <tr className="text-center text-muted-foreground border-b bg-muted/30">
@@ -969,7 +972,8 @@ export default function ProduccionIngresar() {
         </CardContent>
       </Card>
       </div>
-      </div>
+      </div>{/* cierra grid */}
+      </div>{/* cierra overflow-x-auto */}
     </div>
   );
 }
