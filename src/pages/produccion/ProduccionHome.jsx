@@ -1,27 +1,41 @@
 import { useState, useMemo, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  resumenHome,
-  produccionResumen,
-  calidadesProduccion,
-  settings,
-} from "@/api/supabaseClient";
+import { resumenHome, produccionResumen, settings } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Factory, FileSpreadsheet, ClipboardList } from "lucide-react";
 
-// ── Clase compartida para celdas editables de ambas tablas ────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// LISTA FIJA DE CALIDADES — 100 % independiente de calidades_produccion,
+// de Configuraciones y de cualquier otra tabla de la app.
+// Solo cambia aquí si el equipo decide agregar/quitar una calidad en
+// esta página específica.
+// ═══════════════════════════════════════════════════════════════════════════
+const FILAS_HOME = [
+  { codigo: "DMD",             codigoCorto: "C68",  calidad: "DMD" },
+  { codigo: "DM9",             codigoCorto: "C23",  calidad: "DM9" },
+  { codigo: "PRIM",            codigoCorto: "CH1",  calidad: "PRIM." },
+  { codigo: "PREM",            codigoCorto: "G01",  calidad: "PREM." },
+  { codigo: "3LB",             codigoCorto: "CQ2",  calidad: "3LB" },
+  { codigo: "IP",              codigoCorto: "CH7",  calidad: "IP" },
+  { codigo: "24COUNT",         codigoCorto: "C39",  calidad: "24 COUNT" },
+  { codigo: "24COUNT_G39",     codigoCorto: "G39",  calidad: "24 COUNT" },
+  { codigo: "ROSY NORMAL",     codigoCorto: "G05",  calidad: "ROSY NORMAL" },
+  { codigo: "ROSY CONSUMER",   codigoCorto: "GQ5",  calidad: "ROSY CONSUMER" },
+  { codigo: "DM BANABAC",      codigoCorto: "GP7",  calidad: "DM BANABAC" },
+  { codigo: "DM BANABAC MINI", codigoCorto: "GP7",  calidad: "DM BANABAC MINI" },
+  { codigo: "3LBS",            codigoCorto: "CP9",  calidad: "3 LBS" },
+];
+
+// ── Clase compartida para celdas numéricas editables ──────────────────────
 const INP =
   "w-16 text-center text-sm h-7 px-1 rounded border border-transparent " +
   "focus:border-input bg-transparent hover:bg-muted/50 focus:bg-background " +
   "transition-colors [appearance:textfield] " +
   "[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
-// ── Filas de la tabla de estadísticas (imagen 2) ──────────────────────────
-// campo: nombre de columna en produccion_resumen
-// label: texto a mostrar
-// tipo: "num" | "pct" | "calc" (no editable, se calcula)
+// ── Filas de la tabla "Datos del Día" (imagen 2) ──────────────────────────
 const STATS_FILAS = [
   { campo: "total_cajas",         label: "TOTAL CAJAS" },
   { campo: "total_paletas",       label: "TOTAL PALETAS" },
@@ -39,36 +53,14 @@ const STATS_FILAS = [
 ];
 
 export default function ProduccionHome() {
-  // Fecha activa
   const [fechaSeleccionada, setFechaSeleccionada] = useState(
     () => new Date().toISOString().slice(0, 10)
   );
-
-  // Estado local de edición antes de blur (tabla 1)
   const [localesResumen, setLocalesResumen] = useState({});
-  // Estado local de edición antes de blur (tabla 2 — stats)
-  const [localesStats, setLocalesStats] = useState({});
-
+  const [localesStats,   setLocalesStats]   = useState({});
   const queryClient = useQueryClient();
 
-  // ── Calidades (fuente de verdad de las filas de imagen 1) ────────────────
-  // NOTA: NO se filtra por visibilidad — las tablas de Producción son
-  //       independientes y no deben ser afectadas por Configuraciones.
-  const { data: calidades = [] } = useQuery({
-    queryKey: ["calidades-produccion"],
-    queryFn: async () => {
-      const { data, error } = await calidadesProduccion.list();
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-  const codigosVisibles = calidades.map((c) => c.codigo);
-  const calidadPorCodigo = useMemo(
-    () => Object.fromEntries(calidades.map((c) => [c.codigo, c])),
-    [calidades]
-  );
-
-  // ── Total acres finca (para % Área Cosecha) ──────────────────────────────
+  // ── Total acres finca (para calcular % Área) ─────────────────────────────
   const { data: acresConfig } = useQuery({
     queryKey: ["settings-acres-finca"],
     queryFn: async () => {
@@ -78,7 +70,7 @@ export default function ProduccionHome() {
   });
   const totalAcresFinca = acresConfig ? Number(acresConfig.value) : 260.6;
 
-  // ── Imagen 1: datos de resumen_home (por fecha+codigo) ───────────────────
+  // ── Imagen 1 — resumen_home (por fecha + codigo de FILAS_HOME) ────────────
   const { data: filasResumen = [], isLoading: cargandoResumen } = useQuery({
     queryKey: ["resumen-home", fechaSeleccionada],
     queryFn: async () => {
@@ -93,7 +85,7 @@ export default function ProduccionHome() {
     [filasResumen]
   );
 
-  // ── Imagen 2: datos de produccion_resumen (por fecha, una fila) ──────────
+  // ── Imagen 2 — produccion_resumen (una fila por fecha) ───────────────────
   const { data: filasStats = [], isLoading: cargandoStats } = useQuery({
     queryKey: ["produccion-resumen-home", fechaSeleccionada],
     queryFn: async () => {
@@ -112,75 +104,64 @@ export default function ProduccionHome() {
       ? localesResumen[k]
       : (resumenPorCodigo[codigo]?.[campo] ?? "");
   };
-  const getS = (campo) => {
-    return localesStats[campo] !== undefined
-      ? localesStats[campo]
-      : (statsHoy?.[campo] ?? "");
-  };
+  const getS = (campo) =>
+    localesStats[campo] !== undefined ? localesStats[campo] : (statsHoy?.[campo] ?? "");
 
-  // ── Handlers Imagen 1 (resumen_home) ─────────────────────────────────────
-  const handleChangeR = (codigo, campo, valor) => {
-    setLocalesResumen((prev) => ({ ...prev, [`${codigo}_${campo}`]: valor }));
-  };
+  // ── Handlers Imagen 1 (resumen_home upsert) ───────────────────────────────
+  const handleChangeR = (codigo, campo, valor) =>
+    setLocalesResumen((p) => ({ ...p, [`${codigo}_${campo}`]: valor }));
+
   const handleBlurR = useCallback(
     async (codigo, campo) => {
       const k = `${codigo}_${campo}`;
       if (localesResumen[k] === undefined) return;
 
-      const rawCaj = campo === "caj_prog"
-        ? localesResumen[k]
-        : (resumenPorCodigo[codigo]?.caj_prog ?? null);
-      const rawTot = campo === "total"
-        ? localesResumen[k]
-        : (resumenPorCodigo[codigo]?.total ?? null);
-
+      const rawCaj = campo === "caj_prog" ? localesResumen[k] : (resumenPorCodigo[codigo]?.caj_prog ?? null);
+      const rawTot = campo === "total"    ? localesResumen[k] : (resumenPorCodigo[codigo]?.total    ?? null);
       const cajProg = rawCaj === "" || rawCaj === null ? null : Number(rawCaj);
-      const total = rawTot === "" || rawTot === null ? null : Number(rawTot);
+      const total   = rawTot === "" || rawTot === null ? null : Number(rawTot);
 
       await resumenHome.upsert(fechaSeleccionada, codigo, cajProg, total);
-
-      setLocalesResumen((prev) => { const n = { ...prev }; delete n[k]; return n; });
+      setLocalesResumen((p) => { const n = { ...p }; delete n[k]; return n; });
       queryClient.invalidateQueries({ queryKey: ["resumen-home", fechaSeleccionada] });
     },
     [localesResumen, resumenPorCodigo, fechaSeleccionada, queryClient]
   );
 
-  // ── Handlers Imagen 2 (produccion_resumen) ───────────────────────────────
-  const handleChangeS = (campo, valor) => {
-    setLocalesStats((prev) => ({ ...prev, [campo]: valor }));
-  };
+  // ── Handlers Imagen 2 (produccion_resumen update/create) ─────────────────
+  const handleChangeS = (campo, valor) =>
+    setLocalesStats((p) => ({ ...p, [campo]: valor }));
+
   const handleBlurS = useCallback(
     async (campo) => {
       if (localesStats[campo] === undefined) return;
-      const raw = localesStats[campo];
-      const valor = raw === "" ? null : Number(raw);
+      const valor = localesStats[campo] === "" ? null : Number(localesStats[campo]);
 
       if (statsHoy) {
         await produccionResumen.update(statsHoy.id, { [campo]: valor });
       } else {
         await produccionResumen.create({ fecha: fechaSeleccionada, [campo]: valor });
       }
-
-      setLocalesStats((prev) => { const n = { ...prev }; delete n[campo]; return n; });
+      setLocalesStats((p) => { const n = { ...p }; delete n[campo]; return n; });
       queryClient.invalidateQueries({ queryKey: ["produccion-resumen-home", fechaSeleccionada] });
     },
     [localesStats, statsHoy, fechaSeleccionada, queryClient]
   );
 
-  // ── Totales fila resumen (imagen 1) ───────────────────────────────────────
+  // ── Totales fila imagen 1 ─────────────────────────────────────────────────
   const totalCajProg = useMemo(
-    () => codigosVisibles.reduce((s, c) => s + (Number(resumenPorCodigo[c]?.caj_prog) || 0), 0),
-    [codigosVisibles, resumenPorCodigo]
+    () => FILAS_HOME.reduce((s, { codigo }) => s + (Number(resumenPorCodigo[codigo]?.caj_prog) || 0), 0),
+    [resumenPorCodigo]
   );
   const totalTotal = useMemo(
-    () => codigosVisibles.reduce((s, c) => s + (Number(resumenPorCodigo[c]?.total) || 0), 0),
-    [codigosVisibles, resumenPorCodigo]
+    () => FILAS_HOME.reduce((s, { codigo }) => s + (Number(resumenPorCodigo[codigo]?.total) || 0), 0),
+    [resumenPorCodigo]
   );
 
-  // ── Formateo de DIF con color ─────────────────────────────────────────────
+  // ── DIF con color ─────────────────────────────────────────────────────────
   const renderDif = (total, cajProg) => {
-    if (!cajProg && !total) return <span className="text-muted-foreground">—</span>;
     const dif = Number(total) - Number(cajProg);
+    if (!cajProg && !total) return <span className="text-muted-foreground">—</span>;
     if (dif === 0) return <span className="text-muted-foreground">0</span>;
     return (
       <span className={dif < 0 ? "text-red-500 font-medium" : "text-green-600 font-medium"}>
@@ -189,14 +170,14 @@ export default function ProduccionHome() {
     );
   };
 
-  // ── Calcular % Área ────────────────────────────────────────────────────────
+  // ── % Área ────────────────────────────────────────────────────────────────
   const pctArea = useMemo(() => {
     const acres = Number(statsHoy?.area_acres) || 0;
     if (!acres || !totalAcresFinca) return null;
     return ((acres / totalAcresFinca) * 100).toFixed(1) + "%";
   }, [statsHoy, totalAcresFinca]);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div>
       {/* Encabezado */}
@@ -239,7 +220,7 @@ export default function ProduccionHome() {
       {/* Layout 2 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
-        {/* ── Columna 1: Resumen de Producción (imagen 1) ── */}
+        {/* ── Col 1: Resumen de Producción — lista fija FILAS_HOME ── */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -247,7 +228,7 @@ export default function ProduccionHome() {
               Resumen de Producción
             </CardTitle>
             <p className="text-xs text-muted-foreground pt-1">
-              Datos independientes — no afectan ni son afectados por otras secciones.
+              Tabla independiente — no se ve afectada por Configuraciones ni por otras secciones.
             </p>
           </CardHeader>
           <CardContent>
@@ -255,20 +236,20 @@ export default function ProduccionHome() {
               <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="text-sm border-collapse w-full">
+                <table className="text-sm border-collapse">
                   <thead>
                     <tr className="text-muted-foreground border-b bg-muted/30">
-                      <th className="py-2 px-2 text-center whitespace-nowrap">CAJ. PROG</th>
+                      <th className="py-2 px-3 text-center whitespace-nowrap">CAJ. PROG</th>
                       <th className="py-2 px-3 text-left whitespace-nowrap">CODIGO</th>
                       <th className="py-2 px-3 text-left whitespace-nowrap">CALIDAD</th>
-                      <th className="py-2 px-2 text-center whitespace-nowrap">TOTAL</th>
-                      <th className="py-2 px-2 text-center whitespace-nowrap">DIF</th>
+                      <th className="py-2 px-3 text-center whitespace-nowrap">TOTAL</th>
+                      <th className="py-2 px-3 text-center whitespace-nowrap">DIF</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {codigosVisibles.map((codigo) => {
+                    {FILAS_HOME.map(({ codigo, codigoCorto, calidad }) => {
                       const cajProg = Number(resumenPorCodigo[codigo]?.caj_prog) || 0;
-                      const total = Number(resumenPorCodigo[codigo]?.total) || 0;
+                      const total   = Number(resumenPorCodigo[codigo]?.total) || 0;
                       return (
                         <tr key={codigo} className="border-b last:border-0 hover:bg-muted/20">
                           <td className="py-0.5 px-1 text-center">
@@ -281,12 +262,8 @@ export default function ProduccionHome() {
                               placeholder="—"
                             />
                           </td>
-                          <td className="py-1.5 px-3 font-semibold whitespace-nowrap">
-                            {calidadPorCodigo[codigo]?.codigo_corto ?? "—"}
-                          </td>
-                          <td className="py-1.5 px-3 whitespace-nowrap">
-                            {calidadPorCodigo[codigo]?.label ?? codigo}
-                          </td>
+                          <td className="py-1.5 px-3 font-semibold whitespace-nowrap">{codigoCorto}</td>
+                          <td className="py-1.5 px-3 whitespace-nowrap">{calidad}</td>
                           <td className="py-0.5 px-1 text-center">
                             <input
                               type="number"
@@ -297,20 +274,17 @@ export default function ProduccionHome() {
                               placeholder="—"
                             />
                           </td>
-                          <td className="py-1.5 px-2 text-center">
+                          <td className="py-1.5 px-3 text-center">
                             {renderDif(total, cajProg)}
                           </td>
                         </tr>
                       );
                     })}
-                    {/* Fila de totales */}
                     <tr className="border-t-2 font-semibold bg-muted/30">
-                      <td className="py-2 px-2 text-center">{totalCajProg || "—"}</td>
+                      <td className="py-2 px-3 text-center">{totalCajProg || "—"}</td>
                       <td className="py-2 px-3" colSpan={2}>TOTAL</td>
-                      <td className="py-2 px-2 text-center">{totalTotal || "—"}</td>
-                      <td className="py-2 px-2 text-center">
-                        {renderDif(totalTotal, totalCajProg)}
-                      </td>
+                      <td className="py-2 px-3 text-center">{totalTotal || "—"}</td>
+                      <td className="py-2 px-3 text-center">{renderDif(totalTotal, totalCajProg)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -319,7 +293,7 @@ export default function ProduccionHome() {
           </CardContent>
         </Card>
 
-        {/* ── Columna 2: Estadísticas del día (imagen 2) ── */}
+        {/* ── Col 2: Datos del Día ── */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -327,34 +301,27 @@ export default function ProduccionHome() {
               Datos del Día
             </CardTitle>
             <p className="text-xs text-muted-foreground pt-1">
-              Datos independientes — edita directamente cada celda.
+              Tabla independiente — edita directamente cada celda.
             </p>
           </CardHeader>
           <CardContent>
             {cargandoStats ? (
               <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
             ) : (
-              <table className="w-full text-sm">
+              <table className="text-sm w-full">
                 <tbody>
                   {STATS_FILAS.map(({ campo, label, calc }) => {
-                    // % Área es calculada (solo lectura)
                     if (calc) {
                       return (
                         <tr key={campo} className="border-b last:border-0">
-                          <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">
-                            {label}
-                          </td>
-                          <td className="py-1.5 text-right font-medium">
-                            {pctArea ?? "—"}
-                          </td>
+                          <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">{label}</td>
+                          <td className="py-1.5 text-right font-medium">{pctArea ?? "—"}</td>
                         </tr>
                       );
                     }
                     return (
                       <tr key={campo} className="border-b last:border-0 hover:bg-muted/20">
-                        <td className="py-1 pr-3 text-muted-foreground whitespace-nowrap">
-                          {label}
-                        </td>
+                        <td className="py-1 pr-3 text-muted-foreground whitespace-nowrap">{label}</td>
                         <td className="py-1 text-right">
                           <input
                             type="number"

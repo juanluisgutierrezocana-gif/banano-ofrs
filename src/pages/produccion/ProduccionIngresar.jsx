@@ -554,7 +554,7 @@ export default function ProduccionIngresar() {
           cada columna flex toma el ancho que necesita su tabla. */}
       <div className="overflow-x-auto pb-2">
       <div className="flex gap-6 mb-8 items-start">
-      <div className="space-y-6 flex-shrink-0">
+      <div className="space-y-6 flex-shrink-0 w-fit">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
@@ -751,7 +751,7 @@ export default function ProduccionIngresar() {
 
       </div>
 
-      <div className="space-y-6 flex-shrink-0">
+      <div className="space-y-6 flex-shrink-0 w-fit">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -765,7 +765,7 @@ export default function ProduccionIngresar() {
               Aún no hay registros. Guarda el primero para ver aquí los datos calculados.
             </p>
           ) : (
-            <table className="w-full text-sm">
+            <table className="text-sm">
               <tbody>
                 {/* Orden exacto del boceto Excel del cliente (INF. PROCESO E INVENTARIOS) */}
                 <FilaProceso label="Hora Inicio" valor={ultimo.hora_inicio} />
@@ -809,7 +809,7 @@ export default function ProduccionIngresar() {
       </div>
 
       {/* Columna 3: Resumen de Producción */}
-      <div className="space-y-6 flex-shrink-0">
+      <div className="space-y-6 flex-shrink-0 w-fit">
       {/* Tabla "FINCA / SEMANA" estilo reporte (boceto Excel, hoja LA
           GRACIA12). CAJ.PROG y DIF quedan pendientes a propósito: el Excel
           no tiene fórmula para CAJ.PROG (se escribe a mano) y la app
@@ -829,7 +829,7 @@ export default function ProduccionIngresar() {
           </p>
         </CardHeader>
         <CardContent>
-          <table className="w-full text-sm mb-4 border rounded-md overflow-hidden">
+          <table className="text-sm mb-4 border rounded-md overflow-hidden">
             <tbody>
               <tr className="border-b bg-muted/30">
                 <td className="py-1.5 px-3 font-semibold w-28">Finca</td>
@@ -849,7 +849,7 @@ export default function ProduccionIngresar() {
           ) : (
             <>
               <div className="mb-4">
-                <table className="text-sm border-collapse w-full">
+                <table className="text-sm border-collapse">
                   <thead>
                     <tr className="text-center text-muted-foreground border-b bg-muted/30">
                       <th className="py-2 px-2 whitespace-nowrap">Caj.Prog</th>
@@ -895,7 +895,7 @@ export default function ProduccionIngresar() {
                 </table>
               </div>
 
-              <table className="w-full text-sm">
+              <table className="text-sm">
                 <tbody>
                   <FilaProceso label="Total Cajas" valor={redondear(calculado?.cajasTotal)} />
                   <FilaProceso label="Total Paletas" valor={valoresCajasPalet[diaActual]?.palet || "—"} />
