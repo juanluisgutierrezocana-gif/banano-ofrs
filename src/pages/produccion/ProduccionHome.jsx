@@ -231,133 +231,150 @@ export default function ProduccionHome() {
         </CardContent>
       </Card>
 
-      {/* Layout horizontal siempre — 2 columnas lado a lado */}
-      <div className="overflow-x-auto pb-2">
-      <div className="flex gap-6 items-start min-w-max">
-
-        {/* ── Col 1: Resumen de Producción — lista fija FILAS_HOME ── */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileSpreadsheet className="w-4 h-4" />
-              Resumen de Producción
-            </CardTitle>
-            <p className="text-xs text-muted-foreground pt-1">
-              Tabla independiente — no se ve afectada por Configuraciones ni por otras secciones.
-            </p>
-          </CardHeader>
-          <CardContent>
-            {cargandoResumen ? (
-              <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="text-sm border-collapse">
-                  <thead>
-                    <tr className="text-muted-foreground border-b bg-muted/30">
-                      <th className="py-2 px-3 text-center whitespace-nowrap">CAJ. PROG</th>
-                      <th className="py-2 px-3 text-left whitespace-nowrap">CODIGO</th>
-                      <th className="py-2 px-3 text-left whitespace-nowrap">CALIDAD</th>
-                      <th className="py-2 px-3 text-center whitespace-nowrap">TOTAL</th>
-                      <th className="py-2 px-3 text-center whitespace-nowrap">DIF</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {FILAS_HOME.map(({ codigo, codigoCorto, calidad }) => {
+      {/* ── Tabla 1: Resumen de Producción — calidades como columnas ── */}
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileSpreadsheet className="w-4 h-4" />
+            Resumen de Producción
+          </CardTitle>
+          <p className="text-xs text-muted-foreground pt-1">
+            Tabla independiente — no se ve afectada por Configuraciones ni por otras secciones.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {cargandoResumen ? (
+            <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="text-sm border-collapse">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    {/* columna de etiqueta de fila */}
+                    <th className="py-2 px-3 text-left whitespace-nowrap text-muted-foreground"></th>
+                    {FILAS_HOME.map(({ codigo, codigoCorto, calidad }) => (
+                      <th key={codigo} className="py-2 px-3 text-center whitespace-nowrap">
+                        <div className="font-semibold text-foreground">{codigoCorto}</div>
+                        <div className="text-xs font-normal text-muted-foreground">{calidad}</div>
+                      </th>
+                    ))}
+                    <th className="py-2 px-3 text-center whitespace-nowrap text-muted-foreground">TOTAL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Fila CAJ. PROG */}
+                  <tr className="border-b hover:bg-muted/20">
+                    <td className="py-1 px-3 text-muted-foreground font-medium whitespace-nowrap">CAJ. PROG</td>
+                    {FILAS_HOME.map(({ codigo }) => (
+                      <td key={codigo} className="py-0.5 px-1 text-center">
+                        <input
+                          type="number"
+                          className={INP}
+                          value={getR(codigo, "caj_prog")}
+                          onChange={(e) => handleChangeR(codigo, "caj_prog", e.target.value)}
+                          onBlur={() => handleBlurR(codigo, "caj_prog")}
+                          placeholder="—"
+                        />
+                      </td>
+                    ))}
+                    <td className="py-1 px-3 text-center font-semibold">{totalCajProg || "—"}</td>
+                  </tr>
+                  {/* Fila TOTAL */}
+                  <tr className="border-b hover:bg-muted/20">
+                    <td className="py-1 px-3 text-muted-foreground font-medium whitespace-nowrap">TOTAL</td>
+                    {FILAS_HOME.map(({ codigo }) => (
+                      <td key={codigo} className="py-0.5 px-1 text-center">
+                        <input
+                          type="number"
+                          className={INP}
+                          value={getR(codigo, "total")}
+                          onChange={(e) => handleChangeR(codigo, "total", e.target.value)}
+                          onBlur={() => handleBlurR(codigo, "total")}
+                          placeholder="—"
+                        />
+                      </td>
+                    ))}
+                    <td className="py-1 px-3 text-center font-semibold">{totalTotal || "—"}</td>
+                  </tr>
+                  {/* Fila DIF */}
+                  <tr className="hover:bg-muted/20">
+                    <td className="py-1.5 px-3 text-muted-foreground font-medium whitespace-nowrap">DIF</td>
+                    {FILAS_HOME.map(({ codigo }) => {
                       const cajProg = Number(resumenPorCodigo[codigo]?.caj_prog) || 0;
                       const total   = Number(resumenPorCodigo[codigo]?.total) || 0;
                       return (
-                        <tr key={codigo} className="border-b last:border-0 hover:bg-muted/20">
-                          <td className="py-0.5 px-1 text-center">
-                            <input
-                              type="number"
-                              className={INP}
-                              value={getR(codigo, "caj_prog")}
-                              onChange={(e) => handleChangeR(codigo, "caj_prog", e.target.value)}
-                              onBlur={() => handleBlurR(codigo, "caj_prog")}
-                              placeholder="—"
-                            />
-                          </td>
-                          <td className="py-1.5 px-3 font-semibold whitespace-nowrap">{codigoCorto}</td>
-                          <td className="py-1.5 px-3 whitespace-nowrap">{calidad}</td>
-                          <td className="py-0.5 px-1 text-center">
-                            <input
-                              type="number"
-                              className={INP}
-                              value={getR(codigo, "total")}
-                              onChange={(e) => handleChangeR(codigo, "total", e.target.value)}
-                              onBlur={() => handleBlurR(codigo, "total")}
-                              placeholder="—"
-                            />
-                          </td>
-                          <td className="py-1.5 px-3 text-center">
-                            {renderDif(total, cajProg)}
-                          </td>
-                        </tr>
+                        <td key={codigo} className="py-1.5 px-2 text-center">
+                          {renderDif(total, cajProg)}
+                        </td>
                       );
                     })}
-                    <tr className="border-t-2 font-semibold bg-muted/30">
-                      <td className="py-2 px-3 text-center">{totalCajProg || "—"}</td>
-                      <td className="py-2 px-3" colSpan={2}>TOTAL</td>
-                      <td className="py-2 px-3 text-center">{totalTotal || "—"}</td>
-                      <td className="py-2 px-3 text-center">{renderDif(totalTotal, totalCajProg)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    <td className="py-1.5 px-3 text-center font-semibold">
+                      {renderDif(totalTotal, totalCajProg)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* ── Col 2: Datos del Día ── */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <ClipboardList className="w-4 h-4" />
-              Datos del Día
-            </CardTitle>
-            <p className="text-xs text-muted-foreground pt-1">
-              Tabla independiente — edita directamente cada celda.
-            </p>
-          </CardHeader>
-          <CardContent>
-            {cargandoStats ? (
-              <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
-            ) : (
-              <table className="text-sm w-full">
+      {/* ── Tabla 2: Datos del Día — stats como columnas ── */}
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ClipboardList className="w-4 h-4" />
+            Datos del Día
+          </CardTitle>
+          <p className="text-xs text-muted-foreground pt-1">
+            Tabla independiente — edita directamente cada celda.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {cargandoStats ? (
+            <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="text-sm border-collapse">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    {STATS_FILAS.map(({ campo, label }) => (
+                      <th key={campo} className="py-2 px-3 text-center text-xs font-medium text-muted-foreground whitespace-nowrap">
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody>
-                  {STATS_FILAS.map(({ campo, label, calc }) => {
-                    if (calc) {
+                  <tr className="hover:bg-muted/20">
+                    {STATS_FILAS.map(({ campo, calc }) => {
+                      if (calc) {
+                        return (
+                          <td key={campo} className="py-1.5 px-3 text-center font-medium">
+                            {pctArea ?? "—"}
+                          </td>
+                        );
+                      }
                       return (
-                        <tr key={campo} className="border-b last:border-0">
-                          <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">{label}</td>
-                          <td className="py-1.5 text-right font-medium">{pctArea ?? "—"}</td>
-                        </tr>
-                      );
-                    }
-                    return (
-                      <tr key={campo} className="border-b last:border-0 hover:bg-muted/20">
-                        <td className="py-1 pr-3 text-muted-foreground whitespace-nowrap">{label}</td>
-                        <td className="py-1 text-right">
+                        <td key={campo} className="py-0.5 px-1 text-center">
                           <input
                             type="number"
-                            className={`${INP} w-24`}
+                            className={INP}
                             value={getS(campo)}
                             onChange={(e) => handleChangeS(campo, e.target.value)}
                             onBlur={() => handleBlurS(campo)}
                             placeholder="—"
                           />
                         </td>
-                      </tr>
-                    );
-                  })}
+                      );
+                    })}
+                  </tr>
                 </tbody>
               </table>
-            )}
-          </CardContent>
-        </Card>
-
-      </div>{/* cierra flex min-w-max */}
-      </div>{/* cierra overflow-x-auto */}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── Gráfica de Calidades ── */}
       <Card className="mt-6">
