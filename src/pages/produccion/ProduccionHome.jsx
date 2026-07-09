@@ -4,16 +4,14 @@ import { resumenHome, produccionResumen, settings } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Factory, FileSpreadsheet, ClipboardList, BarChart2 } from "lucide-react";
+import { Factory, FileSpreadsheet, ClipboardList, PieChart as PieIcon } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LISTA FIJA DE CALIDADES — 100 % independiente de calidades_produccion,
 // de Configuraciones y de cualquier otra tabla de la app.
-// Solo cambia aquí si el equipo decide agregar/quitar una calidad en
-// esta página específica.
 // ═══════════════════════════════════════════════════════════════════════════
 const FILAS_HOME = [
   { codigo: "DMD",             codigoCorto: "C68",  calidad: "DMD" },
@@ -31,6 +29,13 @@ const FILAS_HOME = [
   { codigo: "3LBS",            codigoCorto: "CP9",  calidad: "3 LBS" },
 ];
 
+// ── Paleta de colores para el pie chart ───────────────────────────────────
+const PIE_COLORS = [
+  "#16a34a", "#22c55e", "#4ade80", "#86efac",
+  "#0ea5e9", "#38bdf8", "#7dd3fc", "#bae6fd",
+  "#f59e0b", "#fbbf24", "#ef4444", "#f97316", "#a855f7",
+];
+
 // ── Clase compartida para celdas numéricas editables ──────────────────────
 const INP =
   "w-16 text-center text-sm h-7 px-1 rounded border border-transparent " +
@@ -38,7 +43,7 @@ const INP =
   "transition-colors [appearance:textfield] " +
   "[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
-// ── Filas de la tabla "Datos del Día" (imagen 2) ──────────────────────────
+// ── Filas de la tabla "Datos del Día" ────────────────────────────────────
 const STATS_FILAS = [
   { campo: "total_cajas",         label: "TOTAL CAJAS" },
   { campo: "total_paletas",       label: "TOTAL PALETAS" },
@@ -73,7 +78,7 @@ export default function ProduccionHome() {
   });
   const totalAcresFinca = acresConfig ? Number(acresConfig.value) : 260.6;
 
-  // ── Imagen 1 — resumen_home (por fecha + codigo de FILAS_HOME) ────────────
+  // ── resumen_home — total por calidad (col 2: tabla calidades) ────────────
   const { data: filasResumen = [], isLoading: cargandoResumen } = useQuery({
     queryKey: ["resumen-home", fechaSeleccionada],
     queryFn: async () => {
@@ -88,7 +93,7 @@ export default function ProduccionHome() {
     [filasResumen]
   );
 
-  // ── Imagen 2 — produccion_resumen (una fila por fecha) ───────────────────
+  // ── produccion_resumen — stats del día (col 1: datos del día) ────────────
   const { data: filasStats = [], isLoading: cargandoStats } = useQuery({
     queryKey: ["produccion-resumen-home", fechaSeleccionada],
     queryFn: async () => {
@@ -101,29 +106,26 @@ export default function ProduccionHome() {
   const statsHoy = filasStats[0] ?? null;
 
   // ── Helpers de valor ─────────────────────────────────────────────────────
-  const getR = (codigo, campo) => {
-    const k = `${codigo}_${campo}`;
+  const getTotal = (codigo) => {
+    const k = `${codigo}_total`;
     return localesResumen[k] !== undefined
       ? localesResumen[k]
-      : (resumenPorCodigo[codigo]?.[campo] ?? "");
+      : (resumenPorCodigo[codigo]?.total ?? "");
   };
   const getS = (campo) =>
     localesStats[campo] !== undefined ? localesStats[campo] : (statsHoy?.[campo] ?? "");
 
-  // ── Handlers Imagen 1 (resumen_home upsert) ───────────────────────────────
-  const handleChangeR = (codigo, campo, valor) =>
-    setLocalesResumen((p) => ({ ...p, [`${codigo}_${campo}`]: valor }));
+  // ── Handler calidades (solo campo "total") ────────────────────────────────
+  const handleChangeTotal = (codigo, valor) =>
+    setLocalesResumen((p) => ({ ...p, [`${codigo}_total`]: valor }));
 
-  const handleBlurR = useCallback(
-    async (codigo, campo) => {
-      const k = `${codigo}_${campo}`;
+  const handleBlurTotal = useCallback(
+    async (codigo) => {
+      const k = `${codigo}_total`;
       if (localesResumen[k] === undefined) return;
-
-      const rawCaj = campo === "caj_prog" ? localesResumen[k] : (resumenPorCodigo[codigo]?.caj_prog ?? null);
-      const rawTot = campo === "total"    ? localesResumen[k] : (resumenPorCodigo[codigo]?.total    ?? null);
-      const cajProg = rawCaj === "" || rawCaj === null ? null : Number(rawCaj);
+      const rawTot = localesResumen[k];
+      const cajProg = resumenPorCodigo[codigo]?.caj_prog ?? null;
       const total   = rawTot === "" || rawTot === null ? null : Number(rawTot);
-
       await resumenHome.upsert(fechaSeleccionada, codigo, cajProg, total);
       setLocalesResumen((p) => { const n = { ...p }; delete n[k]; return n; });
       queryClient.invalidateQueries({ queryKey: ["resumen-home", fechaSeleccionada] });
@@ -131,7 +133,7 @@ export default function ProduccionHome() {
     [localesResumen, resumenPorCodigo, fechaSeleccionada, queryClient]
   );
 
-  // ── Handlers Imagen 2 (produccion_resumen update/create) ─────────────────
+  // ── Handlers stats (produccion_resumen) ──────────────────────────────────
   const handleChangeS = (campo, valor) =>
     setLocalesStats((p) => ({ ...p, [campo]: valor }));
 
@@ -139,7 +141,6 @@ export default function ProduccionHome() {
     async (campo) => {
       if (localesStats[campo] === undefined) return;
       const valor = localesStats[campo] === "" ? null : Number(localesStats[campo]);
-
       if (statsHoy) {
         await produccionResumen.update(statsHoy.id, { [campo]: valor });
       } else {
@@ -151,27 +152,11 @@ export default function ProduccionHome() {
     [localesStats, statsHoy, fechaSeleccionada, queryClient]
   );
 
-  // ── Totales fila imagen 1 ─────────────────────────────────────────────────
-  const totalCajProg = useMemo(
-    () => FILAS_HOME.reduce((s, { codigo }) => s + (Number(resumenPorCodigo[codigo]?.caj_prog) || 0), 0),
-    [resumenPorCodigo]
-  );
+  // ── Total general de cajas (pie del pie chart y tabla) ───────────────────
   const totalTotal = useMemo(
     () => FILAS_HOME.reduce((s, { codigo }) => s + (Number(resumenPorCodigo[codigo]?.total) || 0), 0),
     [resumenPorCodigo]
   );
-
-  // ── DIF con color ─────────────────────────────────────────────────────────
-  const renderDif = (total, cajProg) => {
-    const dif = Number(total) - Number(cajProg);
-    if (!cajProg && !total) return <span className="text-muted-foreground">—</span>;
-    if (dif === 0) return <span className="text-muted-foreground">0</span>;
-    return (
-      <span className={dif < 0 ? "text-red-500 font-medium" : "text-green-600 font-medium"}>
-        {dif > 0 ? `+${dif}` : dif}
-      </span>
-    );
-  };
 
   // ── % Área ────────────────────────────────────────────────────────────────
   const pctArea = useMemo(() => {
@@ -180,14 +165,15 @@ export default function ProduccionHome() {
     return ((acres / totalAcresFinca) * 100).toFixed(1) + "%";
   }, [statsHoy, totalAcresFinca]);
 
-  // ── Datos para gráfica de calidades ──────────────────────────────────────
-  const datosGrafica = useMemo(
+  // ── Datos pie chart (solo calidades con total > 0) ────────────────────────
+  const datosGraficaPie = useMemo(
     () =>
-      FILAS_HOME.map(({ codigo, codigoCorto }) => ({
-        nombre: codigoCorto,
-        "Prog.": Number(resumenPorCodigo[codigo]?.caj_prog) || 0,
-        "Total": Number(resumenPorCodigo[codigo]?.total)    || 0,
-      })),
+      FILAS_HOME
+        .map(({ codigo, codigoCorto }) => ({
+          name:  codigoCorto,
+          value: Number(resumenPorCodigo[codigo]?.total) || 0,
+        }))
+        .filter((d) => d.value > 0),
     [resumenPorCodigo]
   );
 
@@ -231,189 +217,150 @@ export default function ProduccionHome() {
         </CardContent>
       </Card>
 
-      {/* ── Tabla 1: Resumen de Producción — calidades como columnas ── */}
-      <Card className="mb-6">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4" />
-            Resumen de Producción
-          </CardTitle>
-          <p className="text-xs text-muted-foreground pt-1">
-            Tabla independiente — no se ve afectada por Configuraciones ni por otras secciones.
-          </p>
-        </CardHeader>
-        <CardContent>
-          {cargandoResumen ? (
-            <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="text-sm border-collapse">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    {/* columna de etiqueta de fila */}
-                    <th className="py-2 px-3 text-left whitespace-nowrap text-muted-foreground"></th>
-                    {FILAS_HOME.map(({ codigo, codigoCorto, calidad }) => (
-                      <th key={codigo} className="py-2 px-3 text-center whitespace-nowrap">
-                        <div className="font-semibold text-foreground">{codigoCorto}</div>
-                        <div className="text-xs font-normal text-muted-foreground">{calidad}</div>
-                      </th>
-                    ))}
-                    <th className="py-2 px-3 text-center whitespace-nowrap text-muted-foreground">TOTAL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* Fila CAJ. PROG */}
-                  <tr className="border-b hover:bg-muted/20">
-                    <td className="py-1 px-3 text-muted-foreground font-medium whitespace-nowrap">CAJ. PROG</td>
-                    {FILAS_HOME.map(({ codigo }) => (
-                      <td key={codigo} className="py-0.5 px-1 text-center">
-                        <input
-                          type="number"
-                          className={INP}
-                          value={getR(codigo, "caj_prog")}
-                          onChange={(e) => handleChangeR(codigo, "caj_prog", e.target.value)}
-                          onBlur={() => handleBlurR(codigo, "caj_prog")}
-                          placeholder="—"
-                        />
-                      </td>
-                    ))}
-                    <td className="py-1 px-3 text-center font-semibold">{totalCajProg || "—"}</td>
-                  </tr>
-                  {/* Fila TOTAL */}
-                  <tr className="border-b hover:bg-muted/20">
-                    <td className="py-1 px-3 text-muted-foreground font-medium whitespace-nowrap">TOTAL</td>
-                    {FILAS_HOME.map(({ codigo }) => (
-                      <td key={codigo} className="py-0.5 px-1 text-center">
-                        <input
-                          type="number"
-                          className={INP}
-                          value={getR(codigo, "total")}
-                          onChange={(e) => handleChangeR(codigo, "total", e.target.value)}
-                          onBlur={() => handleBlurR(codigo, "total")}
-                          placeholder="—"
-                        />
-                      </td>
-                    ))}
-                    <td className="py-1 px-3 text-center font-semibold">{totalTotal || "—"}</td>
-                  </tr>
-                  {/* Fila DIF */}
-                  <tr className="hover:bg-muted/20">
-                    <td className="py-1.5 px-3 text-muted-foreground font-medium whitespace-nowrap">DIF</td>
-                    {FILAS_HOME.map(({ codigo }) => {
-                      const cajProg = Number(resumenPorCodigo[codigo]?.caj_prog) || 0;
-                      const total   = Number(resumenPorCodigo[codigo]?.total) || 0;
-                      return (
-                        <td key={codigo} className="py-1.5 px-2 text-center">
-                          {renderDif(total, cajProg)}
-                        </td>
-                      );
-                    })}
-                    <td className="py-1.5 px-3 text-center font-semibold">
-                      {renderDif(totalTotal, totalCajProg)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* ── Layout 3 columnas: stats | calidades | pie chart ── */}
+      <div className="overflow-x-auto pb-2">
+        <div className="flex gap-6 items-start min-w-max">
 
-      {/* ── Tabla 2: Datos del Día — stats como columnas ── */}
-      <Card className="mb-6">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <ClipboardList className="w-4 h-4" />
-            Datos del Día
-          </CardTitle>
-          <p className="text-xs text-muted-foreground pt-1">
-            Tabla independiente — edita directamente cada celda.
-          </p>
-        </CardHeader>
-        <CardContent>
-          {cargandoStats ? (
-            <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="text-sm border-collapse">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    {STATS_FILAS.map(({ campo, label }) => (
-                      <th key={campo} className="py-2 px-3 text-center text-xs font-medium text-muted-foreground whitespace-nowrap">
-                        {label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="hover:bg-muted/20">
-                    {STATS_FILAS.map(({ campo, calc }) => {
+          {/* ── Col 1: Datos del Día (stats verticales) ── */}
+          <Card className="flex-shrink-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ClipboardList className="w-4 h-4" />
+                Datos del Día
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {cargandoStats ? (
+                <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
+              ) : (
+                <table className="text-sm w-full">
+                  <tbody>
+                    {STATS_FILAS.map(({ campo, label, calc }) => {
                       if (calc) {
                         return (
-                          <td key={campo} className="py-1.5 px-3 text-center font-medium">
-                            {pctArea ?? "—"}
-                          </td>
+                          <tr key={campo} className="border-b last:border-0">
+                            <td className="py-1.5 pr-6 text-muted-foreground whitespace-nowrap">{label}</td>
+                            <td className="py-1.5 text-right font-medium">{pctArea ?? "—"}</td>
+                          </tr>
                         );
                       }
                       return (
-                        <td key={campo} className="py-0.5 px-1 text-center">
+                        <tr key={campo} className="border-b last:border-0 hover:bg-muted/20">
+                          <td className="py-1 pr-6 text-muted-foreground whitespace-nowrap">{label}</td>
+                          <td className="py-1 text-right">
+                            <input
+                              type="number"
+                              className={`${INP} w-24`}
+                              value={getS(campo)}
+                              onChange={(e) => handleChangeS(campo, e.target.value)}
+                              onBlur={() => handleBlurS(campo)}
+                              placeholder="—"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── Col 2: Calidades (Código | Calidad | Total) ── */}
+          <Card className="flex-shrink-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4" />
+                Calidades
+              </CardTitle>
+              <p className="text-xs text-muted-foreground pt-1">
+                Independiente — no afecta ni es afectada por otras secciones.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {cargandoResumen ? (
+                <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
+              ) : (
+                <table className="text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b bg-muted/30 text-muted-foreground">
+                      <th className="py-2 px-3 text-left whitespace-nowrap">Código</th>
+                      <th className="py-2 px-3 text-left whitespace-nowrap">Calidad</th>
+                      <th className="py-2 px-3 text-center whitespace-nowrap">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {FILAS_HOME.map(({ codigo, codigoCorto, calidad }) => (
+                      <tr key={codigo} className="border-b last:border-0 hover:bg-muted/20">
+                        <td className="py-1.5 px-3 font-semibold whitespace-nowrap">{codigoCorto}</td>
+                        <td className="py-1.5 px-3 whitespace-nowrap">{calidad}</td>
+                        <td className="py-0.5 px-2 text-center">
                           <input
                             type="number"
                             className={INP}
-                            value={getS(campo)}
-                            onChange={(e) => handleChangeS(campo, e.target.value)}
-                            onBlur={() => handleBlurS(campo)}
+                            value={getTotal(codigo)}
+                            onChange={(e) => handleChangeTotal(codigo, e.target.value)}
+                            onBlur={() => handleBlurTotal(codigo)}
                             placeholder="—"
                           />
                         </td>
-                      );
-                    })}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 bg-muted/30 font-semibold">
+                      <td className="py-2 px-3" colSpan={2}>TOTAL</td>
+                      <td className="py-2 px-3 text-center">{totalTotal || "—"}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
 
-      {/* ── Gráfica de Calidades ── */}
-      <Card className="mt-6">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <BarChart2 className="w-4 h-4" />
-            Cajas por Calidad
-          </CardTitle>
-          <p className="text-xs text-muted-foreground pt-1">
-            Cajas programadas vs. producidas por calidad · {fechaSeleccionada}
-          </p>
-        </CardHeader>
-        <CardContent>
-          {cargandoResumen ? (
-            <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart
-                data={datosGrafica}
-                margin={{ top: 8, right: 16, left: 0, bottom: 48 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis
-                  dataKey="nombre"
-                  tick={{ fontSize: 11 }}
-                  angle={-40}
-                  textAnchor="end"
-                  interval={0}
-                />
-                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                <Tooltip />
-                <Legend verticalAlign="top" height={28} />
-                <Bar dataKey="Prog." fill="#16a34a" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="Total" fill="#86efac" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+          {/* ── Col 3: Pie chart de calidades ── */}
+          <Card className="flex-shrink-0 w-80">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <PieIcon className="w-4 h-4" />
+                Distribución de Calidades
+              </CardTitle>
+              <p className="text-xs text-muted-foreground pt-1">
+                Cajas producidas por calidad · {fechaSeleccionada}
+              </p>
+            </CardHeader>
+            <CardContent>
+              {cargandoResumen ? (
+                <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
+              ) : datosGraficaPie.length === 0 ? (
+                <p className="text-muted-foreground text-sm text-center py-8">
+                  Sin datos para este día.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={datosGraficaPie}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="45%"
+                      outerRadius={100}
+                      label={({ name, value }) => `${name}: ${value}`}
+                      labelLine={false}
+                    >
+                      {datosGraficaPie.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(val, name) => [`${val} cajas`, name]} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+        </div>
+      </div>
     </div>
   );
 }

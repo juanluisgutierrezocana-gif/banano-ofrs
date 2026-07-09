@@ -737,7 +737,7 @@ export default function ProduccionReporteria() {
 
       <div className="flex flex-wrap gap-2 mb-4">
         <Button size="sm" variant={vista === "diario" ? "default" : "outline"} onClick={() => setVista("diario")}>
-          Diario
+          Datos Proceso Planta Empacadora
         </Button>
         <Button size="sm" variant={vista === "semanal" ? "default" : "outline"} onClick={() => setVista("semanal")}>
           Resumen Semanal
