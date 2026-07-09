@@ -1,0 +1,66 @@
+import React, { useMemo, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+// Tabla de Balance / Racimos Faltantes por cuadrilla.
+// Balance se ingresa manualmente (se guarda en estado local por sesión).
+// Rac. Faltantes = Balance − Total Racimos de la cuadrilla.
+export default function BalanceTable({ trenadas }) {
+  const [balances, setBalances] = useState({});
+
+  const crewTotals = useMemo(() => {
+    const crews = {};
+    trenadas.forEach(t => {
+      const c = t.cuadrilla;
+      if (!crews[c]) crews[c] = { cuadrilla: c, total: 0 };
+      crews[c].total += t.total_racimos || 0;
+    });
+    return Object.values(crews).sort((a, b) => a.cuadrilla - b.cuadrilla);
+  }, [trenadas]);
+
+  if (!crewTotals.length) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="font-heading text-lg">Balance / Rac. Faltantes</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <table className="text-sm w-full">
+          <thead>
+            <tr className="border-b">
+              <th className="text-left py-2 px-3 font-semibold">Cuadrilla</th>
+              <th className="text-center py-2 px-3 font-semibold">Total</th>
+              <th className="text-center py-2 px-3 font-semibold">Balance</th>
+              <th className="text-center py-2 px-3 font-semibold">Rac. Faltantes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {crewTotals.map(crew => (
+              <tr key={crew.cuadrilla} className="border-b last:border-0 hover:bg-muted/50">
+                <td className="py-2 px-3 font-bold text-primary">#{crew.cuadrilla}</td>
+                <td className="text-center py-2 px-3 font-bold">{crew.total}</td>
+                <td className="text-center py-1 px-2">
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-20 text-center rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    value={balances[crew.cuadrilla] ?? ""}
+                    onChange={(e) =>
+                      setBalances((b) => ({ ...b, [crew.cuadrilla]: e.target.value }))
+                    }
+                    placeholder="—"
+                  />
+                </td>
+                <td className="text-center py-2 px-3 font-medium">
+                  {balances[crew.cuadrilla] !== undefined && balances[crew.cuadrilla] !== ""
+                    ? Number(balances[crew.cuadrilla]) - crew.total
+                    : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
+  );
+}

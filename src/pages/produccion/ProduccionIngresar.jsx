@@ -417,52 +417,99 @@ export default function ProduccionIngresar() {
   // todos los códigos de la tabla semanal y del Resumen de Producción.
   const [savingGrid, setSavingGrid] = useState(false);
 
-  // false = solo-lectura (datos guardados), true = celdas editables (modo edición).
-  // Mismo patrón que modoEdicion en "Nuevo Registro Diario".
+  // false = solo-lectura, true = celdas editables. Independiente para cada tabla.
   const [modoEdicionSemanal, setModoEdicionSemanal] = useState(false);
+  const [modoEdicionResumen, setModoEdicionResumen] = useState(false);
 
-  // Hay datos guardados hoy si algún código tiene valor en la columna del día.
+  // Estado de guardado independiente para cada tabla.
+  const [savingResumen, setSavingResumen] = useState(false);
+
+  // Hay CAJAS guardadas hoy en Supabase. Se basa en filasSemana (datos
+  // persistidos), NO en valoresGrid (estado local), para que tipear un solo
+  // dígito no active prematuramente el modo "ya guardado".
   const tieneDataHoy = diaActual
-    ? todosCodigos.some((c) => {
-        const v = valoresGrid[c]?.[diaActual];
-        return v !== "" && v !== null && v !== undefined;
+    ? filasSemana.some((f) => {
+        const v = f[diaActual];
+        return v !== null && v !== undefined;
       })
     : false;
 
+  // Hay CAJ.PROG guardado hoy. Controla el Resumen de Producción de forma
+  // independiente a la tabla de cajas de arriba.
+  const tieneProgHoy = diaActual
+    ? filasSemana.some((f) => {
+        const v = f[`caj_prog_${diaActual}`];
+        return v !== null && v !== undefined;
+      })
+    : false;
+
+  // Guarda solo la columna CAJAS del día (Producción Semanal por Código).
+  // Caj.Prog tiene su propio handleGuardarResumen.
   const handleGuardarGrid = async () => {
     if (!diaActual) {
       toast.error("Selecciona una fecha de lunes a sábado");
       return;
     }
     setSavingGrid(true);
-    // Ejecutar secuencialmente para evitar race condition en CREATE.
+    // Secuencial para evitar race condition en CREATE (un registro por código).
     for (const codigo of todosCodigos) {
       await handleBlurGrid(codigo, diaActual);
-      await handleBlurGrid(codigo, `caj_prog_${diaActual}`);
     }
     setSavingGrid(false);
-    toast.success("Datos guardados");
-    setModoEdicionSemanal(false); // Volver a modo solo-lectura tras guardar
+    toast.success("Cajas guardadas");
+    setModoEdicionSemanal(false);
   };
 
-  // Borra todos los valores del día actual para todos los códigos en la grid semanal.
+  // Guarda solo la columna CAJ.PROG del día (Resumen de Producción).
+  const handleGuardarResumen = async () => {
+    if (!diaActual) {
+      toast.error("Selecciona una fecha de lunes a sábado");
+      return;
+    }
+    setSavingResumen(true);
+    for (const codigo of todosCodigos) {
+      await handleBlurGrid(codigo, `caj_prog_${diaActual}`);
+    }
+    setSavingResumen(false);
+    toast.success("Caj.Prog guardado");
+    setModoEdicionResumen(false);
+  };
+
+  // Limpia solo las CAJAS del día (Producción Semanal por Código).
   const handleLimpiarDia = async () => {
     if (!diaActual) return;
-    if (!confirm(`¿Limpiar todos los datos del ${diaActualLabel}? Esta acción no se puede deshacer.`)) return;
+    if (!confirm(`¿Limpiar las CAJAS del ${diaActualLabel}? Esta acción no se puede deshacer.`)) return;
     setSavingGrid(true);
     await Promise.all(
       todosCodigos.map(async (codigo) => {
         const fila = valoresGrid[codigo];
         if (!fila?.id) return;
+        const { error } = await produccionSemanal.update(fila.id, { [diaActual]: null });
+        if (error) toast.error(`Error al limpiar ${codigo}: ${error.message}`);
+      })
+    );
+    setSavingGrid(false);
+    toast.success("Cajas del día limpiadas");
+    queryClient.invalidateQueries({ queryKey: ["produccion-semanal", semana] });
+  };
+
+  // Limpia Caj.Prog del día (Resumen de Producción).
+  const handleLimpiarResumen = async () => {
+    if (!diaActual) return;
+    if (!confirm(`¿Limpiar Caj.Prog del ${diaActualLabel}? Esta acción no se puede deshacer.`)) return;
+    setSavingResumen(true);
+    await Promise.all(
+      todosCodigos.map(async (codigo) => {
+        const fila = valoresGrid[codigo];
+        if (!fila?.id) return;
         const { error } = await produccionSemanal.update(fila.id, {
-          [diaActual]: null,
           [`caj_prog_${diaActual}`]: null,
         });
         if (error) toast.error(`Error al limpiar ${codigo}: ${error.message}`);
       })
     );
-    setSavingGrid(false);
-    toast.success("Día limpiado");
+    setSavingResumen(false);
+    toast.success("Caj.Prog limpiado");
     queryClient.invalidateQueries({ queryKey: ["produccion-semanal", semana] });
   };
 
@@ -960,7 +1007,7 @@ export default function ProduccionIngresar() {
                               value={valoresGrid[calidad]?.[campoCajProg] ?? ""}
                               onChange={(e) => handleChangeGrid(calidad, campoCajProg, e.target.value)}
                               onBlur={() => handleBlurGrid(calidad, campoCajProg)}
-                              disabled={tieneDataHoy && !modoEdicionSemanal}
+                              disabled={tieneProgHoy && !modoEdicionResumen}
                             />
                           </td>
                           <td className="py-1 px-1 font-medium">
@@ -1000,21 +1047,21 @@ export default function ProduccionIngresar() {
                 </tbody>
               </table>
 
-              {/* Botones al fondo — mismo patrón que "Nuevo Registro Diario" */}
+              {/* Botones Resumen — independientes de la tabla Producción Semanal */}
               <div className="flex gap-2 mt-3 flex-wrap">
-                {(!tieneDataHoy || modoEdicionSemanal) && (
-                  <Button onClick={handleGuardarGrid} disabled={savingGrid || !diaActual}>
+                {(!tieneProgHoy || modoEdicionResumen) && (
+                  <Button onClick={handleGuardarResumen} disabled={savingResumen || !diaActual}>
                     <Plus className="w-4 h-4" />
-                    {savingGrid ? "Guardando..." : "Guardar"}
+                    {savingResumen ? "Guardando..." : "Guardar"}
                   </Button>
                 )}
-                {tieneDataHoy && !modoEdicionSemanal && (
+                {tieneProgHoy && !modoEdicionResumen && (
                   <>
-                    <Button variant="outline" onClick={() => setModoEdicionSemanal(true)}>
+                    <Button variant="outline" onClick={() => setModoEdicionResumen(true)}>
                       <Pencil className="w-4 h-4" />
                       Editar
                     </Button>
-                    <Button variant="destructive" onClick={handleLimpiarDia} disabled={savingGrid}>
+                    <Button variant="destructive" onClick={handleLimpiarResumen} disabled={savingResumen}>
                       <Trash2 className="w-4 h-4" />
                       Limpiar Día
                     </Button>

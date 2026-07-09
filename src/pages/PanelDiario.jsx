@@ -10,6 +10,7 @@ import { Layers, Clock, Calendar, RefreshCw, LandPlot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import HourlyChart from "@/components/dashboard/HourlyChart";
 import CrewTable from "@/components/dashboard/CrewTable";
+import BalanceTable from "@/components/dashboard/BalanceTable";
 import ColorSummaryCards from "@/components/dashboard/ColorSummaryCards";
 import CrewPieChart from "@/components/dashboard/CrewPieChart";
 
@@ -195,6 +196,9 @@ export default function PanelDiario() {
         <CrewTable trenadas={trenadaRecords} buttons={buttons} />
         <CrewPieChart trenadas={trenadaRecords} />
       </div>
+
+      {/* Tabla independiente de Balance / Rac. Faltantes */}
+      <BalanceTable trenadas={trenadaRecords} />
 
       {/* Hourly chart */}
       <HourlyChart trenadas={trenadaRecords} />

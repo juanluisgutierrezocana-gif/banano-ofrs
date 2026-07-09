@@ -1,11 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
 
+// Tabla de cuadrillas: colores por edad + total + última trenada.
+// Balance / Rac. Faltantes viven en BalanceTable (componente separado).
 export default function CrewTable({ trenadas, buttons }) {
-  // BALANCE editable por cuadrilla. Se guarda en estado local (por sesión).
-  // RAC. FALTANTES = BALANCE ingresado − total racimos de esa cuadrilla.
-  const [balances, setBalances] = useState({});
   const crewData = useMemo(() => {
     const crews = {};
     trenadas.forEach(t => {
@@ -28,9 +27,7 @@ export default function CrewTable({ trenadas, buttons }) {
     return Array.from(keys);
   }, [crewData]);
 
-  if (!crewData.length) {
-    return null;
-  }
+  if (!crewData.length) return null;
 
   return (
     <Card>
@@ -48,8 +45,6 @@ export default function CrewTable({ trenadas, buttons }) {
                 ))}
                 <th className="text-center py-2 px-3 font-semibold">Total</th>
                 <th className="text-center py-2 px-3 font-semibold">Última Trenada</th>
-                <th className="text-center py-2 px-3 font-semibold">Balance</th>
-                <th className="text-center py-2 px-3 font-semibold">Rac. Faltantes</th>
               </tr>
             </thead>
             <tbody>
@@ -61,24 +56,9 @@ export default function CrewTable({ trenadas, buttons }) {
                   ))}
                   <td className="text-center py-2 px-3 font-bold">{crew.total}</td>
                   <td className="text-center py-2 px-3 text-muted-foreground text-xs">
-                    {crew.lastTime ? (crew.lastTime.length <= 5 ? crew.lastTime : format(new Date(crew.lastTime), "HH:mm")) : "-"}
-                  </td>
-                  <td className="text-center py-1 px-2">
-                    <input
-                      type="number"
-                      min="0"
-                      className="w-20 text-center rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                      value={balances[crew.cuadrilla] ?? ""}
-                      onChange={(e) =>
-                        setBalances((b) => ({ ...b, [crew.cuadrilla]: e.target.value }))
-                      }
-                      placeholder="—"
-                    />
-                  </td>
-                  <td className="text-center py-2 px-3 font-medium">
-                    {balances[crew.cuadrilla] !== undefined && balances[crew.cuadrilla] !== ""
-                      ? Number(balances[crew.cuadrilla]) - crew.total
-                      : "—"}
+                    {crew.lastTime
+                      ? (crew.lastTime.length <= 5 ? crew.lastTime : format(new Date(crew.lastTime), "HH:mm"))
+                      : "-"}
                   </td>
                 </tr>
               ))}
