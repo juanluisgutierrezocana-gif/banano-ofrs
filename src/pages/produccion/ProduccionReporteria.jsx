@@ -712,10 +712,15 @@ export default function ProduccionReporteria() {
     () => agruparResumenPorMes(resumenHistorial, anioSeleccionado),
     [resumenHistorial, anioSeleccionado]
   );
+  // En vista diaria, aplicar el mismo filtroDiario que la primera tabla.
   const filasProduccionActuales =
-    vista === "diario" ? resumenHistorial
-    : vista === "semanal" ? resumenSemanalProduccion
-    : resumenMensualProduccion.filas;
+    vista === "diario"
+      ? (filtroDiario
+          ? resumenHistorial.filter((f) => f.fecha === filtroDiario)
+          : resumenHistorial)
+      : vista === "semanal"
+      ? resumenSemanalProduccion
+      : resumenMensualProduccion.filas;
   const labelProduccion = (f) =>
     vista === "diario" ? f.fecha : vista === "semanal" ? `Sem ${f.semanaNum}` : f.mes;
 

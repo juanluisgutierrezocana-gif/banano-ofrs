@@ -1,10 +1,11 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { resumenHome, produccionResumen, settings } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Factory, FileSpreadsheet, ClipboardList, PieChart as PieIcon } from "lucide-react";
+import { toast } from "sonner";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
@@ -105,6 +106,15 @@ export default function ProduccionHome() {
   });
   const statsHoy = filasStats[0] ?? null;
 
+  // Ref mutable para evitar race condition en handleBlurS: si el usuario
+  // tabula entre campos rápido, statsHoy puede estar stale en el closure
+  // y cada blur crearía un registro nuevo. El ref se actualiza de forma
+  // síncrona después de cada CREATE para que el siguiente blur ya vea el id.
+  const statsHoyRef = useRef(null);
+  useEffect(() => {
+    statsHoyRef.current = statsHoy;
+  }, [statsHoy]);
+
   // ── Helpers de valor ─────────────────────────────────────────────────────
   const getTotal = (codigo) => {
     const k = `${codigo}_total`;
@@ -141,15 +151,23 @@ export default function ProduccionHome() {
     async (campo) => {
       if (localesStats[campo] === undefined) return;
       const valor = localesStats[campo] === "" ? null : Number(localesStats[campo]);
-      if (statsHoy) {
-        await produccionResumen.update(statsHoy.id, { [campo]: valor });
+      // Usar ref en vez de closure para evitar race condition: si el usuario
+      // tabula rápido entre campos antes del refetch, el closure tendría
+      // statsHoy === null aunque ya se haya creado el registro.
+      const current = statsHoyRef.current;
+      if (current) {
+        const { error } = await produccionResumen.update(current.id, { [campo]: valor });
+        if (error) { toast.error("No se pudo guardar: " + error.message); return; }
       } else {
-        await produccionResumen.create({ fecha: fechaSeleccionada, [campo]: valor });
+        const { data, error } = await produccionResumen.create({ fecha: fechaSeleccionada, [campo]: valor });
+        if (error) { toast.error("No se pudo guardar: " + error.message); return; }
+        // Actualizar el ref inmediatamente para que el siguiente blur use el id correcto.
+        if (data) statsHoyRef.current = data;
       }
       setLocalesStats((p) => { const n = { ...p }; delete n[campo]; return n; });
       queryClient.invalidateQueries({ queryKey: ["produccion-resumen-home", fechaSeleccionada] });
     },
-    [localesStats, statsHoy, fechaSeleccionada, queryClient]
+    [localesStats, fechaSeleccionada, queryClient]
   );
 
   // ── Total general de cajas (pie del pie chart y tabla) ───────────────────

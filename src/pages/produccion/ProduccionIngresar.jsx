@@ -135,8 +135,10 @@ export default function ProduccionIngresar() {
     } else {
       setForm(emptyForm);
     }
-    // Salir de modo edición al cambiar de fecha (el registro cambia).
+    // Salir de TODOS los modos de edición al cambiar de fecha.
     setModoEdicion(false);
+    setModoEdicionSemanal(false);
+    setModoEdicionResumen(false);
   }, [ultimo?.id, fechaSeleccionada]);
 
   // % Área Cosecha Día = Área Cosecha Día (acres) / área total de la finca.
