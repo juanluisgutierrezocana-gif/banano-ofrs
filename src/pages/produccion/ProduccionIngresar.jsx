@@ -840,7 +840,6 @@ export default function ProduccionIngresar() {
                           className={inputClaseSemana}
                           value={valoresGrid[codigo]?.[diaActual] ?? ""}
                           onChange={(e) => handleChangeGrid(codigo, diaActual, e.target.value)}
-                          onBlur={() => handleBlurGrid(codigo, diaActual)}
                           disabled={tieneDataHoy && !modoEdicionSemanal}
                           placeholder="—"
                         />
@@ -1006,7 +1005,6 @@ export default function ProduccionIngresar() {
                               className={inputClaseSemana}
                               value={valoresGrid[calidad]?.[campoCajProg] ?? ""}
                               onChange={(e) => handleChangeGrid(calidad, campoCajProg, e.target.value)}
-                              onBlur={() => handleBlurGrid(calidad, campoCajProg)}
                               disabled={tieneProgHoy && !modoEdicionResumen}
                             />
                           </td>

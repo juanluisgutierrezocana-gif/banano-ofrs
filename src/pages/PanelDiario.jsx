@@ -191,14 +191,12 @@ export default function PanelDiario() {
       {/* Color summary */}
       <ColorSummaryCards colorTotals={colorTotals} />
 
-      {/* Crew table + pie chart */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Cuadrillas | Balance/Rac.Faltantes | Gráfico — 3 columnas */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <CrewTable trenadas={trenadaRecords} buttons={buttons} />
+        <BalanceTable trenadas={trenadaRecords} />
         <CrewPieChart trenadas={trenadaRecords} />
       </div>
-
-      {/* Tabla independiente de Balance / Rac. Faltantes */}
-      <BalanceTable trenadas={trenadaRecords} />
 
       {/* Hourly chart */}
       <HourlyChart trenadas={trenadaRecords} />

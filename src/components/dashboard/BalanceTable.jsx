@@ -2,8 +2,8 @@ import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 // Tabla de Balance / Racimos Faltantes por cuadrilla.
-// Balance se ingresa manualmente (se guarda en estado local por sesión).
-// Rac. Faltantes = Balance − Total Racimos de la cuadrilla.
+// Solo dos columnas: Balance (input manual) y Rac. Faltantes (calculado).
+// La cuadrilla se identifica como label inline junto al input.
 export default function BalanceTable({ trenadas }) {
   const [balances, setBalances] = useState({});
 
@@ -28,28 +28,27 @@ export default function BalanceTable({ trenadas }) {
         <table className="text-sm w-full">
           <thead>
             <tr className="border-b">
-              <th className="text-left py-2 px-3 font-semibold">Cuadrilla</th>
-              <th className="text-center py-2 px-3 font-semibold">Total</th>
               <th className="text-center py-2 px-3 font-semibold">Balance</th>
               <th className="text-center py-2 px-3 font-semibold">Rac. Faltantes</th>
             </tr>
           </thead>
           <tbody>
             {crewTotals.map(crew => (
-              <tr key={crew.cuadrilla} className="border-b last:border-0 hover:bg-muted/50">
-                <td className="py-2 px-3 font-bold text-primary">#{crew.cuadrilla}</td>
-                <td className="text-center py-2 px-3 font-bold">{crew.total}</td>
+              <tr key={crew.cuadrilla} className="border-b last:border-0">
                 <td className="text-center py-1 px-2">
-                  <input
-                    type="number"
-                    min="0"
-                    className="w-20 text-center rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    value={balances[crew.cuadrilla] ?? ""}
-                    onChange={(e) =>
-                      setBalances((b) => ({ ...b, [crew.cuadrilla]: e.target.value }))
-                    }
-                    placeholder="—"
-                  />
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span className="text-xs font-bold text-primary">#{crew.cuadrilla}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-20 text-center rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      value={balances[crew.cuadrilla] ?? ""}
+                      onChange={(e) =>
+                        setBalances((b) => ({ ...b, [crew.cuadrilla]: e.target.value }))
+                      }
+                      placeholder="—"
+                    />
+                  </div>
                 </td>
                 <td className="text-center py-2 px-3 font-medium">
                   {balances[crew.cuadrilla] !== undefined && balances[crew.cuadrilla] !== ""
