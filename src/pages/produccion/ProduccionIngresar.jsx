@@ -333,7 +333,8 @@ export default function ProduccionIngresar() {
 
   const granTotalSemana = todosCodigos.reduce((suma, codigo) => suma + totalPorCodigo(codigo), 0);
 
-  // TOTAL PALETAS por calidad = Total Cajas / Cajas por Paleta (caj_default)
+  // TOTAL PALETAS por calidad = Total Cajas (semanal) / Cajas por Paleta (caj_default).
+  // Sigue existiendo para el acumulado semanal (exportación, etc.).
   const totalPaletasPorCodigo = (codigo) => {
     const total = totalPorCodigo(codigo);
     const cajDefault = Number(calidadPorCodigo[codigo]?.caj_default);
@@ -344,6 +345,20 @@ export default function ProduccionIngresar() {
     (s, c) => s + (totalPaletasPorCodigo(c) ?? 0),
     0
   );
+
+  // TOTAL PALETAS solo del día seleccionado (confirmado por cliente PDF:
+  // la columna PALETAS de la tabla semanal y "Total Paletas" en Resumen
+  // deben mostrar el día, no el acumulado de la semana).
+  const totalPaletasPorCodigoDia = (codigo) => {
+    if (!diaActual) return null;
+    const cajas = numeroSemana(valoresGrid[codigo]?.[diaActual]);
+    const cajDefault = Number(calidadPorCodigo[codigo]?.caj_default);
+    if (!cajDefault || !cajas) return null;
+    return cajas / cajDefault;
+  };
+  const granTotalPaletasDia = diaActual
+    ? codigosVisibles.reduce((s, c) => s + (totalPaletasPorCodigoDia(c) ?? 0), 0)
+    : 0;
 
   // Total de Caj.Prog del día (tabla "Resumen de Producción"). Independiente
   // de totalPorDia, que suma la columna "Total".
@@ -396,6 +411,25 @@ export default function ProduccionIngresar() {
     toast.success("Registro eliminado");
     setModoEdicion(false);
     queryClient.invalidateQueries({ queryKey: ["produccion-registros"] });
+  };
+
+  // Guarda explícitamente todas las celdas del día (cajas + caj_prog) para
+  // todos los códigos de la tabla semanal y del Resumen de Producción.
+  const [savingGrid, setSavingGrid] = useState(false);
+  const handleGuardarGrid = async () => {
+    if (!diaActual) {
+      toast.error("Selecciona una fecha de lunes a sábado");
+      return;
+    }
+    setSavingGrid(true);
+    await Promise.all(
+      todosCodigos.flatMap((codigo) => [
+        handleBlurGrid(codigo, diaActual),
+        handleBlurGrid(codigo, `caj_prog_${diaActual}`),
+      ])
+    );
+    setSavingGrid(false);
+    toast.success("Datos guardados");
   };
 
   // Redondea valores calculados a 2 decimales, sin tocar null/undefined.
@@ -469,9 +503,9 @@ export default function ProduccionIngresar() {
         rows: codigosVisibles.map((codigo) => [
           codigo,
           valoresGrid[codigo]?.[diaActual] ?? "",
-          totalPaletasPorCodigo(codigo) || "",
+          totalPaletasPorCodigoDia(codigo)?.toFixed(2) || "",
         ]),
-        totalsRow: ["TOTAL", totalPorDia(diaActual) || "", granTotalPaletas > 0 ? granTotalPaletas.toFixed(2) : ""],
+        totalsRow: ["TOTAL", totalPorDia(diaActual) || "", granTotalPaletasDia > 0 ? granTotalPaletasDia.toFixed(2) : ""],
       });
 
       sheets.push({
@@ -682,7 +716,18 @@ export default function ProduccionIngresar() {
       {/* Tablas semanales migradas desde "Inventario Semanal" */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Producción Semanal por Código</CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-base">Producción Semanal por Código</CardTitle>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleGuardarGrid}
+              disabled={savingGrid || !diaActual}
+            >
+              <Plus className="w-3 h-3" />
+              {savingGrid ? "Guardando..." : "Guardar"}
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground pt-1">
             {diaActualLabel
               ? `Mostrando: ${diaActualLabel} (semana del ${semana}) — según la fecha de arriba.`
@@ -731,7 +776,7 @@ export default function ProduccionIngresar() {
                       </td>
                       <td className="py-1 px-1 text-center">
                         {(() => {
-                          const p = totalPaletasPorCodigo(codigo);
+                          const p = totalPaletasPorCodigoDia(codigo);
                           return p !== null && p > 0 ? p.toFixed(2) : "—";
                         })()}
                       </td>
@@ -740,7 +785,7 @@ export default function ProduccionIngresar() {
                   <tr className="border-t-2 font-semibold bg-muted/30">
                     <td className="py-1.5 px-2" colSpan={3}>TOTAL</td>
                     <td className="py-1.5 px-1 text-center">{totalPorDia(diaActual) || "—"}</td>
-                    <td className="py-1.5 px-1 text-center">{granTotalPaletas > 0 ? granTotalPaletas.toFixed(2) : "—"}</td>
+                    <td className="py-1.5 px-1 text-center">{granTotalPaletasDia > 0 ? granTotalPaletasDia.toFixed(2) : "—"}</td>
                   </tr>
                 </tbody>
               </table>
@@ -813,10 +858,21 @@ export default function ProduccionIngresar() {
           Excel, relacionadas con datos que la app ya carga arriba. */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4" />
-            Resumen de Producción
-          </CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileSpreadsheet className="w-4 h-4" />
+              Resumen de Producción
+            </CardTitle>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleGuardarGrid}
+              disabled={savingGrid || !diaActual}
+            >
+              <Plus className="w-3 h-3" />
+              {savingGrid ? "Guardando..." : "Guardar"}
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground pt-1">
             {diaActualLabel
               ? `Mostrando: ${diaActualLabel} (semana del ${semana}) — según la fecha de arriba.`
@@ -893,7 +949,7 @@ export default function ProduccionIngresar() {
               <table className="text-xs w-full">
                 <tbody>
                   <FilaProceso label="Total Cajas" valor={redondear(calculado?.cajasTotal)} />
-                  <FilaProceso label="Total Paletas" valor={valoresCajasPalet[diaActual]?.palet || "—"} />
+                  <FilaProceso label="Total Paletas" valor={granTotalPaletasDia > 0 ? granTotalPaletasDia.toFixed(2) : "—"} />
                   <FilaProceso label="Cajas Tercera" valor={ultimo?.cajas_tercera ?? "—"} />
                   <FilaProceso label="Rac. Cosechados" valor={ultimo?.racimos_cosechados ?? "—"} />
                   <FilaProceso label="Racimos Rechazados" valor={ultimo?.racimos_rechazados ?? "—"} />
