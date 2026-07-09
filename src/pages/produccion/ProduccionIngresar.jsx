@@ -354,7 +354,7 @@ export default function ProduccionIngresar() {
     );
 
   const inputClaseSemana =
-    "w-20 text-center rounded-md border border-input bg-background px-1.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40";
+    "w-16 text-center rounded-md border border-input bg-background px-1 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40";
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -413,8 +413,8 @@ export default function ProduccionIngresar() {
   // Fila de solo lectura para el panel "Datos de Proceso".
   const FilaProceso = ({ label, valor }) => (
     <tr className="border-b last:border-0">
-      <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">{label}</td>
-      <td className="py-1.5 text-right font-medium">{valor ?? "—"}</td>
+      <td className="py-1 pr-2 text-muted-foreground text-xs">{label}</td>
+      <td className="py-1 text-right font-medium text-xs">{valor ?? "—"}</td>
     </tr>
   );
 
@@ -550,11 +550,11 @@ export default function ProduccionIngresar() {
         </CardContent>
       </Card>
 
-      {/* overflow-x-auto aquí para que la página scrollee horizontalmente;
-          cada columna flex toma el ancho que necesita su tabla. */}
-      <div className="overflow-x-auto pb-2">
-      <div className="flex gap-6 mb-8 items-start">
-      <div className="space-y-6 flex-shrink-0 w-fit">
+      {/* Grid de 3 columnas iguales: sin overflow horizontal, cada columna
+          se comprime a 1/3 del ancho disponible (min-w-0 permite shrink). */}
+      <div className="pb-2">
+      <div className="grid grid-cols-3 gap-4 mb-4 items-start">
+      <div className="space-y-4 min-w-0">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
@@ -698,27 +698,27 @@ export default function ProduccionIngresar() {
             </p>
           ) : (
             <div>
-              <table className="text-sm border-collapse">
+              <table className="text-xs border-collapse w-full">
                 <thead>
                   <tr className="text-center text-muted-foreground border-b bg-muted/30">
-                    <th className="py-2 px-3 text-left whitespace-nowrap">Calidad</th>
-                    <th className="py-2 px-2 whitespace-nowrap">CAJAS PALETA</th>
-                    <th className="py-2 px-2 whitespace-nowrap">Cod</th>
-                    <th className="py-2 px-2 whitespace-nowrap">TOTAL CAJAS</th>
-                    <th className="py-2 px-3 whitespace-nowrap">TOTAL PALETAS</th>
+                    <th className="py-1.5 px-2 text-left">Calidad</th>
+                    <th className="py-1.5 px-1">CAJ/PAL</th>
+                    <th className="py-1.5 px-1">Cod</th>
+                    <th className="py-1.5 px-1">CAJAS</th>
+                    <th className="py-1.5 px-1">PALETAS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {codigosVisibles.map((codigo) => (
                     <tr key={codigo} className="border-b last:border-0">
-                      <td className="py-1.5 px-3 font-medium whitespace-nowrap">{calidadPorCodigo[codigo]?.label ?? codigo}</td>
-                      <td className="py-1.5 px-2 text-center text-muted-foreground">
+                      <td className="py-1 px-2 font-medium">{calidadPorCodigo[codigo]?.label ?? codigo}</td>
+                      <td className="py-1 px-1 text-center text-muted-foreground">
                         {calidadPorCodigo[codigo]?.caj_default ?? "—"}
                       </td>
-                      <td className="py-1.5 px-2 text-center text-muted-foreground">
+                      <td className="py-1 px-1 text-center text-muted-foreground">
                         {calidadPorCodigo[codigo]?.codigo_corto ?? "—"}
                       </td>
-                      <td className="py-1 px-1">
+                      <td className="py-0.5 px-1">
                         <input
                           type="number"
                           step="1"
@@ -729,7 +729,7 @@ export default function ProduccionIngresar() {
                           placeholder="—"
                         />
                       </td>
-                      <td className="py-1.5 px-3 text-center">
+                      <td className="py-1 px-1 text-center">
                         {(() => {
                           const p = totalPaletasPorCodigo(codigo);
                           return p !== null && p > 0 ? p.toFixed(2) : "—";
@@ -738,9 +738,9 @@ export default function ProduccionIngresar() {
                     </tr>
                   ))}
                   <tr className="border-t-2 font-semibold bg-muted/30">
-                    <td className="py-2 px-3 whitespace-nowrap" colSpan={3}>TOTAL</td>
-                    <td className="py-2 px-2 text-center">{totalPorDia(diaActual) || "—"}</td>
-                    <td className="py-2 px-3 text-center">{granTotalPaletas > 0 ? granTotalPaletas.toFixed(2) : "—"}</td>
+                    <td className="py-1.5 px-2" colSpan={3}>TOTAL</td>
+                    <td className="py-1.5 px-1 text-center">{totalPorDia(diaActual) || "—"}</td>
+                    <td className="py-1.5 px-1 text-center">{granTotalPaletas > 0 ? granTotalPaletas.toFixed(2) : "—"}</td>
                   </tr>
                 </tbody>
               </table>
@@ -751,7 +751,7 @@ export default function ProduccionIngresar() {
 
       </div>
 
-      <div className="space-y-6 flex-shrink-0 w-fit">
+      <div className="space-y-4 min-w-0">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -765,7 +765,7 @@ export default function ProduccionIngresar() {
               Aún no hay registros. Guarda el primero para ver aquí los datos calculados.
             </p>
           ) : (
-            <table className="text-sm">
+            <table className="text-xs w-full leading-tight">
               <tbody>
                 {/* Orden exacto del boceto Excel del cliente (INF. PROCESO E INVENTARIOS) */}
                 <FilaProceso label="Hora Inicio" valor={ultimo.hora_inicio} />
@@ -804,7 +804,7 @@ export default function ProduccionIngresar() {
       </div>
 
       {/* Columna 3: Resumen de Producción */}
-      <div className="space-y-6 flex-shrink-0 w-fit">
+      <div className="space-y-4 min-w-0">
       {/* Tabla "FINCA / SEMANA" estilo reporte (boceto Excel, hoja LA
           GRACIA12). CAJ.PROG y DIF quedan pendientes a propósito: el Excel
           no tiene fórmula para CAJ.PROG (se escribe a mano) y la app
@@ -824,15 +824,15 @@ export default function ProduccionIngresar() {
           </p>
         </CardHeader>
         <CardContent>
-          <table className="text-sm mb-4 border rounded-md overflow-hidden">
+          <table className="text-xs mb-4 border rounded-md overflow-hidden w-full">
             <tbody>
               <tr className="border-b bg-muted/30">
-                <td className="py-1.5 px-3 font-semibold w-28">Finca</td>
-                <td className="py-1.5 px-3">{currentUser?.finca?.nombre || "—"}</td>
+                <td className="py-1 px-2 font-semibold w-16">Finca</td>
+                <td className="py-1 px-2">{currentUser?.finca?.nombre || "—"}</td>
               </tr>
               <tr>
-                <td className="py-1.5 px-3 font-semibold w-28">Fecha</td>
-                <td className="py-1.5 px-3">{fechaSeleccionada}</td>
+                <td className="py-1 px-2 font-semibold w-16">Fecha</td>
+                <td className="py-1 px-2">{fechaSeleccionada}</td>
               </tr>
             </tbody>
           </table>
@@ -844,14 +844,14 @@ export default function ProduccionIngresar() {
           ) : (
             <>
               <div className="mb-4">
-                <table className="text-sm border-collapse">
+                <table className="text-xs border-collapse w-full">
                   <thead>
                     <tr className="text-center text-muted-foreground border-b bg-muted/30">
-                      <th className="py-2 px-2 whitespace-nowrap">Caj.Prog</th>
-                      <th className="py-2 px-3 text-left whitespace-nowrap">Código</th>
-                      <th className="py-2 px-3 text-left whitespace-nowrap">Calidad</th>
-                      <th className="py-2 px-2 whitespace-nowrap">Total</th>
-                      <th className="py-2 px-2 whitespace-nowrap">Dif</th>
+                      <th className="py-1.5 px-1">Caj.Prog</th>
+                      <th className="py-1.5 px-1 text-left">Cód</th>
+                      <th className="py-1.5 px-1 text-left">Calidad</th>
+                      <th className="py-1.5 px-1">Total</th>
+                      <th className="py-1.5 px-1">Dif</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -862,7 +862,7 @@ export default function ProduccionIngresar() {
                       const dif = total - cajProg;
                       return (
                         <tr key={calidad} className="border-b last:border-0">
-                          <td className="py-1 px-2 text-center">
+                          <td className="py-0.5 px-1 text-center">
                             <input
                               type="number"
                               className={inputClaseSemana}
@@ -871,26 +871,26 @@ export default function ProduccionIngresar() {
                               onBlur={() => handleBlurGrid(calidad, campoCajProg)}
                             />
                           </td>
-                          <td className="py-1.5 px-3 font-medium whitespace-nowrap">
+                          <td className="py-1 px-1 font-medium">
                             {calidadPorCodigo[calidad]?.codigo_corto ?? "—"}
                           </td>
-                          <td className="py-1.5 px-3 whitespace-nowrap">{calidadPorCodigo[calidad]?.label ?? calidad}</td>
-                          <td className="py-1.5 px-2 text-center font-semibold">{total || "—"}</td>
-                          <td className="py-1.5 px-2 text-center">{dif || "—"}</td>
+                          <td className="py-1 px-1">{calidadPorCodigo[calidad]?.label ?? calidad}</td>
+                          <td className="py-1 px-1 text-center font-semibold">{total || "—"}</td>
+                          <td className="py-1 px-1 text-center">{dif || "—"}</td>
                         </tr>
                       );
                     })}
                     <tr className="border-t-2 font-semibold bg-muted/30">
-                      <td className="py-2 px-2 text-center">{totalCajProgPorDia(diaActual) || "—"}</td>
-                      <td className="py-2 px-3" colSpan={2}>TOTAL</td>
-                      <td className="py-2 px-2"></td>
-                      <td className="py-2 px-2"></td>
+                      <td className="py-1.5 px-1 text-center">{totalCajProgPorDia(diaActual) || "—"}</td>
+                      <td className="py-1.5 px-1" colSpan={2}>TOTAL</td>
+                      <td className="py-1.5 px-1"></td>
+                      <td className="py-1.5 px-1"></td>
                     </tr>
                   </tbody>
                 </table>
               </div>
 
-              <table className="text-sm">
+              <table className="text-xs w-full">
                 <tbody>
                   <FilaProceso label="Total Cajas" valor={redondear(calculado?.cajasTotal)} />
                   <FilaProceso label="Total Paletas" valor={valoresCajasPalet[diaActual]?.palet || "—"} />
@@ -913,8 +913,8 @@ export default function ProduccionIngresar() {
         </CardContent>
       </Card>
       </div>
-      </div>{/* cierra grid */}
-      </div>{/* cierra overflow-x-auto */}
+      </div>{/* cierra grid-cols-3 */}
+      </div>{/* cierra pb-2 */}
     </div>
   );
 }
