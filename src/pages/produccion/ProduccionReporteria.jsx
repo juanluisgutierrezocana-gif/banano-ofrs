@@ -6,6 +6,7 @@ import {
   produccionCostos,
   produccionResumen,
   produccionVisibilidad,
+  resumenHome,
   settings,
 } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -194,6 +195,91 @@ function agruparResumenPorMes(filas, anio) {
   };
 
   return { filas: meses, totalAno };
+}
+
+// ============================================================
+// CALIDADES (espejo de ProduccionHome.FILAS_HOME — duplicada
+// intencionalmente: no debe cambiar si el admin edita calidades_produccion).
+// ============================================================
+const FILAS_HOME = [
+  { codigo: "DMD",             codigoCorto: "C68",  calidad: "DMD" },
+  { codigo: "DM9",             codigoCorto: "C23",  calidad: "DM9" },
+  { codigo: "PRIM",            codigoCorto: "CH1",  calidad: "PRIM." },
+  { codigo: "PREM",            codigoCorto: "G01",  calidad: "PREM." },
+  { codigo: "3LB",             codigoCorto: "CQ2",  calidad: "3LB" },
+  { codigo: "IP",              codigoCorto: "CH7",  calidad: "IP" },
+  { codigo: "24COUNT",         codigoCorto: "C39",  calidad: "24 COUNT" },
+  { codigo: "24COUNT_G39",     codigoCorto: "G39",  calidad: "24 COUNT" },
+  { codigo: "ROSY NORMAL",     codigoCorto: "G05",  calidad: "ROSY NORMAL" },
+  { codigo: "ROSY CONSUMER",   codigoCorto: "GQ5",  calidad: "ROSY CONSUMER" },
+  { codigo: "DM BANABAC",      codigoCorto: "GP7",  calidad: "DM BANABAC" },
+  { codigo: "DM BANABAC MINI", codigoCorto: "GP7",  calidad: "DM BANABAC MINI" },
+  { codigo: "3LBS",            codigoCorto: "CP9",  calidad: "3 LBS" },
+];
+const FILAS_HOME_CODIGOS = FILAS_HOME.map((f) => f.codigo);
+
+// Pivota los datos de resumen_home según la vista activa. Devuelve array de
+// { periodoLabel, totalesPorCodigo, totalGeneral }.
+function calcularFilasCalidades(historial, vista, filtroDiario, filtroSemana, anioSeleccionado) {
+  if (vista === "diario") {
+    const map = {};
+    historial
+      .filter((f) => !filtroDiario || f.fecha === filtroDiario)
+      .forEach((f) => {
+        if (!f.fecha) return;
+        if (!map[f.fecha]) map[f.fecha] = {};
+        // Una fila por (fecha, codigo) — se sobreescribe si hay duplicados.
+        map[f.fecha][f.codigo] = Number(f.total) || 0;
+      });
+    return Object.entries(map)
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([fecha, tots]) => ({
+        periodoLabel: fecha,
+        totalesPorCodigo: tots,
+        totalGeneral: FILAS_HOME_CODIGOS.reduce((s, c) => s + (tots[c] || 0), 0),
+      }));
+  }
+
+  if (vista === "semanal") {
+    const map = {};
+    historial
+      .filter((f) => !filtroSemana || lunesDeSemanaDe(f.fecha) === filtroSemana)
+      .forEach((f) => {
+        if (!f.fecha) return;
+        const lunes = lunesDeSemanaDe(f.fecha);
+        if (!map[lunes]) map[lunes] = { lunes, semana: numeroSemanaISO(lunes), tots: {} };
+        map[lunes].tots[f.codigo] = (map[lunes].tots[f.codigo] || 0) + (Number(f.total) || 0);
+      });
+    return Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, d]) => ({
+        periodoLabel: `Sem ${d.semana}`,
+        totalesPorCodigo: d.tots,
+        totalGeneral: FILAS_HOME_CODIGOS.reduce((s, c) => s + (d.tots[c] || 0), 0),
+      }));
+  }
+
+  // mensual — siempre los 12 meses del año seleccionado.
+  const anioStr = String(anioSeleccionado);
+  const mesMap = {};
+  MESES.forEach((nombre, idx) => {
+    const mesStr = String(idx + 1).padStart(2, "0");
+    mesMap[mesStr] = { nombre, tots: {} };
+  });
+  historial
+    .filter((f) => f.fecha?.slice(0, 4) === anioStr)
+    .forEach((f) => {
+      const mesStr = f.fecha.slice(5, 7);
+      if (!mesMap[mesStr]) return;
+      mesMap[mesStr].tots[f.codigo] = (mesMap[mesStr].tots[f.codigo] || 0) + (Number(f.total) || 0);
+    });
+  return Object.entries(mesMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, d]) => ({
+      periodoLabel: d.nombre,
+      totalesPorCodigo: d.tots,
+      totalGeneral: FILAS_HOME_CODIGOS.reduce((s, c) => s + (d.tots[c] || 0), 0),
+    }));
 }
 
 // Campos que en Semanal/Mensual se recalculan por fórmula (no son suma
@@ -469,6 +555,16 @@ export default function ProduccionReporteria() {
     },
   });
 
+  // Historial de calidades (tabla resumen_home — misma fuente que /produccion).
+  const { data: calidadesHistorial = [] } = useQuery({
+    queryKey: ["resumen-home-historial"],
+    queryFn: async () => {
+      const { data, error } = await resumenHome.list("-fecha");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   // Total acres finca (configurable desde Configuraciones, fallback 260.6).
   const { data: acresConfig } = useQuery({
     queryKey: ["settings-acres-finca-reporteria"],
@@ -625,6 +721,12 @@ export default function ProduccionReporteria() {
 
   const tituloVistaActual = vista === "diario" ? "Histórico Diario" : vista === "semanal" ? "Resumen Semanal" : "Resumen Mensual";
 
+  // Calidades pivotadas según la vista activa (Diario/Semanal/Mensual).
+  const filasCalidades = useMemo(
+    () => calcularFilasCalidades(calidadesHistorial, vista, filtroDiario, filtroSemana, anioSeleccionado),
+    [calidadesHistorial, vista, filtroDiario, filtroSemana, anioSeleccionado]
+  );
+
   // Construye la hoja de Excel de "Ingresar Datos" para la vista actual, o
   // null si no hay filas. La reutilizan los 3 botones de exportar (solo
   // Ingresar Datos / solo Producción / ambos en el mismo archivo).
@@ -696,6 +798,47 @@ export default function ProduccionReporteria() {
     exportStyledWorkbook({
       fileName: `reporteria_produccion_${vista}_${new Date().toISOString().slice(0, 10)}.xlsx`,
       sheets: [hoja],
+    });
+  };
+
+  // Construye la hoja de Stats (produccion_resumen) para exportar en la nueva sección.
+  const construirHojaStats = () => {
+    if (filasProduccionActuales.length === 0) return null;
+    const esAgregado = vista !== "diario";
+    const headers = [etiquetaCol, ...camposResumenVisibles.map((c) => c.label)];
+    const filasExport = vista === "mensual"
+      ? [...filasProduccionActuales, resumenMensualProduccion.totalAno]
+      : filasProduccionActuales;
+    const rows = filasExport.map((f) => [
+      labelProduccion(f),
+      ...camposResumenVisibles.map((c) => formatearCampoResumen(f[c.field], c.field, esAgregado)),
+    ]);
+    return { sheetName: "Datos del Día", title: `Datos del Día — ${tituloVistaActual}`, headers, rows };
+  };
+
+  // Construye la hoja de Calidades (resumen_home) para exportar.
+  const construirHojaCalidades = () => {
+    if (filasCalidades.length === 0) return null;
+    const headers = [
+      etiquetaCol,
+      ...FILAS_HOME.map((f) => `${f.codigoCorto} ${f.calidad}`),
+      "TOTAL",
+    ];
+    const rows = filasCalidades.map((f) => [
+      f.periodoLabel,
+      ...FILAS_HOME.map(({ codigo }) => f.totalesPorCodigo[codigo] ?? ""),
+      f.totalGeneral || "",
+    ]);
+    return { sheetName: "Calidades", title: `Calidades — ${tituloVistaActual}`, headers, rows };
+  };
+
+  // Exporta la sección fusionada (Stats + Calidades) de la vista activa.
+  const handleExportarProduccionCalidades = () => {
+    const sheets = [construirHojaStats(), construirHojaCalidades()].filter(Boolean);
+    if (sheets.length === 0) { toast.error("No hay datos para exportar"); return; }
+    exportStyledWorkbook({
+      fileName: `produccion_calidades_${vista}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      sheets,
     });
   };
 
@@ -878,6 +1021,150 @@ export default function ProduccionReporteria() {
             )}
           </CardContent>
         </Card>
+
+      {/* ── PRODUCCIÓN DE CALIDADES (fusión de "Datos del Día" + "Calidades"
+           de la página /produccion — tablas independientes de Ingresar Datos) ── */}
+      <Card className="mt-6">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Factory className="w-4 h-4 text-primary" />
+            <CardTitle className="text-base">
+              Producción de Calidades — {tituloVistaActual}
+            </CardTitle>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Mismos controles de filtro que la tabla de arriba */}
+            {vista === "diario" && (
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs text-muted-foreground whitespace-nowrap">Fecha:</label>
+                <input
+                  type="date"
+                  className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                  value={filtroDiario}
+                  onChange={(e) => setFiltroDiario(e.target.value)}
+                />
+                {filtroDiario && (
+                  <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setFiltroDiario("")}>✕</button>
+                )}
+              </div>
+            )}
+            {vista === "semanal" && (
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs text-muted-foreground whitespace-nowrap">Semana (lunes):</label>
+                <input
+                  type="date"
+                  className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                  value={filtroSemana}
+                  onChange={(e) => setFiltroSemana(e.target.value)}
+                />
+                {filtroSemana && (
+                  <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setFiltroSemana("")}>✕</button>
+                )}
+              </div>
+            )}
+            {vista === "mensual" && (
+              <select
+                className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                value={anioSeleccionado}
+                onChange={(e) => setAnioSeleccionado(e.target.value)}
+              >
+                {aniosDisponibles.map((anio) => (
+                  <option key={anio} value={anio}>{anio}</option>
+                ))}
+              </select>
+            )}
+            <Button size="sm" variant="outline" onClick={handleExportarProduccionCalidades}>
+              <Download className="w-3.5 h-3.5" />
+              Exportar
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {/* Sub-tabla 1: Datos del Día (produccion_resumen) */}
+          {filasProduccionActuales.length > 0 && (
+            <div className="mb-6">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Datos del Día
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-center text-muted-foreground border-b bg-muted/30 text-xs">
+                      <th className="py-2 px-2 whitespace-nowrap text-left">{etiquetaCol}</th>
+                      {camposResumenVisibles.map((c) => (
+                        <th key={c.field} className="py-2 px-2 whitespace-nowrap">{c.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filasProduccionActuales.map((f, i) => (
+                      <tr key={i} className="border-b last:border-0 hover:bg-muted/30 text-center">
+                        <td className="py-2 px-2 font-medium text-left whitespace-nowrap">{labelProduccion(f)}</td>
+                        {camposResumenVisibles.map((c) => (
+                          <td key={c.field} className="py-2 px-2">
+                            {formatearCampoResumen(f[c.field], c.field, vista !== "diario")}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                    {vista === "mensual" && (
+                      <tr className="text-center font-semibold bg-muted/40 border-t-2">
+                        <td className="py-2 px-2 text-left">{resumenMensualProduccion.totalAno.mes ?? "TOTAL"}</td>
+                        {camposResumenVisibles.map((c) => (
+                          <td key={c.field} className="py-2 px-2">
+                            {formatearCampoResumen(resumenMensualProduccion.totalAno[c.field], c.field, true)}
+                          </td>
+                        ))}
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Sub-tabla 2: Calidades (resumen_home) */}
+          {filasCalidades.length > 0 ? (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Calidades
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-center text-muted-foreground border-b bg-muted/30 text-xs">
+                      <th className="py-2 px-2 whitespace-nowrap text-left">{etiquetaCol}</th>
+                      {FILAS_HOME.map(({ codigo, codigoCorto, calidad }) => (
+                        <th key={codigo} className="py-2 px-1 whitespace-nowrap text-center">
+                          {codigoCorto}<br /><span className="font-normal">{calidad}</span>
+                        </th>
+                      ))}
+                      <th className="py-2 px-2 whitespace-nowrap font-semibold">TOTAL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filasCalidades.map((f, i) => (
+                      <tr key={i} className="border-b last:border-0 hover:bg-muted/30 text-center">
+                        <td className="py-2 px-2 font-medium text-left whitespace-nowrap">{f.periodoLabel}</td>
+                        {FILAS_HOME.map(({ codigo }) => (
+                          <td key={codigo} className="py-2 px-1">
+                            {f.totalesPorCodigo[codigo] ? f.totalesPorCodigo[codigo].toLocaleString("es-EC") : "—"}
+                          </td>
+                        ))}
+                        <td className="py-2 px-2 font-semibold">
+                          {f.totalGeneral > 0 ? f.totalGeneral.toLocaleString("es-EC") : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm text-center py-6">Sin datos de calidades aún.</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Modal de edición — solo para filas de la vista Diario (1 fila =
           1 registro real en registros_produccion). */}
