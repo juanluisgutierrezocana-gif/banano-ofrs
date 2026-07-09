@@ -416,20 +416,54 @@ export default function ProduccionIngresar() {
   // Guarda explícitamente todas las celdas del día (cajas + caj_prog) para
   // todos los códigos de la tabla semanal y del Resumen de Producción.
   const [savingGrid, setSavingGrid] = useState(false);
+
+  // false = solo-lectura (datos guardados), true = celdas editables (modo edición).
+  // Mismo patrón que modoEdicion en "Nuevo Registro Diario".
+  const [modoEdicionSemanal, setModoEdicionSemanal] = useState(false);
+
+  // Hay datos guardados hoy si algún código tiene valor en la columna del día.
+  const tieneDataHoy = diaActual
+    ? todosCodigos.some((c) => {
+        const v = valoresGrid[c]?.[diaActual];
+        return v !== "" && v !== null && v !== undefined;
+      })
+    : false;
+
   const handleGuardarGrid = async () => {
     if (!diaActual) {
       toast.error("Selecciona una fecha de lunes a sábado");
       return;
     }
     setSavingGrid(true);
-    await Promise.all(
-      todosCodigos.flatMap((codigo) => [
-        handleBlurGrid(codigo, diaActual),
-        handleBlurGrid(codigo, `caj_prog_${diaActual}`),
-      ])
-    );
+    // Ejecutar secuencialmente para evitar race condition en CREATE.
+    for (const codigo of todosCodigos) {
+      await handleBlurGrid(codigo, diaActual);
+      await handleBlurGrid(codigo, `caj_prog_${diaActual}`);
+    }
     setSavingGrid(false);
     toast.success("Datos guardados");
+    setModoEdicionSemanal(false); // Volver a modo solo-lectura tras guardar
+  };
+
+  // Borra todos los valores del día actual para todos los códigos en la grid semanal.
+  const handleLimpiarDia = async () => {
+    if (!diaActual) return;
+    if (!confirm(`¿Limpiar todos los datos del ${diaActualLabel}? Esta acción no se puede deshacer.`)) return;
+    setSavingGrid(true);
+    await Promise.all(
+      todosCodigos.map(async (codigo) => {
+        const fila = valoresGrid[codigo];
+        if (!fila?.id) return;
+        const { error } = await produccionSemanal.update(fila.id, {
+          [diaActual]: null,
+          [`caj_prog_${diaActual}`]: null,
+        });
+        if (error) toast.error(`Error al limpiar ${codigo}: ${error.message}`);
+      })
+    );
+    setSavingGrid(false);
+    toast.success("Día limpiado");
+    queryClient.invalidateQueries({ queryKey: ["produccion-semanal", semana] });
   };
 
   // Redondea valores calculados a 2 decimales, sin tocar null/undefined.
@@ -716,18 +750,7 @@ export default function ProduccionIngresar() {
       {/* Tablas semanales migradas desde "Inventario Semanal" */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="text-base">Producción Semanal por Código</CardTitle>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleGuardarGrid}
-              disabled={savingGrid || !diaActual}
-            >
-              <Plus className="w-3 h-3" />
-              {savingGrid ? "Guardando..." : "Guardar"}
-            </Button>
-          </div>
+          <CardTitle className="text-base">Producción Semanal por Código</CardTitle>
           <p className="text-xs text-muted-foreground pt-1">
             {diaActualLabel
               ? `Mostrando: ${diaActualLabel} (semana del ${semana}) — según la fecha de arriba.`
@@ -771,6 +794,7 @@ export default function ProduccionIngresar() {
                           value={valoresGrid[codigo]?.[diaActual] ?? ""}
                           onChange={(e) => handleChangeGrid(codigo, diaActual, e.target.value)}
                           onBlur={() => handleBlurGrid(codigo, diaActual)}
+                          disabled={tieneDataHoy && !modoEdicionSemanal}
                           placeholder="—"
                         />
                       </td>
@@ -789,6 +813,28 @@ export default function ProduccionIngresar() {
                   </tr>
                 </tbody>
               </table>
+
+              {/* Botones al fondo — mismo patrón que "Nuevo Registro Diario" */}
+              <div className="flex gap-2 mt-3 flex-wrap">
+                {(!tieneDataHoy || modoEdicionSemanal) && (
+                  <Button onClick={handleGuardarGrid} disabled={savingGrid || !diaActual}>
+                    <Plus className="w-4 h-4" />
+                    {savingGrid ? "Guardando..." : "Guardar"}
+                  </Button>
+                )}
+                {tieneDataHoy && !modoEdicionSemanal && (
+                  <>
+                    <Button variant="outline" onClick={() => setModoEdicionSemanal(true)}>
+                      <Pencil className="w-4 h-4" />
+                      Editar
+                    </Button>
+                    <Button variant="destructive" onClick={handleLimpiarDia} disabled={savingGrid}>
+                      <Trash2 className="w-4 h-4" />
+                      Limpiar Día
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </CardContent>
@@ -858,21 +904,10 @@ export default function ProduccionIngresar() {
           Excel, relacionadas con datos que la app ya carga arriba. */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileSpreadsheet className="w-4 h-4" />
-              Resumen de Producción
-            </CardTitle>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleGuardarGrid}
-              disabled={savingGrid || !diaActual}
-            >
-              <Plus className="w-3 h-3" />
-              {savingGrid ? "Guardando..." : "Guardar"}
-            </Button>
-          </div>
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileSpreadsheet className="w-4 h-4" />
+            Resumen de Producción
+          </CardTitle>
           <p className="text-xs text-muted-foreground pt-1">
             {diaActualLabel
               ? `Mostrando: ${diaActualLabel} (semana del ${semana}) — según la fecha de arriba.`
@@ -925,6 +960,7 @@ export default function ProduccionIngresar() {
                               value={valoresGrid[calidad]?.[campoCajProg] ?? ""}
                               onChange={(e) => handleChangeGrid(calidad, campoCajProg, e.target.value)}
                               onBlur={() => handleBlurGrid(calidad, campoCajProg)}
+                              disabled={tieneDataHoy && !modoEdicionSemanal}
                             />
                           </td>
                           <td className="py-1 px-1 font-medium">
@@ -963,6 +999,28 @@ export default function ProduccionIngresar() {
                   <FilaProceso label="Rechazo en Camión (Quintal)" valor={ultimo?.quintales_rechazo ?? "—"} />
                 </tbody>
               </table>
+
+              {/* Botones al fondo — mismo patrón que "Nuevo Registro Diario" */}
+              <div className="flex gap-2 mt-3 flex-wrap">
+                {(!tieneDataHoy || modoEdicionSemanal) && (
+                  <Button onClick={handleGuardarGrid} disabled={savingGrid || !diaActual}>
+                    <Plus className="w-4 h-4" />
+                    {savingGrid ? "Guardando..." : "Guardar"}
+                  </Button>
+                )}
+                {tieneDataHoy && !modoEdicionSemanal && (
+                  <>
+                    <Button variant="outline" onClick={() => setModoEdicionSemanal(true)}>
+                      <Pencil className="w-4 h-4" />
+                      Editar
+                    </Button>
+                    <Button variant="destructive" onClick={handleLimpiarDia} disabled={savingGrid}>
+                      <Trash2 className="w-4 h-4" />
+                      Limpiar Día
+                    </Button>
+                  </>
+                )}
+              </div>
             </>
           )}
 

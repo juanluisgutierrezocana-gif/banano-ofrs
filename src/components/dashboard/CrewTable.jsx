@@ -39,7 +39,7 @@ export default function CrewTable({ trenadas, buttons }) {
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="text-sm min-w-max w-full">
             <thead>
               <tr className="border-b">
                 <th className="text-left py-2 px-3 font-semibold">Cuadrilla</th>
