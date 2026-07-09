@@ -205,50 +205,55 @@ export function calcularDatosProcesoAgregado(registros) {
 }
 
 // Agrega un grupo de filas de produccion_resumen (una semana o un mes) para
-// la tabla "Producción" de Reportería. produccion_resumen se llena a mano
-// (sin fórmula) con los mismos nombres de campo que calcularDatosProceso
-// devuelve (racimos_cosechados, factor_general, peso_racimo, etc.), así que
-// para Semanal/Mensual se suman los campos de conteo (racimos, cajas,
-// quintales) y se VUELVEN A CALCULAR factor/peso racimo/desperdicio sobre
-// esas sumas — mismo criterio "recalcular sobre sumas" que ya usa
-// calcularDatosProcesoAgregado() arriba. Así el resultado no depende de la
-// escala en que el usuario haya tecleado manualmente esos campos día por día.
+// la tabla "Datos del Día" de Reportería. produccion_resumen almacena los
+// campos que el usuario llena a mano en ProduccionHome: total_cajas,
+// total_paletas, area_acres, racimos_*, cajas_tercera, quintales_rechazo,
+// factor_primera, factor_general, desperdicio_monte, desperdicio_general.
+//
+// Criterio de agregación:
+// - Campos de CONTEO (racimos, cajas, quintales, área): se suman.
+// - factor_general: se RECALCULA sobre las sumas (total_cajas / racimos_procesados)
+//   para mayor precisión que promediar.
+// - factor_primera, desperdicio_monte, desperdicio_general: sin cajas_primera
+//   disponible no se pueden recalcular exactamente, se promedian solo las filas
+//   que tengan valor > 0 (evita diluir con días sin datos).
 export function calcularResumenAgregado(filas) {
-  const sum = (campo) => filas.reduce((acc, f) => acc + (Number(f[campo]) || 0), 0);
+  const sum = (campo) =>
+    filas.reduce((acc, f) => acc + (Number(f[campo]) || 0), 0);
 
-  const racimosCosechados = sum("racimos_cosechados");
-  const racimosRechazados = sum("racimos_rechazados");
-  const racimosProcesados = racimosCosechados - racimosRechazados;
-  const cajasPrimera = sum("cajas_primera");
-  const cajasSegunda = sum("cajas_segunda");
-  const cajasTercera = sum("cajas_tercera");
-  const quintalesRechazo = sum("quintales_rechazo");
+  // Promedio sobre filas con valor > 0 (evita diluir con días vacíos)
+  const avg = (campo) => {
+    const con = filas.filter((f) => Number(f[campo]) > 0);
+    return con.length > 0
+      ? con.reduce((acc, f) => acc + Number(f[campo]), 0) / con.length
+      : 0;
+  };
 
-  const pesoTotalCajas =
-    (cajasSegunda + cajasPrimera) * 41.5 + cajasTercera * 42.5 + quintalesRechazo * 100;
-  const pesoRacimo = racimosCosechados > 0 ? pesoTotalCajas / racimosCosechados : 0;
-  const factorPrimera = racimosProcesados > 0 ? cajasPrimera / racimosProcesados : 0;
-  const factorGeneral = racimosProcesados > 0 ? (cajasPrimera + cajasSegunda) / racimosProcesados : 0;
-  const factorPotencial = pesoRacimo / 41.5;
-  const pesoBueno = (cajasPrimera + cajasSegunda) * 41.5;
-  const pesoPotencial = pesoRacimo * racimosProcesados;
-  const desperdicioMonte = pesoPotencial > 0 ? (pesoPotencial - pesoBueno) / pesoPotencial : 0;
-  const pesoRechazo = cajasTercera * 42.5 + quintalesRechazo * 100;
-  const desperdicioGeneral = pesoTotalCajas > 0 ? pesoRechazo / pesoTotalCajas : 0;
+  const totalCajas          = sum("total_cajas");
+  const totalPaletas        = sum("total_paletas");
+  const cajasTercera        = sum("cajas_tercera");
+  const racimosCosechados   = sum("racimos_cosechados");
+  const racimosRechazados   = sum("racimos_rechazados");
+  const racimosProcesados   = sum("racimos_procesados");
+  const areaAcres           = sum("area_acres");
+  const quintalesRechazo    = sum("quintales_rechazo");
+
+  // Factor general recalculado desde las sumas (más preciso que promediar)
+  const factorGeneral =
+    racimosProcesados > 0 ? totalCajas / racimosProcesados : 0;
 
   return {
-    racimos_cosechados: racimosCosechados,
-    racimos_rechazados: racimosRechazados,
-    racimos_procesados: racimosProcesados,
-    cajas_primera: cajasPrimera,
-    cajas_segunda: cajasSegunda,
-    cajas_tercera: cajasTercera,
-    quintales_rechazo: quintalesRechazo,
-    factor_primera: factorPrimera,
-    factor_general: factorGeneral,
-    factor_potencial: factorPotencial,
-    peso_racimo: pesoRacimo,
-    desperdicio_monte: desperdicioMonte,
-    desperdicio_general: desperdicioGeneral,
+    total_cajas:          totalCajas,
+    total_paletas:        totalPaletas,
+    cajas_tercera:        cajasTercera,
+    racimos_cosechados:   racimosCosechados,
+    racimos_rechazados:   racimosRechazados,
+    racimos_procesados:   racimosProcesados,
+    area_acres:           areaAcres,
+    quintales_rechazo:    quintalesRechazo,
+    factor_primera:       avg("factor_primera"),     // promedio de días con dato
+    factor_general:       factorGeneral,             // recalculado desde total_cajas
+    desperdicio_monte:    avg("desperdicio_monte"),   // promedio de días con dato
+    desperdicio_general:  avg("desperdicio_general"), // promedio de días con dato
   };
 }

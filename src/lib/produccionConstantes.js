@@ -6,20 +6,23 @@
 
 // --- Tabla "Producción" (ProduccionHome.jsx) ---
 // Columnas del resumen diario rellenable a mano (tabla produccion_resumen).
+// IMPORTANTE: estos campos deben coincidir exactamente con las columnas que
+// existen en la tabla produccion_resumen de Supabase. Campos calculados que
+// NO existen en la tabla (cajas_primera, cajas_segunda, factor_potencial,
+// peso_racimo) fueron eliminados.
 export const CAMPOS_RESUMEN = [
-  { field: "racimos_cosechados", label: "Racimos Cosechados" },
-  { field: "racimos_rechazados", label: "Racimos Rechazados" },
-  { field: "racimos_procesados", label: "Racimos Procesados" },
-  { field: "cajas_primera", label: "Cajas 1ra" },
-  { field: "cajas_segunda", label: "Cajas 2da" },
-  { field: "cajas_tercera", label: "Cajas 3ra" },
-  { field: "quintales_rechazo", label: "Quintales Rechazo" },
-  { field: "factor_primera", label: "Factor 1ra" },
-  { field: "factor_general", label: "Factor General" },
-  { field: "factor_potencial", label: "Factor Potencial" },
-  { field: "peso_racimo", label: "Peso Racimo" },
-  { field: "desperdicio_monte", label: "DESPERDICIO RAC. RECH." },
+  { field: "total_cajas",         label: "Total Cajas" },
+  { field: "total_paletas",       label: "Total Paletas" },
+  { field: "cajas_tercera",       label: "Cajas 3ra" },
+  { field: "racimos_cosechados",  label: "Racimos Cosechados" },
+  { field: "racimos_rechazados",  label: "Racimos Rechazados" },
+  { field: "racimos_procesados",  label: "Racimos Procesados" },
+  { field: "area_acres",          label: "Área Cosecha (acres)" },
+  { field: "factor_primera",      label: "Factor 1ra" },
+  { field: "factor_general",      label: "Factor General" },
+  { field: "desperdicio_monte",   label: "DESPERDICIO RAC. RECH." },
   { field: "desperdicio_general", label: "Desperdicio General" },
+  { field: "quintales_rechazo",   label: "Quintales Rechazo" },
 ];
 
 // --- Tablas "Ingresar Datos" (ProduccionIngresar.jsx) ---
