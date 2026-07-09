@@ -317,7 +317,7 @@ export default function ProduccionHome() {
           </Card>
 
           {/* ── Col 3: Pie chart de calidades ── */}
-          <Card className="flex-shrink-0 w-80">
+          <Card className="flex-shrink-0 w-96">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <PieIcon className="w-4 h-4" />
@@ -335,17 +335,17 @@ export default function ProduccionHome() {
                   Sin datos para este día.
                 </p>
               ) : (
-                <ResponsiveContainer width="100%" height={300}>
+                /* Labels eliminados del pie (se amontonaban con muchas calidades).
+                   Los datos se leen en el Legend y en el Tooltip al pasar el cursor. */
+                <ResponsiveContainer width="100%" height={400}>
                   <PieChart>
                     <Pie
                       data={datosGraficaPie}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
-                      cy="45%"
-                      outerRadius={100}
-                      label={({ name, value }) => `${name}: ${value}`}
-                      labelLine={false}
+                      cy="42%"
+                      outerRadius={130}
                     >
                       {datosGraficaPie.map((_, i) => (
                         <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />

@@ -191,11 +191,19 @@ export default function PanelDiario() {
       {/* Color summary */}
       <ColorSummaryCards colorTotals={colorTotals} />
 
-      {/* Cuadrillas | Balance/Rac.Faltantes | Gráfico — 3 columnas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <CrewTable trenadas={trenadaRecords} buttons={buttons} />
-        <BalanceTable trenadas={trenadaRecords} />
-        <CrewPieChart trenadas={trenadaRecords} />
+      {/* Cuadrillas | Balance/Rac.Faltantes | Gráfico
+          Flex row: BalanceTable toma su ancho natural (shrink-0), las
+          otras dos columnas se reparten el espacio restante. */}
+      <div className="flex flex-col md:flex-row gap-4 items-start">
+        <div className="flex-1 min-w-0">
+          <CrewTable trenadas={trenadaRecords} buttons={buttons} />
+        </div>
+        <div className="shrink-0">
+          <BalanceTable trenadas={trenadaRecords} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <CrewPieChart trenadas={trenadaRecords} />
+        </div>
       </div>
 
       {/* Hourly chart */}
