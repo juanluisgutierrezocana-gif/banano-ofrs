@@ -325,6 +325,33 @@ function formatearCampoResumen(valor, field, esAgregado) {
   return Math.round(n).toLocaleString("es-EC");
 }
 
+// Convierte un registro de registros_produccion al shape de CAMPOS_RESUMEN,
+// usando calcularDatosProceso para los campos derivados.
+// filasCajasPalet: array de produccion_cajas_palet (para total_paletas).
+function registroToResumenFila(r, filasCajasPalet = []) {
+  const c = calcularDatosProceso(r);
+  const lunes  = r.fecha ? lunesDeSemanaDe(r.fecha) : null;
+  const diaKey = r.fecha ? diaKeyDeFecha(r.fecha) : null;
+  const filaPalet = filasCajasPalet.find(
+    (cp) => cp.fecha_semana === lunes && cp.dia === diaKey
+  );
+  return {
+    _label:              r.fecha,
+    total_cajas:         c.cajasTotal,
+    total_paletas:       filaPalet ? (Number(filaPalet.palet) || 0) : null,
+    cajas_tercera:       Number(r.cajas_tercera) || 0,
+    racimos_cosechados:  Number(r.racimos_cosechados) || 0,
+    racimos_rechazados:  Number(r.racimos_rechazados) || 0,
+    racimos_procesados:  c.racimosProcesados,
+    area_acres:          Number(r.acres) || 0,
+    factor_primera:      c.factorPrimera,
+    factor_general:      c.factorGeneral,
+    desperdicio_monte:   c.desperdicioMonte,
+    desperdicio_general: c.desperdicioGeneral,
+    quintales_rechazo:   c.quintalesRechazo,
+  };
+}
+
 // ============================================================
 // ESQUEMA ÚNICO DE 18 COLUMNAS (transcripción exacta dada por el cliente,
 // corregida: sin la columna "Total General" duplicada, con Cajas 2da
@@ -781,6 +808,98 @@ export default function ProduccionReporteria() {
     [calidadesHistorial, vista, filtroDiario, filtroSemana, anioSeleccionado, filasHomeCodigos]
   );
 
+  // "Datos del Día" dentro de la card de Calidades — ahora lee de
+  // registros_produccion (misma fuente que ProduccionHome) en lugar de
+  // produccion_resumen (tabla manual que puede estar desactualizada).
+  const filasParaDatosDelDia = useMemo(() => {
+    if (vista === "diario") {
+      const filas = registros.map((r) => registroToResumenFila(r, filasCajasPalet));
+      return filtroDiario ? filas.filter((f) => f._label === filtroDiario) : filas;
+    }
+
+    if (vista === "semanal") {
+      // Agrupar registros por semana (lunes como clave)
+      const map = {};
+      registros.forEach((r) => {
+        const lunes = r.fecha ? lunesDeSemanaDe(r.fecha) : null;
+        if (!lunes) return;
+        if (filtroSemana && lunes !== filtroSemana) return;
+        if (!map[lunes]) map[lunes] = { lunes, semana: numeroSemanaISO(lunes), regs: [], palets: [] };
+        map[lunes].regs.push(r);
+        const diaKey = r.fecha ? diaKeyDeFecha(r.fecha) : null;
+        const fp = filasCajasPalet.find((cp) => cp.fecha_semana === lunes && cp.dia === diaKey);
+        if (fp) map[lunes].palets.push(Number(fp.palet) || 0);
+      });
+      return Object.entries(map)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([, d]) => {
+          const agg = calcularDatosProcesoAgregado(d.regs);
+          const sumAcres = d.regs.reduce((s, r) => s + (Number(r.acres) || 0), 0);
+          const sumPalet = d.palets.reduce((s, v) => s + v, 0);
+          return {
+            _label:              `Sem ${d.semana}`,
+            total_cajas:         agg.cajasTotal,
+            total_paletas:       sumPalet || null,
+            cajas_tercera:       agg.cajasTercera,
+            racimos_cosechados:  agg.racimosCosechados,
+            racimos_rechazados:  agg.racimosRechazados,
+            racimos_procesados:  agg.racimosProcesados,
+            area_acres:          sumAcres,
+            factor_primera:      agg.factorPrimera,
+            factor_general:      agg.factorGeneral,
+            desperdicio_monte:   null, // no disponible en agregado semanal
+            desperdicio_general: agg.desperdicioGeneral,
+            quintales_rechazo:   agg.quintalesRechazo,
+          };
+        });
+    }
+
+    // mensual
+    const anioStr = String(anioSeleccionado);
+    const mesMap = {};
+    MESES.forEach((nombre, idx) => {
+      const mesStr = String(idx + 1).padStart(2, "0");
+      mesMap[mesStr] = { nombre, regs: [], palets: [] };
+    });
+    registros
+      .filter((r) => r.fecha?.slice(0, 4) === anioStr)
+      .forEach((r) => {
+        const mesStr = r.fecha.slice(5, 7);
+        if (!mesMap[mesStr]) return;
+        mesMap[mesStr].regs.push(r);
+        const lunes  = r.fecha ? lunesDeSemanaDe(r.fecha) : null;
+        const diaKey = r.fecha ? diaKeyDeFecha(r.fecha) : null;
+        const fp = filasCajasPalet.find((cp) => cp.fecha_semana === lunes && cp.dia === diaKey);
+        if (fp) mesMap[mesStr].palets.push(Number(fp.palet) || 0);
+      });
+    return Object.entries(mesMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, d]) => {
+        if (d.regs.length === 0) {
+          // Mes sin datos: mostrar fila vacía
+          return { _label: d.nombre, ...Object.fromEntries(CAMPOS_RESUMEN.map((c) => [c.field, null])) };
+        }
+        const agg = calcularDatosProcesoAgregado(d.regs);
+        const sumAcres = d.regs.reduce((s, r) => s + (Number(r.acres) || 0), 0);
+        const sumPalet = d.palets.reduce((s, v) => s + v, 0);
+        return {
+          _label:              d.nombre,
+          total_cajas:         agg.cajasTotal,
+          total_paletas:       sumPalet || null,
+          cajas_tercera:       agg.cajasTercera,
+          racimos_cosechados:  agg.racimosCosechados,
+          racimos_rechazados:  agg.racimosRechazados,
+          racimos_procesados:  agg.racimosProcesados,
+          area_acres:          sumAcres,
+          factor_primera:      agg.factorPrimera,
+          factor_general:      agg.factorGeneral,
+          desperdicio_monte:   null,
+          desperdicio_general: agg.desperdicioGeneral,
+          quintales_rechazo:   agg.quintalesRechazo,
+        };
+      });
+  }, [registros, filasCajasPalet, vista, filtroDiario, filtroSemana, anioSeleccionado]);
+
   // Construye la hoja de Excel de "Ingresar Datos" para la vista actual, o
   // null si no hay filas. La reutilizan los 3 botones de exportar (solo
   // Ingresar Datos / solo Producción / ambos en el mismo archivo).
@@ -1134,8 +1253,10 @@ export default function ProduccionReporteria() {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Sub-tabla 1: Datos del Día (produccion_resumen) */}
-          {filasProduccionActuales.length > 0 && (
+          {/* Sub-tabla 1: Datos del Día — ahora lee de registros_produccion
+               (misma fuente que ProduccionHome) para mostrar los datos
+               del día actual sin necesidad de guardar en produccion_resumen */}
+          {filasParaDatosDelDia.length > 0 && (
             <div className="mb-6">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                 Datos del Día
@@ -1151,9 +1272,9 @@ export default function ProduccionReporteria() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filasProduccionActuales.map((f, i) => (
+                    {filasParaDatosDelDia.map((f, i) => (
                       <tr key={i} className="border-b last:border-0 hover:bg-muted/30 text-center">
-                        <td className="py-2 px-2 font-medium text-left whitespace-nowrap">{labelProduccion(f)}</td>
+                        <td className="py-2 px-2 font-medium text-left whitespace-nowrap">{f._label}</td>
                         {camposResumenVisibles.map((c) => (
                           <td key={c.field} className="py-2 px-2">
                             {formatearCampoResumen(f[c.field], c.field, vista !== "diario")}
@@ -1161,16 +1282,6 @@ export default function ProduccionReporteria() {
                         ))}
                       </tr>
                     ))}
-                    {vista === "mensual" && (
-                      <tr className="text-center font-semibold bg-muted/40 border-t-2">
-                        <td className="py-2 px-2 text-left">{resumenMensualProduccion.totalAno.mes ?? "TOTAL"}</td>
-                        {camposResumenVisibles.map((c) => (
-                          <td key={c.field} className="py-2 px-2">
-                            {formatearCampoResumen(resumenMensualProduccion.totalAno[c.field], c.field, true)}
-                          </td>
-                        ))}
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
