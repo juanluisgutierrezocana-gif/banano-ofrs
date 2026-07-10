@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,8 @@ function getTextColor(hex) {
 }
 
 export default function StepConteo({ info, onSave, onBack }) {
+  const { user: currentUser } = useAuth();
+
   // Cargar botones configurados por el admin (solo activos)
   const { data: buttonConfigs = [] } = useQuery({
     queryKey: ["buttons-active"],
@@ -115,6 +118,9 @@ export default function StepConteo({ info, onSave, onBack }) {
         racimos,
         total_racimos: totalRacimos,
         correlativo,
+        // finca_id explícito para no depender del DEFAULT en el INSERT,
+        // evita fallos silenciosos de RLS cuando el JWT no tiene el claim
+        finca_id: currentUser?.finca_id,
       };
 
       // FIXED: trenadas.create() retorna { data, error } — unwrapear correctamente
