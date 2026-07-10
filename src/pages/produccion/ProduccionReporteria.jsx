@@ -7,6 +7,7 @@ import {
   produccionResumen,
   produccionVisibilidad,
   produccionSemanal,
+  calidadesProduccion,
   settings,
 } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -198,27 +199,11 @@ function agruparResumenPorMes(filas, anio) {
 }
 
 // ============================================================
-// CALIDADES (espejo de ProduccionHome.FILAS_HOME — duplicada
-// intencionalmente: no debe cambiar si el admin edita calidades_produccion).
+// CALIDADES — lista dinámica leída desde calidades_produccion.
+// Antes era hardcodeada; ahora se construye en el componente
+// con filasHome/filasHomeCodigos para garantizar que los códigos
+// coincidan exactamente con produccion_semanal.codigo_producto.
 // ============================================================
-// IMPORTANTE: codigo debe coincidir exactamente con calidades_produccion.codigo
-// (= produccion_semanal.codigo_producto). Los nombres viejos ("DMD", "PRIM",
-// etc.) eran de Base44/resumen_home y nunca hacían match con la tabla real.
-const FILAS_HOME = [
-  { codigo: "C68",  codigoCorto: "C68",  calidad: "DMD" },
-  { codigo: "C23",  codigoCorto: "C23",  calidad: "DM9" },
-  { codigo: "CH1",  codigoCorto: "CH1",  calidad: "PRIM." },
-  { codigo: "G01",  codigoCorto: "G01",  calidad: "PREM." },
-  { codigo: "CQ2",  codigoCorto: "CQ2",  calidad: "3LB" },
-  { codigo: "CH7",  codigoCorto: "CH7",  calidad: "IP" },
-  { codigo: "C39",  codigoCorto: "C39",  calidad: "24 COUNT" },
-  { codigo: "G39",  codigoCorto: "G39",  calidad: "24 COUNT." },
-  { codigo: "G05",  codigoCorto: "G05",  calidad: "ROSY NORMAL" },
-  { codigo: "CQ5",  codigoCorto: "CQ5",  calidad: "ROSY CONSUMER" },
-  { codigo: "GP7",  codigoCorto: "GP7",  calidad: "DM BANABAC" },
-  { codigo: "CP9",  codigoCorto: "CP9",  calidad: "3 LBS" },
-];
-const FILAS_HOME_CODIGOS = FILAS_HOME.map((f) => f.codigo);
 
 // Expande filas de produccion_semanal (una fila por semana × codigo) a filas
 // diarias con forma { fecha, codigo, total } — el mismo shape que esperaba
@@ -254,7 +239,8 @@ function expandirSemanalADiario(filasSemana) {
 
 // Pivota los datos de produccion_semanal (expandidos a diario) según la vista
 // activa. Devuelve array de { periodoLabel, totalesPorCodigo, totalGeneral }.
-function calcularFilasCalidades(historial, vista, filtroDiario, filtroSemana, anioSeleccionado) {
+// `codigos` es el array de códigos de calidad (filasHomeCodigos) — dinámico.
+function calcularFilasCalidades(historial, vista, filtroDiario, filtroSemana, anioSeleccionado, codigos) {
   if (vista === "diario") {
     const map = {};
     historial
@@ -270,7 +256,7 @@ function calcularFilasCalidades(historial, vista, filtroDiario, filtroSemana, an
       .map(([fecha, tots]) => ({
         periodoLabel: fecha,
         totalesPorCodigo: tots,
-        totalGeneral: FILAS_HOME_CODIGOS.reduce((s, c) => s + (tots[c] || 0), 0),
+        totalGeneral: codigos.reduce((s, c) => s + (tots[c] || 0), 0),
       }));
   }
 
@@ -289,7 +275,7 @@ function calcularFilasCalidades(historial, vista, filtroDiario, filtroSemana, an
       .map(([, d]) => ({
         periodoLabel: `Sem ${d.semana}`,
         totalesPorCodigo: d.tots,
-        totalGeneral: FILAS_HOME_CODIGOS.reduce((s, c) => s + (d.tots[c] || 0), 0),
+        totalGeneral: codigos.reduce((s, c) => s + (d.tots[c] || 0), 0),
       }));
   }
 
@@ -312,7 +298,7 @@ function calcularFilasCalidades(historial, vista, filtroDiario, filtroSemana, an
     .map(([, d]) => ({
       periodoLabel: d.nombre,
       totalesPorCodigo: d.tots,
-      totalGeneral: FILAS_HOME_CODIGOS.reduce((s, c) => s + (d.tots[c] || 0), 0),
+      totalGeneral: codigos.reduce((s, c) => s + (d.tots[c] || 0), 0),
     }));
 }
 
@@ -605,6 +591,29 @@ export default function ProduccionReporteria() {
     [calidadesSemanalRaw]
   );
 
+  // Catálogo de calidades — leído dinámicamente para que los códigos
+  // coincidan exactamente con produccion_semanal.codigo_producto.
+  const { data: calidadesProduccionRaw = [] } = useQuery({
+    queryKey: ["calidades-produccion-reporteria"],
+    queryFn: async () => {
+      const { data, error } = await calidadesProduccion.list("position");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const filasHome = useMemo(
+    () => calidadesProduccionRaw.map((c) => ({
+      codigo:      c.codigo,
+      codigoCorto: c.codigo_corto || c.codigo,
+      calidad:     c.label || c.codigo,
+    })),
+    [calidadesProduccionRaw]
+  );
+  const filasHomeCodigos = useMemo(
+    () => filasHome.map((f) => f.codigo),
+    [filasHome]
+  );
+
   // Total acres finca (configurable desde Configuraciones, fallback 260.6).
   const { data: acresConfig } = useQuery({
     queryKey: ["settings-acres-finca-reporteria"],
@@ -768,8 +777,8 @@ export default function ProduccionReporteria() {
 
   // Calidades pivotadas según la vista activa (Diario/Semanal/Mensual).
   const filasCalidades = useMemo(
-    () => calcularFilasCalidades(calidadesHistorial, vista, filtroDiario, filtroSemana, anioSeleccionado),
-    [calidadesHistorial, vista, filtroDiario, filtroSemana, anioSeleccionado]
+    () => calcularFilasCalidades(calidadesHistorial, vista, filtroDiario, filtroSemana, anioSeleccionado, filasHomeCodigos),
+    [calidadesHistorial, vista, filtroDiario, filtroSemana, anioSeleccionado, filasHomeCodigos]
   );
 
   // Construye la hoja de Excel de "Ingresar Datos" para la vista actual, o
@@ -866,12 +875,12 @@ export default function ProduccionReporteria() {
     if (filasCalidades.length === 0) return null;
     const headers = [
       etiquetaCol,
-      ...FILAS_HOME.map((f) => `${f.codigoCorto} ${f.calidad}`),
+      ...filasHome.map((f) => `${f.codigoCorto} ${f.calidad}`),
       "TOTAL",
     ];
     const rows = filasCalidades.map((f) => [
       f.periodoLabel,
-      ...FILAS_HOME.map(({ codigo }) => f.totalesPorCodigo[codigo] ?? ""),
+      ...filasHome.map(({ codigo }) => f.totalesPorCodigo[codigo] ?? ""),
       f.totalGeneral || "",
     ]);
     return { sheetName: "Calidades", title: `Calidades — ${tituloVistaActual}`, headers, rows };
@@ -1179,7 +1188,7 @@ export default function ProduccionReporteria() {
                   <thead>
                     <tr className="text-center text-muted-foreground border-b bg-muted/30 text-xs">
                       <th className="py-2 px-2 whitespace-nowrap text-left">{etiquetaCol}</th>
-                      {FILAS_HOME.map(({ codigo, codigoCorto, calidad }) => (
+                      {filasHome.map(({ codigo, codigoCorto, calidad }) => (
                         <th key={codigo} className="py-2 px-1 whitespace-nowrap text-center">
                           {codigoCorto}<br /><span className="font-normal">{calidad}</span>
                         </th>
@@ -1191,9 +1200,11 @@ export default function ProduccionReporteria() {
                     {filasCalidades.map((f, i) => (
                       <tr key={i} className="border-b last:border-0 hover:bg-muted/30 text-center">
                         <td className="py-2 px-2 font-medium text-left whitespace-nowrap">{f.periodoLabel}</td>
-                        {FILAS_HOME.map(({ codigo }) => (
+                        {filasHome.map(({ codigo }) => (
                           <td key={codigo} className="py-2 px-1">
-                            {f.totalesPorCodigo[codigo] ? f.totalesPorCodigo[codigo].toLocaleString("es-EC") : "—"}
+                            {f.totalesPorCodigo[codigo] != null
+                              ? f.totalesPorCodigo[codigo].toLocaleString("es-EC")
+                              : "—"}
                           </td>
                         ))}
                         <td className="py-2 px-2 font-semibold">
