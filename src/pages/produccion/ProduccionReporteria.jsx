@@ -6,7 +6,7 @@ import {
   produccionCostos,
   produccionResumen,
   produccionVisibilidad,
-  resumenHome,
+  produccionSemanal,
   settings,
 } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -218,8 +218,40 @@ const FILAS_HOME = [
 ];
 const FILAS_HOME_CODIGOS = FILAS_HOME.map((f) => f.codigo);
 
-// Pivota los datos de resumen_home según la vista activa. Devuelve array de
-// { periodoLabel, totalesPorCodigo, totalGeneral }.
+// Expande filas de produccion_semanal (una fila por semana × codigo) a filas
+// diarias con forma { fecha, codigo, total } — el mismo shape que esperaba
+// resumen_home — para que calcularFilasCalidades funcione sin cambios.
+function expandirSemanalADiario(filasSemana) {
+  const DIAS = [
+    { key: "lunes",     delta: 0 },
+    { key: "martes",    delta: 1 },
+    { key: "miercoles", delta: 2 },
+    { key: "jueves",    delta: 3 },
+    { key: "viernes",   delta: 4 },
+    { key: "sabado",    delta: 5 },
+  ];
+  const result = [];
+  filasSemana.forEach((f) => {
+    if (!f.fecha_semana) return;
+    // fecha_semana es lunes de la semana (ISO string "YYYY-MM-DD").
+    const lunes = new Date(f.fecha_semana + "T00:00:00");
+    DIAS.forEach(({ key, delta }) => {
+      const total = f[key];
+      if (total === null || total === undefined) return;
+      const fecha = new Date(lunes);
+      fecha.setDate(lunes.getDate() + delta);
+      result.push({
+        fecha:  fecha.toISOString().slice(0, 10),
+        codigo: f.codigo_producto,
+        total:  Number(total) || 0,
+      });
+    });
+  });
+  return result;
+}
+
+// Pivota los datos de produccion_semanal (expandidos a diario) según la vista
+// activa. Devuelve array de { periodoLabel, totalesPorCodigo, totalGeneral }.
 function calcularFilasCalidades(historial, vista, filtroDiario, filtroSemana, anioSeleccionado) {
   if (vista === "diario") {
     const map = {};
@@ -555,15 +587,21 @@ export default function ProduccionReporteria() {
     },
   });
 
-  // Historial de calidades (tabla resumen_home — misma fuente que /produccion).
-  const { data: calidadesHistorial = [] } = useQuery({
-    queryKey: ["resumen-home-historial"],
+  // Historial de calidades — ahora desde produccion_semanal (misma fuente que
+  // /produccion/ingresar). Se expande a filas diarias con expandirSemanalADiario
+  // para que calcularFilasCalidades reciba el shape { fecha, codigo, total }.
+  const { data: calidadesSemanalRaw = [] } = useQuery({
+    queryKey: ["produccion-semanal-historial"],
     queryFn: async () => {
-      const { data, error } = await resumenHome.list("-fecha");
+      const { data, error } = await produccionSemanal.list("-fecha_semana");
       if (error) throw error;
       return data ?? [];
     },
   });
+  const calidadesHistorial = useMemo(
+    () => expandirSemanalADiario(calidadesSemanalRaw),
+    [calidadesSemanalRaw]
+  );
 
   // Total acres finca (configurable desde Configuraciones, fallback 260.6).
   const { data: acresConfig } = useQuery({

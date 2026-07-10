@@ -199,7 +199,7 @@ export default function PanelDiario() {
           <CrewTable trenadas={trenadaRecords} buttons={buttons} />
         </div>
         <div className="shrink-0">
-          <BalanceTable trenadas={trenadaRecords} />
+          <BalanceTable trenadas={trenadaRecords} fecha={fecha} />
         </div>
         <div className="flex-1 min-w-0">
           <CrewPieChart trenadas={trenadaRecords} />

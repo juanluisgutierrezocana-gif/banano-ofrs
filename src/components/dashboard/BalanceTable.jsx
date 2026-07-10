@@ -1,11 +1,24 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 // Tabla de Balance / Racimos Faltantes por cuadrilla.
 // Solo dos columnas: Balance (input manual) y Rac. Faltantes (calculado).
 // La cuadrilla se identifica como label inline junto al input.
-export default function BalanceTable({ trenadas }) {
+// FIXED: localStorage por fecha — el state sobrevive navegación entre módulos.
+export default function BalanceTable({ trenadas, fecha }) {
   const [balances, setBalances] = useState({});
+
+  // Cargar desde localStorage cuando cambia la fecha (incluyendo el montaje
+  // inicial). Cada fecha tiene su propia clave para no mezclar datos de días.
+  useEffect(() => {
+    if (!fecha) return;
+    try {
+      const saved = localStorage.getItem(`balance_${fecha}`);
+      setBalances(saved ? JSON.parse(saved) : {});
+    } catch {
+      setBalances({});
+    }
+  }, [fecha]);
 
   const crewTotals = useMemo(() => {
     const crews = {};
@@ -43,9 +56,16 @@ export default function BalanceTable({ trenadas }) {
                       min="0"
                       className="w-20 text-center rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                       value={balances[crew.cuadrilla] ?? ""}
-                      onChange={(e) =>
-                        setBalances((b) => ({ ...b, [crew.cuadrilla]: e.target.value }))
-                      }
+                      onChange={(e) => {
+                        const valor = e.target.value;
+                        setBalances((b) => {
+                          const next = { ...b, [crew.cuadrilla]: valor };
+                          try {
+                            if (fecha) localStorage.setItem(`balance_${fecha}`, JSON.stringify(next));
+                          } catch {}
+                          return next;
+                        });
+                      }}
                       placeholder="—"
                     />
                   </div>
