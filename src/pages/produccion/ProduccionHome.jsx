@@ -54,7 +54,7 @@ const STATS_FILAS = [
   { campo: "racimos_cosechados",  label: "RAC. COSECHADOS",         tipo: "raw" },
   { campo: "racimos_rechazados",  label: "RACIMOS RECHAZADOS",      tipo: "raw" },
   { campo: "racimos_procesados",  label: "RACIMOS PROCESADOS",      tipo: "calc" },
-  { campo: "area_acres",          label: "AREA COSECHA DIA ACRES",  tipo: "raw" },
+  { campo: "acres",               label: "AREA COSECHA DIA ACRES",  tipo: "raw" },
   { campo: "_pct_area",           label: "% AREA COSECHA DIA",      tipo: "pct_area" },
   { campo: "factor_primera",      label: "FACTOR PRIMERA",          tipo: "calc" },
   { campo: "factor_general",      label: "FACTOR GENERAL",          tipo: "calc" },

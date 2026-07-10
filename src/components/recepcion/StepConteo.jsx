@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -120,20 +121,32 @@ export default function StepConteo({ info, onSave, onBack }) {
       const { data: trenada, error: createError } = await trenadas.create(data);
       if (createError) throw createError;
 
-      // Descontar cosechado de cada embolse usado
+      // Descontar cosechado de cada embolse usado.
+      // Si un update falla (p.ej. RLS), se registra en consola pero NO
+      // cancela la trenada ya guardada — se avisa al usuario por toast.
+      const updateErrors = [];
       await Promise.all(
         racimos.map(async r => {
           const embolse = embolses.find(e => e.id === r.embolse_id);
           if (!embolse) return;
           const newCosechado = (embolse.cosechado || 0) + r.count;
           const newSaldo = embolse.total - newCosechado - (embolse.perdidas || 0);
-          // FIXED: updateEmbolse() no existe → usar update() estándar de createEntity
-          await inventory.update(r.embolse_id, {
+          const { error: updErr } = await inventory.update(r.embolse_id, {
             cosechado: newCosechado,
             saldo: newSaldo,
           });
+          if (updErr) {
+            console.error("inventory.update error:", updErr);
+            updateErrors.push(updErr.message || updErr.code);
+          }
         })
       );
+
+      if (updateErrors.length > 0) {
+        toast.warning(
+          `Trenada guardada, pero hubo un error actualizando el inventario: ${updateErrors[0]}`
+        );
+      }
 
       return trenada;
     },
@@ -142,6 +155,13 @@ export default function StepConteo({ info, onSave, onBack }) {
       queryClient.invalidateQueries({ queryKey: ["trenadas"] });
       queryClient.invalidateQueries({ queryKey: ["embolses"] });
       onSave(result);
+    },
+    onError: (error) => {
+      // Error crítico: la trenada NO se guardó. Mostrar el error real.
+      console.error("saveMutation error:", error);
+      toast.error(
+        `No se pudo guardar la trenada: ${error?.message || error?.code || "Error desconocido"}`
+      );
     },
   });
 
