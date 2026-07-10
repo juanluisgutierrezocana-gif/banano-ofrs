@@ -808,34 +808,48 @@ export default function ProduccionReporteria() {
     [calidadesHistorial, vista, filtroDiario, filtroSemana, anioSeleccionado, filasHomeCodigos]
   );
 
-  // "Datos del Día" dentro de la card de Calidades — ahora lee de
-  // registros_produccion (misma fuente que ProduccionHome) en lugar de
-  // produccion_resumen (tabla manual que puede estar desactualizada).
+  // "Datos del Día" dentro de la card de Calidades — lee de registros_produccion.
+  // total_paletas se calcula desde calidades (cajas/caj_default) porque
+  // produccion_cajas_palet suele estar vacío.
   const filasParaDatosDelDia = useMemo(() => {
+    // ── lookup: caj_default por codigo de calidad ─────────────────────────
+    const cajDefaultPorCodigo = {};
+    calidadesProduccionRaw.forEach((c) => {
+      cajDefaultPorCodigo[c.codigo] = Number(c.caj_default) || 48;
+    });
+    // ── paletas por fecha: sum(cajas / caj_default) para cada día ─────────
+    const paletasPorFecha = {};
+    calidadesHistorial.forEach(({ fecha, codigo, total }) => {
+      if (!fecha || !total) return;
+      const cajPalet = cajDefaultPorCodigo[codigo] || 48;
+      paletasPorFecha[fecha] = (paletasPorFecha[fecha] || 0) + total / cajPalet;
+    });
+
     if (vista === "diario") {
-      const filas = registros.map((r) => registroToResumenFila(r, filasCajasPalet));
+      const filas = registros.map((r) => ({
+        ...registroToResumenFila(r, filasCajasPalet),
+        total_paletas: paletasPorFecha[r.fecha] != null
+          ? Math.round(paletasPorFecha[r.fecha])
+          : null,
+      }));
       return filtroDiario ? filas.filter((f) => f._label === filtroDiario) : filas;
     }
 
     if (vista === "semanal") {
-      // Agrupar registros por semana (lunes como clave)
       const map = {};
       registros.forEach((r) => {
         const lunes = r.fecha ? lunesDeSemanaDe(r.fecha) : null;
         if (!lunes) return;
         if (filtroSemana && lunes !== filtroSemana) return;
-        if (!map[lunes]) map[lunes] = { lunes, semana: numeroSemanaISO(lunes), regs: [], palets: [] };
+        if (!map[lunes]) map[lunes] = { lunes, semana: numeroSemanaISO(lunes), regs: [] };
         map[lunes].regs.push(r);
-        const diaKey = r.fecha ? diaKeyDeFecha(r.fecha) : null;
-        const fp = filasCajasPalet.find((cp) => cp.fecha_semana === lunes && cp.dia === diaKey);
-        if (fp) map[lunes].palets.push(Number(fp.palet) || 0);
       });
       return Object.entries(map)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([, d]) => {
           const agg = calcularDatosProcesoAgregado(d.regs);
           const sumAcres = d.regs.reduce((s, r) => s + (Number(r.acres) || 0), 0);
-          const sumPalet = d.palets.reduce((s, v) => s + v, 0);
+          const sumPalet = d.regs.reduce((s, r) => s + Math.round(paletasPorFecha[r.fecha] || 0), 0);
           return {
             _label:              `Sem ${d.semana}`,
             total_cajas:         agg.cajasTotal,
@@ -847,7 +861,7 @@ export default function ProduccionReporteria() {
             area_acres:          sumAcres,
             factor_primera:      agg.factorPrimera,
             factor_general:      agg.factorGeneral,
-            desperdicio_monte:   null, // no disponible en agregado semanal
+            desperdicio_monte:   null,
             desperdicio_general: agg.desperdicioGeneral,
             quintales_rechazo:   agg.quintalesRechazo,
           };
@@ -859,29 +873,23 @@ export default function ProduccionReporteria() {
     const mesMap = {};
     MESES.forEach((nombre, idx) => {
       const mesStr = String(idx + 1).padStart(2, "0");
-      mesMap[mesStr] = { nombre, regs: [], palets: [] };
+      mesMap[mesStr] = { nombre, regs: [] };
     });
     registros
       .filter((r) => r.fecha?.slice(0, 4) === anioStr)
       .forEach((r) => {
         const mesStr = r.fecha.slice(5, 7);
-        if (!mesMap[mesStr]) return;
-        mesMap[mesStr].regs.push(r);
-        const lunes  = r.fecha ? lunesDeSemanaDe(r.fecha) : null;
-        const diaKey = r.fecha ? diaKeyDeFecha(r.fecha) : null;
-        const fp = filasCajasPalet.find((cp) => cp.fecha_semana === lunes && cp.dia === diaKey);
-        if (fp) mesMap[mesStr].palets.push(Number(fp.palet) || 0);
+        if (mesMap[mesStr]) mesMap[mesStr].regs.push(r);
       });
     return Object.entries(mesMap)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, d]) => {
         if (d.regs.length === 0) {
-          // Mes sin datos: mostrar fila vacía
           return { _label: d.nombre, ...Object.fromEntries(CAMPOS_RESUMEN.map((c) => [c.field, null])) };
         }
         const agg = calcularDatosProcesoAgregado(d.regs);
         const sumAcres = d.regs.reduce((s, r) => s + (Number(r.acres) || 0), 0);
-        const sumPalet = d.palets.reduce((s, v) => s + v, 0);
+        const sumPalet = d.regs.reduce((s, r) => s + Math.round(paletasPorFecha[r.fecha] || 0), 0);
         return {
           _label:              d.nombre,
           total_cajas:         agg.cajasTotal,
@@ -898,7 +906,8 @@ export default function ProduccionReporteria() {
           quintales_rechazo:   agg.quintalesRechazo,
         };
       });
-  }, [registros, filasCajasPalet, vista, filtroDiario, filtroSemana, anioSeleccionado]);
+  }, [registros, filasCajasPalet, calidadesHistorial, calidadesProduccionRaw,
+      vista, filtroDiario, filtroSemana, anioSeleccionado]);
 
   // Construye la hoja de Excel de "Ingresar Datos" para la vista actual, o
   // null si no hay filas. La reutilizan los 3 botones de exportar (solo
@@ -974,16 +983,15 @@ export default function ProduccionReporteria() {
     });
   };
 
-  // Construye la hoja de Stats (produccion_resumen) para exportar en la nueva sección.
+  // Construye la hoja de Stats (Datos del Día) para exportar.
+  // Usa filasParaDatosDelDia (calculado desde registros_produccion) en lugar
+  // del antiguo filasProduccionActuales (produccion_resumen manual).
   const construirHojaStats = () => {
-    if (filasProduccionActuales.length === 0) return null;
+    if (filasParaDatosDelDia.length === 0) return null;
     const esAgregado = vista !== "diario";
     const headers = [etiquetaCol, ...camposResumenVisibles.map((c) => c.label)];
-    const filasExport = vista === "mensual"
-      ? [...filasProduccionActuales, resumenMensualProduccion.totalAno]
-      : filasProduccionActuales;
-    const rows = filasExport.map((f) => [
-      labelProduccion(f),
+    const rows = filasParaDatosDelDia.map((f) => [
+      f._label,
       ...camposResumenVisibles.map((c) => formatearCampoResumen(f[c.field], c.field, esAgregado)),
     ]);
     return { sheetName: "Datos del Día", title: `Datos del Día — ${tituloVistaActual}`, headers, rows };
