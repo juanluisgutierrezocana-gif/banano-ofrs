@@ -201,20 +201,22 @@ function agruparResumenPorMes(filas, anio) {
 // CALIDADES (espejo de ProduccionHome.FILAS_HOME — duplicada
 // intencionalmente: no debe cambiar si el admin edita calidades_produccion).
 // ============================================================
+// IMPORTANTE: codigo debe coincidir exactamente con calidades_produccion.codigo
+// (= produccion_semanal.codigo_producto). Los nombres viejos ("DMD", "PRIM",
+// etc.) eran de Base44/resumen_home y nunca hacían match con la tabla real.
 const FILAS_HOME = [
-  { codigo: "DMD",             codigoCorto: "C68",  calidad: "DMD" },
-  { codigo: "DM9",             codigoCorto: "C23",  calidad: "DM9" },
-  { codigo: "PRIM",            codigoCorto: "CH1",  calidad: "PRIM." },
-  { codigo: "PREM",            codigoCorto: "G01",  calidad: "PREM." },
-  { codigo: "3LB",             codigoCorto: "CQ2",  calidad: "3LB" },
-  { codigo: "IP",              codigoCorto: "CH7",  calidad: "IP" },
-  { codigo: "24COUNT",         codigoCorto: "C39",  calidad: "24 COUNT" },
-  { codigo: "24COUNT_G39",     codigoCorto: "G39",  calidad: "24 COUNT" },
-  { codigo: "ROSY NORMAL",     codigoCorto: "G05",  calidad: "ROSY NORMAL" },
-  { codigo: "ROSY CONSUMER",   codigoCorto: "GQ5",  calidad: "ROSY CONSUMER" },
-  { codigo: "DM BANABAC",      codigoCorto: "GP7",  calidad: "DM BANABAC" },
-  { codigo: "DM BANABAC MINI", codigoCorto: "GP7",  calidad: "DM BANABAC MINI" },
-  { codigo: "3LBS",            codigoCorto: "CP9",  calidad: "3 LBS" },
+  { codigo: "C68",  codigoCorto: "C68",  calidad: "DMD" },
+  { codigo: "C23",  codigoCorto: "C23",  calidad: "DM9" },
+  { codigo: "CH1",  codigoCorto: "CH1",  calidad: "PRIM." },
+  { codigo: "G01",  codigoCorto: "G01",  calidad: "PREM." },
+  { codigo: "CQ2",  codigoCorto: "CQ2",  calidad: "3LB" },
+  { codigo: "CH7",  codigoCorto: "CH7",  calidad: "IP" },
+  { codigo: "C39",  codigoCorto: "C39",  calidad: "24 COUNT" },
+  { codigo: "G39",  codigoCorto: "G39",  calidad: "24 COUNT." },
+  { codigo: "G05",  codigoCorto: "G05",  calidad: "ROSY NORMAL" },
+  { codigo: "CQ5",  codigoCorto: "CQ5",  calidad: "ROSY CONSUMER" },
+  { codigo: "GP7",  codigoCorto: "GP7",  calidad: "DM BANABAC" },
+  { codigo: "CP9",  codigoCorto: "CP9",  calidad: "3 LBS" },
 ];
 const FILAS_HOME_CODIGOS = FILAS_HOME.map((f) => f.codigo);
 
