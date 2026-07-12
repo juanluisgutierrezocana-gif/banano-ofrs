@@ -219,13 +219,13 @@ export default function ProduccionConfiguraciones() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="flex items-center gap-3 mb-8">
+      <div className="flex items-center gap-3 mb-4 sm:mb-8">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center"
           style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}>
           <Settings className="w-6 h-6 text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-heading font-bold text-foreground">Configuraciones</h1>
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground">Configuraciones</h1>
           <p className="text-muted-foreground text-sm">Producción</p>
         </div>
       </div>
@@ -260,7 +260,7 @@ export default function ProduccionConfiguraciones() {
           </p>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3 max-w-xs">
+          <div className="flex flex-wrap items-center gap-3">
             <Label htmlFor="acres-finca" className="text-sm font-medium whitespace-nowrap">
               TOTAL ACRES FINCA
             </Label>
@@ -272,7 +272,7 @@ export default function ProduccionConfiguraciones() {
               placeholder="260.6"
               value={acresFinca}
               onChange={(e) => setAcresFinca(e.target.value)}
-              className="w-32"
+              className="w-28"
             />
             <Button size="sm" onClick={handleGuardarAcres} disabled={guardandoAcres}>
               <Save className="w-3.5 h-3.5" />

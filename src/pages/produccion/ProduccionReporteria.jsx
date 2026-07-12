@@ -1261,42 +1261,7 @@ export default function ProduccionReporteria() {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Sub-tabla 1: Datos del Día — ahora lee de registros_produccion
-               (misma fuente que ProduccionHome) para mostrar los datos
-               del día actual sin necesidad de guardar en produccion_resumen */}
-          {filasParaDatosDelDia.length > 0 && (
-            <div className="mb-6">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                Datos del Día
-              </p>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-center text-muted-foreground border-b bg-muted/30 text-xs">
-                      <th className="py-2 px-2 whitespace-nowrap text-left">{etiquetaCol}</th>
-                      {camposResumenVisibles.map((c) => (
-                        <th key={c.field} className="py-2 px-2 whitespace-nowrap">{c.label}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filasParaDatosDelDia.map((f, i) => (
-                      <tr key={i} className="border-b last:border-0 hover:bg-muted/30 text-center">
-                        <td className="py-2 px-2 font-medium text-left whitespace-nowrap">{f._label}</td>
-                        {camposResumenVisibles.map((c) => (
-                          <td key={c.field} className="py-2 px-2">
-                            {formatearCampoResumen(f[c.field], c.field, vista !== "diario")}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Sub-tabla 2: Calidades (resumen_home) */}
+          {/* Calidades (resumen_home) */}
           {filasCalidades.length > 0 ? (
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
