@@ -62,9 +62,10 @@ function diaKeyDeFecha(fechaStr) {
 }
 
 // Agrupa los registros diarios por semana (lunes a sábado) y suma el
-// Total Palet correspondiente desde produccion_cajas_palet.
+// Total Palet usando paletasPorFecha (mapa fecha→paletas calculado desde
+// produccion_semanal + caj_default — reemplaza produccion_cajas_palet vacía).
 // areaTotalFinca: para recalcular % Recorrido = sum(acres) / areaTotalFinca.
-function agruparPorSemana(registros, filasCajasPalet, areaTotalFinca = 260.6) {
+function agruparPorSemana(registros, paletasPorFecha, areaTotalFinca = 260.6) {
   const grupos = {};
   registros.forEach((r) => {
     if (!r.fecha) return;
@@ -76,9 +77,10 @@ function agruparPorSemana(registros, filasCajasPalet, areaTotalFinca = 260.6) {
   return Object.entries(grupos)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([lunes, filas]) => {
-      const totalPalet = filasCajasPalet
-        .filter((cp) => cp.fecha_semana === lunes)
-        .reduce((acc, cp) => acc + (Number(cp.palet) || 0), 0);
+      const totalPalet = filas.reduce(
+        (acc, r) => acc + (paletasPorFecha[r.fecha] || 0),
+        0
+      );
       const sumAcres = filas.reduce((acc, r) => acc + (Number(r.acres) || 0), 0);
       const pctRecorrido = areaTotalFinca > 0 ? sumAcres / areaTotalFinca : 0;
       return {
@@ -101,7 +103,8 @@ const MESES = [
 // TOTAL recalculada sobre el año completo (no es la suma de los factores
 // mensuales — mismo criterio "recalcular sobre sumas" del resto del archivo).
 // areaTotalFinca: para recalcular % Recorrido = sum(acres) / areaTotalFinca.
-function agruparPorMes(registros, filasCajasPalet, anio, areaTotalFinca = 260.6) {
+// paletasPorFecha: mapa fecha→paletas calculado desde produccion_semanal.
+function agruparPorMes(registros, paletasPorFecha, anio, areaTotalFinca = 260.6) {
   const anioStr = String(anio);
   const registrosDelAno = registros.filter((r) => r.fecha?.slice(0, 4) === anioStr);
 
@@ -109,9 +112,10 @@ function agruparPorMes(registros, filasCajasPalet, anio, areaTotalFinca = 260.6)
     const mesNum = idx + 1;
     const mesStr = String(mesNum).padStart(2, "0");
     const registrosDelMes = registrosDelAno.filter((r) => r.fecha.slice(5, 7) === mesStr);
-    const totalPalet = filasCajasPalet
-      .filter((cp) => cp.fecha_semana?.slice(0, 4) === anioStr && cp.fecha_semana?.slice(5, 7) === mesStr)
-      .reduce((acc, cp) => acc + (Number(cp.palet) || 0), 0);
+    const totalPalet = registrosDelMes.reduce(
+      (acc, r) => acc + (paletasPorFecha[r.fecha] || 0),
+      0
+    );
     const sumAcres = registrosDelMes.reduce((acc, r) => acc + (Number(r.acres) || 0), 0);
     const pctRecorrido = areaTotalFinca > 0 ? sumAcres / areaTotalFinca : 0;
     return {
@@ -124,9 +128,10 @@ function agruparPorMes(registros, filasCajasPalet, anio, areaTotalFinca = 260.6)
     };
   });
 
-  const totalPaletAno = filasCajasPalet
-    .filter((cp) => cp.fecha_semana?.slice(0, 4) === anioStr)
-    .reduce((acc, cp) => acc + (Number(cp.palet) || 0), 0);
+  const totalPaletAno = registrosDelAno.reduce(
+    (acc, r) => acc + (paletasPorFecha[r.fecha] || 0),
+    0
+  );
 
   const sumAcresAno = registrosDelAno.reduce((acc, r) => acc + (Number(r.acres) || 0), 0);
   const pctRecorridoAno = areaTotalFinca > 0 ? sumAcresAno / areaTotalFinca : 0;
@@ -414,15 +419,14 @@ const CAMPOS_EDITAR_DIARIO = [
 ];
 
 // Construye la fila normalizada (mismas 18 claves) para cada granularidad.
+// paletasPorFecha: mapa fecha→paletas (desde produccion_semanal + caj_default).
 // areaTotalFinca: para % Recorrido = acres / areaTotalFinca (corrección cliente).
-function normalizarDiario(r, filasCajasPalet, costosMap, areaTotalFinca = 260.6) {
+function normalizarDiario(r, paletasPorFecha, costosMap, areaTotalFinca = 260.6) {
   const c = calcularDatosProceso(r);
   // Sobreescribir pctRecorrido con la fórmula correcta del cliente
   const pctRecorrido = areaTotalFinca > 0 ? (Number(r.acres) || 0) / areaTotalFinca : 0;
-  const lunes = r.fecha ? lunesDeSemanaDe(r.fecha) : null;
-  const diaKey = r.fecha ? diaKeyDeFecha(r.fecha) : null;
-  const filaPalet = filasCajasPalet.find((cp) => cp.fecha_semana === lunes && cp.dia === diaKey);
-  const totalPalet = filaPalet ? Number(filaPalet.palet) || 0 : 0;
+  // Total Palet: calculado desde produccion_semanal (cajas/caj_default por calidad)
+  const totalPalet = r.fecha ? (paletasPorFecha[r.fecha] || 0) : 0;
   const cajasTercera = Number(r.cajas_tercera) || 0;
   return {
     id: r.id,
@@ -641,6 +645,25 @@ export default function ProduccionReporteria() {
     [filasHome]
   );
 
+  // paletasPorFecha: mapa fecha → total paletas del día.
+  // Calculado desde produccion_semanal (calidadesHistorial = filas diarias con
+  // { fecha, codigo, total }) y el catálogo de caj_default por calidad.
+  // Reemplaza la lectura de produccion_cajas_palet (tabla vacía) en todas las
+  // funciones de normalización (normalizarDiario, agruparPorSemana, agruparPorMes).
+  const paletasPorFecha = useMemo(() => {
+    const cajDefaultPorCodigo = {};
+    calidadesProduccionRaw.forEach((c) => {
+      cajDefaultPorCodigo[c.codigo] = Number(c.caj_default) || 48;
+    });
+    const map = {};
+    calidadesHistorial.forEach(({ fecha, codigo, total }) => {
+      if (!fecha || !total) return;
+      const cajPalet = cajDefaultPorCodigo[codigo] || 48;
+      map[fecha] = (map[fecha] || 0) + total / cajPalet;
+    });
+    return map;
+  }, [calidadesHistorial, calidadesProduccionRaw]);
+
   // Total acres finca (configurable desde Configuraciones, fallback 260.6).
   const { data: acresConfig } = useQuery({
     queryKey: ["settings-acres-finca-reporteria"],
@@ -722,8 +745,8 @@ export default function ProduccionReporteria() {
   };
 
   const resumenSemanal = useMemo(
-    () => agruparPorSemana(registros, filasCajasPalet, areaTotalFinca),
-    [registros, filasCajasPalet, areaTotalFinca]
+    () => agruparPorSemana(registros, paletasPorFecha, areaTotalFinca),
+    [registros, paletasPorFecha, areaTotalFinca]
   );
 
   // Años con datos (más el año actual, para que siempre haya algo que
@@ -737,8 +760,8 @@ export default function ProduccionReporteria() {
   const [anioSeleccionado, setAnioSeleccionado] = useState(() => String(new Date().getFullYear()));
 
   const resumenMensual = useMemo(
-    () => agruparPorMes(registros, filasCajasPalet, anioSeleccionado, areaTotalFinca),
-    [registros, filasCajasPalet, anioSeleccionado, areaTotalFinca]
+    () => agruparPorMes(registros, paletasPorFecha, anioSeleccionado, areaTotalFinca),
+    [registros, paletasPorFecha, anioSeleccionado, areaTotalFinca]
   );
 
   const costosMap = useMemo(() => {
@@ -752,8 +775,8 @@ export default function ProduccionReporteria() {
   const recargarCostos = () => queryClient.invalidateQueries({ queryKey: ["produccion-costos"] });
 
   const filasDiario = useMemo(
-    () => registros.map((r) => normalizarDiario(r, filasCajasPalet, costosMap, areaTotalFinca)),
-    [registros, filasCajasPalet, costosMap, areaTotalFinca]
+    () => registros.map((r) => normalizarDiario(r, paletasPorFecha, costosMap, areaTotalFinca)),
+    [registros, paletasPorFecha, costosMap, areaTotalFinca]
   );
   const filasSemanal = useMemo(
     () => resumenSemanal.map((s) => normalizarSemana(s, costosMap)),
