@@ -216,22 +216,22 @@ export default function ProduccionIngresar() {
       const fila = filasSemana.find((f) => f.codigo_producto === codigo);
       inicial[codigo] = {
         id: fila?.id ?? null,
-        lunes: fila?.lunes ?? "",
-        martes: fila?.martes ?? "",
+        lunes:    fila?.lunes    ?? "",
+        martes:   fila?.martes   ?? "",
         miercoles: fila?.miercoles ?? "",
-        jueves: fila?.jueves ?? "",
-        viernes: fila?.viernes ?? "",
-        sabado: fila?.sabado ?? "",
+        jueves:   fila?.jueves   ?? "",
+        viernes:  fila?.viernes  ?? "",
+        sabado:   fila?.sabado   ?? "",
+        domingo:  fila?.domingo  ?? "",   // columna añadida a produccion_semanal
         meta: fila?.meta ?? "",
-        // Caj.Prog: igual patrón que lunes..sabado, una columna por día
-        // (decisión confirmada con el cliente: debe guardarse permanente
-        // y distinto cada día, no una sola meta semanal).
-        caj_prog_lunes: fila?.caj_prog_lunes ?? "",
-        caj_prog_martes: fila?.caj_prog_martes ?? "",
+        // Caj.Prog: una columna por día (lunes..domingo)
+        caj_prog_lunes:     fila?.caj_prog_lunes     ?? "",
+        caj_prog_martes:    fila?.caj_prog_martes    ?? "",
         caj_prog_miercoles: fila?.caj_prog_miercoles ?? "",
-        caj_prog_jueves: fila?.caj_prog_jueves ?? "",
-        caj_prog_viernes: fila?.caj_prog_viernes ?? "",
-        caj_prog_sabado: fila?.caj_prog_sabado ?? "",
+        caj_prog_jueves:    fila?.caj_prog_jueves    ?? "",
+        caj_prog_viernes:   fila?.caj_prog_viernes   ?? "",
+        caj_prog_sabado:    fila?.caj_prog_sabado    ?? "",
+        caj_prog_domingo:   fila?.caj_prog_domingo   ?? "",  // columna añadida
       };
     });
     setValoresGrid(inicial);
