@@ -32,7 +32,7 @@ function lunesDeSemanaDe(fechaStr) {
   return lunes.toISOString().slice(0, 10);
 }
 
-const DIA_INDICE_A_CLAVE = { 1: "lunes", 2: "martes", 3: "miercoles", 4: "jueves", 5: "viernes", 6: "sabado" };
+const DIA_INDICE_A_CLAVE = { 0: "domingo", 1: "lunes", 2: "martes", 3: "miercoles", 4: "jueves", 5: "viernes", 6: "sabado" };
 function diaKeyDeFecha(fechaStr) {
   if (!fechaStr) return null;
   const fecha = new Date(fechaStr + "T00:00:00");
@@ -251,12 +251,6 @@ export default function ProduccionHome() {
         </CardContent>
       </Card>
 
-      {/* Aviso si es domingo */}
-      {!diaActual && (
-        <p className="text-sm text-muted-foreground text-center mb-6">
-          La fecha seleccionada es domingo — no hay columna de datos para ese día.
-        </p>
-      )}
 
       {/* ── Layout 3 columnas: stats | calidades | pie chart ── */}
       <div className="overflow-x-auto pb-2">
@@ -307,10 +301,6 @@ export default function ProduccionHome() {
             <CardContent>
               {cargandoSemanal ? (
                 <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
-              ) : !diaActual ? (
-                <p className="text-muted-foreground text-sm text-center py-8">
-                  Sin columna para domingo.
-                </p>
               ) : (
                 <table className="text-sm border-collapse">
                   <thead>
