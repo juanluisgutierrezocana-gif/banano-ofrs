@@ -53,9 +53,9 @@ function numeroSemanaISO(lunesStr) {
   return Math.ceil(((d - inicioAno) / 86400000 + 1) / 7);
 }
 
-// Clave de día (lunes..sabado, igual que produccion_cajas_palet.dia) para
-// la fecha recibida. Devuelve null en domingo (no hay columna ese día).
-const DIA_INDICE_A_CLAVE = { 1: "lunes", 2: "martes", 3: "miercoles", 4: "jueves", 5: "viernes", 6: "sabado" };
+// Clave de día (lunes..domingo) para la fecha recibida.
+// Domingo tiene su propia columna en produccion_semanal.
+const DIA_INDICE_A_CLAVE = { 0: "domingo", 1: "lunes", 2: "martes", 3: "miercoles", 4: "jueves", 5: "viernes", 6: "sabado" };
 function diaKeyDeFecha(fechaStr) {
   const fecha = new Date(fechaStr + "T00:00:00");
   return DIA_INDICE_A_CLAVE[fecha.getDay()] ?? null;
@@ -221,6 +221,7 @@ function expandirSemanalADiario(filasSemana) {
     { key: "jueves",    delta: 3 },
     { key: "viernes",   delta: 4 },
     { key: "sabado",    delta: 5 },
+    { key: "domingo",   delta: 6 },
   ];
   const result = [];
   filasSemana.forEach((f) => {

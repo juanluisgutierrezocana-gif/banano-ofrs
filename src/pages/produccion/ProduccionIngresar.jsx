@@ -29,16 +29,19 @@ import { useAuth } from "@/lib/AuthContext";
 const AREA_TOTAL_FINCA_ACRES = 260.6;
 
 const DIAS_SEMANA = [
-  { key: "lunes", label: "Lunes" },
-  { key: "martes", label: "Martes" },
+  { key: "lunes",    label: "Lunes" },
+  { key: "martes",   label: "Martes" },
   { key: "miercoles", label: "Miércoles" },
-  { key: "jueves", label: "Jueves" },
-  { key: "viernes", label: "Viernes" },
-  { key: "sabado", label: "Sábado" },
+  { key: "jueves",   label: "Jueves" },
+  { key: "viernes",  label: "Viernes" },
+  { key: "sabado",   label: "Sábado" },
+  { key: "domingo",  label: "Domingo" },
 ];
 
 // Devuelve la fecha (YYYY-MM-DD) del lunes de la semana que contiene
 // `fechaStr`. Si no se pasa fechaStr, usa la semana actual.
+// Para domingo se usa el lunes de la semana anterior (la semana lun-dom
+// a la que pertenece ese domingo).
 function lunesDeSemanaDe(fechaStr) {
   const fecha = fechaStr ? new Date(fechaStr + "T00:00:00") : new Date();
   const diaSemana = fecha.getDay(); // 0 = domingo
@@ -49,19 +52,12 @@ function lunesDeSemanaDe(fechaStr) {
 }
 
 // Día de la semana (clave de DIAS_SEMANA) correspondiente a `fechaStr`.
-// Domingo (0) mapea a "sabado": muestra la última columna de la semana
-// en modo solo lectura, sin bloquear la página.
-const DIA_INDICE_A_CLAVE = { 0: "sabado", 1: "lunes", 2: "martes", 3: "miercoles", 4: "jueves", 5: "viernes", 6: "sabado" };
+// Domingo (0) tiene su propia columna "domingo" en produccion_semanal.
+const DIA_INDICE_A_CLAVE = { 0: "domingo", 1: "lunes", 2: "martes", 3: "miercoles", 4: "jueves", 5: "viernes", 6: "sabado" };
 function diaKeyDeFecha(fechaStr) {
   if (!fechaStr) return null;
   const fecha = new Date(fechaStr + "T00:00:00");
   return DIA_INDICE_A_CLAVE[fecha.getDay()] ?? null;
-}
-// Devuelve true cuando la fecha seleccionada es domingo (no hay columna
-// propia, se muestra sábado en solo lectura).
-function esDomingoDeFecha(fechaStr) {
-  if (!fechaStr) return false;
-  return new Date(fechaStr + "T00:00:00").getDay() === 0;
 }
 
 const numeroSemana = (v) => {
@@ -161,8 +157,6 @@ export default function ProduccionIngresar() {
   const semana = lunesDeSemanaDe(fechaSeleccionada);
   const diaActual = diaKeyDeFecha(fechaSeleccionada);
   const diaActualLabel = DIAS_SEMANA.find((d) => d.key === diaActual)?.label ?? null;
-  // Domingo: muestra columna sábado pero deshabilita edición.
-  const esDomingo = esDomingoDeFecha(fechaSeleccionada);
 
   const { data: filasSemana = [], isLoading: cargandoGrid } = useQuery({
     queryKey: ["produccion-semanal", semana],
@@ -809,9 +803,7 @@ export default function ProduccionIngresar() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Producción Semanal por Código</CardTitle>
           <p className="text-xs text-muted-foreground pt-1">
-            {esDomingo
-              ? `Domingo — visualizando sábado (semana del ${semana}). Solo lectura.`
-              : diaActualLabel
+            {diaActualLabel
               ? `Mostrando: ${diaActualLabel} (semana del ${semana}) — según la fecha de arriba.`
               : ""}
           </p>
@@ -848,7 +840,7 @@ export default function ProduccionIngresar() {
                           className={inputClaseSemana}
                           value={valoresGrid[codigo]?.[diaActual] ?? ""}
                           onChange={(e) => handleChangeGrid(codigo, diaActual, e.target.value)}
-                          disabled={esDomingo || (tieneDataHoy && !modoEdicionSemanal)}
+                          disabled={tieneDataHoy && !modoEdicionSemanal}
                           placeholder="—"
                         />
                       </td>
@@ -870,7 +862,7 @@ export default function ProduccionIngresar() {
 
               {/* Botones al fondo — mismo patrón que "Nuevo Registro Diario" */}
               <div className="flex gap-2 mt-3 flex-wrap">
-                {!esDomingo && (!tieneDataHoy || modoEdicionSemanal) && (
+                {(!tieneDataHoy || modoEdicionSemanal) && (
                   <Button onClick={handleGuardarGrid} disabled={savingGrid || !diaActual}>
                     <Plus className="w-4 h-4" />
                     {savingGrid ? "Guardando..." : "Guardar"}
@@ -963,9 +955,7 @@ export default function ProduccionIngresar() {
             Resumen de Producción
           </CardTitle>
           <p className="text-xs text-muted-foreground pt-1">
-            {esDomingo
-              ? `Domingo — visualizando sábado (semana del ${semana}). Solo lectura.`
-              : diaActualLabel
+            {diaActualLabel
               ? `Mostrando: ${diaActualLabel} (semana del ${semana}) — según la fecha de arriba.`
               : ""}
           </p>
@@ -1011,7 +1001,7 @@ export default function ProduccionIngresar() {
                               className={inputClaseSemana}
                               value={valoresGrid[calidad]?.[campoCajProg] ?? ""}
                               onChange={(e) => handleChangeGrid(calidad, campoCajProg, e.target.value)}
-                              disabled={esDomingo || (tieneProgHoy && !modoEdicionResumen)}
+                              disabled={tieneProgHoy && !modoEdicionResumen}
                             />
                           </td>
                           <td className="py-1 px-1 font-medium">
@@ -1053,7 +1043,7 @@ export default function ProduccionIngresar() {
 
               {/* Botones Resumen — independientes de la tabla Producción Semanal */}
               <div className="flex gap-2 mt-3 flex-wrap">
-                {!esDomingo && (!tieneProgHoy || modoEdicionResumen) && (
+                {(!tieneProgHoy || modoEdicionResumen) && (
                   <Button onClick={handleGuardarResumen} disabled={savingResumen || !diaActual}>
                     <Plus className="w-4 h-4" />
                     {savingResumen ? "Guardando..." : "Guardar"}
