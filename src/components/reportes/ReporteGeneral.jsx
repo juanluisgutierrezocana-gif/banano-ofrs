@@ -37,12 +37,27 @@ const { data: buttons = [] } = useQuery({
 });
 
   const colorKeys = useMemo(() => {
-    const keys = new Set();
-    // Primero incluir todos los botones activos
-    buttons.forEach(btn => keys.add(`${btn.color_name} S${btn.week_age}`));
-    // Luego incluir los que vengan en trenadaRecords (por si hay datos de botones ya eliminados)
-    trenadaRecords.forEach(t => (t.racimos || []).forEach(r => keys.add(`${r.color_name} S${r.week_age}`)));
-    return Array.from(keys);
+    // Columnas a partir de datos reales de racimos guardados.
+    // NO mezclamos con button_config para evitar duplicados con ceros:
+    // si el color_name en button_config difiere del guardado en el racimo
+    // (mayúsculas, espacios) el Set crea dos entradas distintas → columna
+    // duplicada con cero en el export.
+    const racimoKeys = new Set();
+    trenadaRecords.forEach(t =>
+      (t.racimos || []).forEach(r => racimoKeys.add(`${r.color_name} S${r.week_age}`))
+    );
+
+    if (racimoKeys.size > 0) {
+      // Hay datos: solo mostrar las columnas que realmente tienen información
+      return Array.from(racimoKeys);
+    }
+
+    // Sin registros en el día: usar los botones activos como plantilla de columnas vacías
+    const buttonKeys = new Set();
+    buttons.forEach(btn =>
+      buttonKeys.add(`${btn.color_name ?? btn.button_name} S${btn.week_age ?? ""}`)
+    );
+    return Array.from(buttonKeys);
   }, [trenadaRecords, buttons]);
 
   const exportExcel = () => {

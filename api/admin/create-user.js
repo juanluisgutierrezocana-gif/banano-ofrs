@@ -92,6 +92,10 @@ export async function POST(request) {
   }
 
   // --- 3. Crear el usuario en Supabase Auth (ya confirmado, sin correo) ---
+  // Si el email ya existe en Auth (fue borrado de la app pero no de Auth),
+  // reutilizamos el auth user existente en lugar de fallar.
+  let authUserId;
+
   const { data: newAuthUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
@@ -100,14 +104,47 @@ export async function POST(request) {
   });
 
   if (createError) {
-    console.error('Error creando usuario en Auth:', createError);
-    const status = createError.status && createError.status >= 400 ? createError.status : 500;
-    return Response.json({ error: createError.message }, { status });
+    // Código/mensaje que Supabase devuelve cuando el email ya existe en auth.users
+    const isAlreadyExists =
+      createError.message?.toLowerCase().includes('already been registered') ||
+      createError.message?.toLowerCase().includes('already registered') ||
+      createError.code === 'email_exists';
+
+    if (!isAlreadyExists) {
+      console.error('Error creando usuario en Auth:', createError);
+      const status = createError.status && createError.status >= 400 ? createError.status : 500;
+      return Response.json({ error: createError.message }, { status });
+    }
+
+    // El email existe en Auth pero no tiene perfil en la app (fue eliminado).
+    // Buscar el auth user existente para reusar su ID y solo crear el perfil.
+    const { data: { users: existingAuthUsers }, error: listError } =
+      await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+
+    if (listError) {
+      console.error('Error buscando auth user existente:', listError);
+      return Response.json({ error: 'Error al verificar el usuario existente' }, { status: 500 });
+    }
+
+    const existingAuthUser = existingAuthUsers?.find(u => u.email === email);
+    if (!existingAuthUser) {
+      return Response.json({ error: 'El email ya está registrado pero no se pudo recuperar' }, { status: 500 });
+    }
+
+    // Actualizar contraseña y nombre por si cambió
+    await supabaseAdmin.auth.admin.updateUserById(existingAuthUser.id, {
+      password,
+      user_metadata: full_name ? { full_name } : undefined,
+    });
+
+    authUserId = existingAuthUser.id;
+  } else {
+    authUserId = newAuthUser.user.id;
   }
 
   // --- 4. Crear su fila en public.users (perfil de la app) ---
   const { error: profileError } = await supabaseAdmin.from('users').insert([{
-    id: newAuthUser.user.id,
+    id: authUserId,
     email,
     full_name: full_name || null,
     role,
@@ -116,14 +153,17 @@ export async function POST(request) {
 
   if (profileError) {
     // Si el perfil falla, no dejamos un usuario "fantasma" que puede
-    // iniciar sesión pero no tiene perfil ni finca: se revierte el alta en Auth.
-    console.error('Error creando perfil en users, revirtiendo Auth:', profileError);
-    await supabaseAdmin.auth.admin.deleteUser(newAuthUser.user.id);
+    // iniciar sesión pero no tiene perfil ni finca: se revierte el alta en Auth
+    // SOLO si fue un usuario recién creado (no si era uno ya existente).
+    console.error('Error creando perfil en users:', profileError);
+    if (newAuthUser) {
+      await supabaseAdmin.auth.admin.deleteUser(authUserId);
+    }
     return Response.json({ error: 'Error de base de datos al crear el perfil' }, { status: 500 });
   }
 
   return Response.json({
-    id: newAuthUser.user.id,
+    id: authUserId,
     email,
     full_name: full_name || null,
     role,
