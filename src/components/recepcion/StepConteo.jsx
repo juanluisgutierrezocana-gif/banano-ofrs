@@ -92,10 +92,23 @@ export default function StepConteo({ info, onSave, onBack }) {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const today = info.fecha || format(new Date(), "yyyy-MM-dd");
-      // FIXED: trenadas.filter() retorna { data, error } — debe unwrapearse antes de usar .length
-      const { data: existing = [], error: existingError } = await trenadas.filter({ fecha: today });
+      const fincaId = currentUser?.finca_id ?? null;
+
+      // Filtrar EXPLÍCITAMENTE por finca_id para no depender del RLS.
+      // Usar MAX(correlativo) en vez de COUNT para ser robusto ante huecos
+      // o conflictos por concurrencia entre usuarios de la misma finca.
+      const { data: existingRaw = [], error: existingError } = await supabase
+        .from("trenadas")
+        .select("correlativo")
+        .eq("fecha", today)
+        .eq("finca_id", fincaId);
       if (existingError) throw existingError;
-      const correlativo = existing.length + 1;
+
+      const maxCorrelativo = (existingRaw ?? []).reduce(
+        (max, t) => Math.max(max, t.correlativo || 0),
+        0
+      );
+      const correlativo = maxCorrelativo + 1;
 
       const racimos = buttons
         .filter(b => (counts[b.id] || 0) > 0)
