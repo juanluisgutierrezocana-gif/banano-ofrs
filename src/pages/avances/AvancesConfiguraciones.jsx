@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 // FIXED: importar seccionAgricola (tabla: seccion_agricola) en lugar de sections (tabla: sections)
 // Las secciones agrícolas tienen: nombre, acres, minifinca, activa — distinto de sections (name, active)
-import { seccionAgricola, laborAgricola } from "@/api/supabaseClient";
+import { supabase, seccionAgricola, laborAgricola } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,10 @@ export default function AvancesConfiguraciones() {
   const [formSeccion, setFormSeccion] = useState(emptySeccion);
   const [savingSeccion, setSavingSeccion] = useState(false);
   const [deletingSeccionId, setDeletingSeccionId] = useState(null);
+
+  // Estado de edición inline para secciones
+  const [editingSeccion, setEditingSeccion] = useState(null); // { id, nombre, acres, minifinca }
+  const [savingEditSeccion, setSavingEditSeccion] = useState(false);
 
   const [formLabor, setFormLabor] = useState(emptyLabor);
   const [savingLabor, setSavingLabor] = useState(false);
@@ -77,6 +81,38 @@ export default function AvancesConfiguraciones() {
     await seccionAgricola.delete(id);
     queryClient.invalidateQueries({ queryKey: ["secciones-agricolas"] });
     setDeletingSeccionId(null);
+  };
+
+  const handleSaveEditSeccion = async () => {
+    if (!editingSeccion?.nombre?.trim() || !editingSeccion?.acres || !editingSeccion?.minifinca?.trim()) return;
+    setSavingEditSeccion(true);
+
+    const nuevoNombre = editingSeccion.nombre.trim();
+    const nuevaMinifinca = editingSeccion.minifinca.trim();
+    const nuevosAcres = parseFloat(editingSeccion.acres);
+
+    // 1. Actualizar la sección en seccion_agricola
+    const { error: secError } = await seccionAgricola.update(editingSeccion.id, {
+      nombre: nuevoNombre,
+      acres: nuevosAcres,
+      minifinca: nuevaMinifinca,
+    });
+    if (secError) {
+      setSavingEditSeccion(false);
+      return;
+    }
+
+    // 2. Propagar nombre y minifinca a registros_labor (texto denormalizado).
+    //    acres no se guarda en registros_labor, solo en seccion_agricola.
+    await supabase
+      .from("registros_labor")
+      .update({ seccion_nombre: nuevoNombre, minifinca: nuevaMinifinca })
+      .eq("seccion_id", editingSeccion.id);
+
+    queryClient.invalidateQueries({ queryKey: ["secciones-agricolas"] });
+    queryClient.invalidateQueries({ queryKey: ["registros-labor"] });
+    setEditingSeccion(null);
+    setSavingEditSeccion(false);
   };
 
   // Labores
@@ -222,28 +258,73 @@ export default function AvancesConfiguraciones() {
                 <p className="text-muted-foreground text-sm text-center py-8">No hay secciones aún.</p>
               ) : (
                 <div className="space-y-3">
-                  {secciones.map((s) => (
-                    <div key={s.id}
-                      className="flex items-center justify-between p-4 rounded-xl border bg-muted/30 hover:bg-muted/50 transition-colors">
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <TreePine className="w-4 h-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-foreground">{s.nombre}</p>
-                          <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1"><Layers className="w-3 h-3" /> {s.acres} acres</span>
-                            <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {s.minifinca}</span>
+                  {secciones.map((s) => {
+                    const isEditingThis = editingSeccion?.id === s.id;
+                    return (
+                      <div key={s.id}
+                        className="flex items-center justify-between p-4 rounded-xl border bg-muted/30 hover:bg-muted/50 transition-colors">
+                        {isEditingThis ? (
+                          /* ---- Modo edición inline ---- */
+                          <div className="flex items-center gap-2 flex-1 flex-wrap">
+                            <Input
+                              className="h-7 text-sm w-36"
+                              placeholder="Nombre"
+                              value={editingSeccion.nombre}
+                              onChange={(e) => setEditingSeccion({ ...editingSeccion, nombre: e.target.value })}
+                              autoFocus
+                            />
+                            <Input
+                              className="h-7 text-sm w-20"
+                              type="number" min="0" step="0.01"
+                              placeholder="Acres"
+                              value={editingSeccion.acres}
+                              onChange={(e) => setEditingSeccion({ ...editingSeccion, acres: e.target.value })}
+                            />
+                            <Input
+                              className="h-7 text-sm w-28"
+                              placeholder="Minifinca"
+                              value={editingSeccion.minifinca}
+                              onChange={(e) => setEditingSeccion({ ...editingSeccion, minifinca: e.target.value })}
+                              onKeyDown={(e) => { if (e.key === "Enter") handleSaveEditSeccion(); if (e.key === "Escape") setEditingSeccion(null); }}
+                            />
+                            <Button size="icon" className="h-7 w-7" onClick={handleSaveEditSeccion} disabled={savingEditSeccion}>
+                              <Check className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingSeccion(null)}>
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
                           </div>
-                        </div>
+                        ) : (
+                          /* ---- Modo visualización ---- */
+                          <>
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <TreePine className="w-4 h-4 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-foreground">{s.nombre}</p>
+                                <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                                  <span className="flex items-center gap-1"><Layers className="w-3 h-3" /> {s.acres} acres</span>
+                                  <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {s.minifinca}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                onClick={() => setEditingSeccion({ id: s.id, nombre: s.nombre, acres: String(s.acres ?? ""), minifinca: s.minifinca ?? "" })}>
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteSeccion(s.id)} disabled={deletingSeccionId === s.id}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </>
+                        )}
                       </div>
-                      <Button variant="ghost" size="icon"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => handleDeleteSeccion(s.id)} disabled={deletingSeccionId === s.id}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

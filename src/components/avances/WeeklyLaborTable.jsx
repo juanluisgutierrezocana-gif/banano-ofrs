@@ -47,10 +47,12 @@ export default function WeeklyLaborTable() {
   const activeLaborFiltered = labores.filter((l) => l.activa !== false);
 
   return (
-    <div className="overflow-x-auto">
+    // overflow-auto + max-h permiten scroll vertical; sticky top-0 en el header
+    // requiere que el scroll container tenga overflow-y (no solo overflow-x).
+    <div className="overflow-auto max-h-[520px]">
       <Table className="text-xs">
         <TableHeader>
-          <TableRow className="bg-muted/50">
+          <TableRow className="bg-muted sticky top-0 z-10">
             <TableHead className="w-12 font-bold">Semana</TableHead>
             {activeLaborFiltered.map((labor) => (
               <TableHead key={labor.id} className="text-center font-bold min-w-32">

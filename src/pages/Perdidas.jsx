@@ -3,11 +3,16 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Save, ShieldOff, Pencil, Check, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Save, ShieldOff, Pencil, Check, X, Download } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useRole } from "@/hooks/useRole";
 import { useQueryClient } from "@tanstack/react-query";
+import { exportStyledExcel } from "@/utils/excelExport";
+
+// Causas predefinidas de pérdidas
+const CAUSAS = ["VIENTO", "CAÍDO", "ROBO", "PLAGA", "OTRO"];
 
 function pct(num, total) {
   if (!total) return 0;
@@ -17,7 +22,9 @@ function pct(num, total) {
 export default function Perdidas() {
   const { isViewer } = useRole();
   const queryClient = useQueryClient();
-  const [inputs, setInputs] = useState({});
+  const [inputs, setInputs] = useState({});       // cantidad por embolse_id
+  const [noSemanas, setNoSemanas] = useState({});  // no_semana por embolse_id
+  const [causas, setCausas] = useState({});        // causa por embolse_id
   const [saving, setSaving] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [editVal, setEditVal] = useState("");
@@ -26,6 +33,16 @@ export default function Perdidas() {
     queryKey: ["embolses"],
     queryFn: async () => {
       const { data, error } = await inventory.listEmbolse("-semana");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  // Cargar registros detallados de pérdidas para el export
+  const { data: registrosPerdidas = [] } = useQuery({
+    queryKey: ["perdidas-detalle"],
+    queryFn: async () => {
+      const { data, error } = await losses.list("-fecha");
       if (error) throw error;
       return data ?? [];
     },
@@ -57,6 +74,9 @@ export default function Perdidas() {
       color_name: emb.color_name,
       cantidad: cant,
       fecha: format(new Date(), "yyyy-MM-dd"),
+      // Campos nuevos: semana de cosecha y causa de la pérdida
+      no_semana: noSemanas[emb.id] ? parseInt(noSemanas[emb.id]) : null,
+      causa: causas[emb.id] || null,
     });
     if (lossError) {
       setSaving(s => ({ ...s, [emb.id]: false }));
@@ -74,9 +94,13 @@ export default function Perdidas() {
     }
 
     queryClient.invalidateQueries({ queryKey: ["embolses"] });
+    queryClient.invalidateQueries({ queryKey: ["perdidas-detalle"] });
     setInputs(s => ({ ...s, [emb.id]: "" }));
+    setNoSemanas(s => ({ ...s, [emb.id]: "" }));
+    setCausas(s => ({ ...s, [emb.id]: "" }));
     setSaving(s => ({ ...s, [emb.id]: false }));
-    toast.success(`Pérdida de ${cant} registrada para S${emb.semana} - ${emb.color_name}`);
+    const causaStr = causas[emb.id] ? ` — ${causas[emb.id]}` : "";
+    toast.success(`Pérdida de ${cant} registrada para S${emb.semana} - ${emb.color_name}${causaStr}`);
   };
 
   const startEdit = (emb) => {
@@ -105,9 +129,79 @@ export default function Perdidas() {
     cancelEdit();
   };
 
+  // ─── Export de pérdidas: tabla pivotada por semana de embolse × semana de cosecha ───
+  const handleExport = () => {
+    if (!registrosPerdidas.length) {
+      toast.error("No hay registros de pérdidas para exportar.");
+      return;
+    }
+
+    // Obtener todas las semanas de cosecha únicas (no_semana) presentes en los registros
+    const semanasUnicas = Array.from(
+      new Set(registrosPerdidas.map(r => r.no_semana).filter(Boolean))
+    ).sort((a, b) => a - b);
+
+    // Encabezados: Semana Embolse | Color | Fecha | [SEM X | CAUSA]* | Total Pérdidas
+    const encabezadosSem = semanasUnicas.flatMap(s => [`Sem Cosecha ${s}`, "Causa"]);
+    const headers = ["Semana Embolse", "Color", "Fecha Registro", ...encabezadosSem, "Total Pérdidas"];
+
+    // Agrupar por embolse_id + fecha para construir las filas
+    const gruposPorEmbolse = {};
+    registrosPerdidas.forEach(r => {
+      const key = r.embolse_id;
+      if (!gruposPorEmbolse[key]) {
+        gruposPorEmbolse[key] = {
+          semana: r.semana,
+          color_name: r.color_name,
+          fecha: r.fecha,
+          registros: [],
+        };
+      }
+      gruposPorEmbolse[key].registros.push(r);
+    });
+
+    const rows = [];
+    Object.values(gruposPorEmbolse).forEach(g => {
+      // Una fila por registro de pérdida (no pivotada a nivel de embolse,
+      // sino plana con columnas de semana de cosecha marcadas)
+      g.registros.forEach(r => {
+        const semCols = semanasUnicas.flatMap(s => {
+          if (r.no_semana === s) {
+            return [r.cantidad, r.causa || "—"];
+          }
+          return ["", ""];
+        });
+        rows.push([
+          `S${r.semana}`,
+          r.color_name || "—",
+          r.fecha || "—",
+          ...semCols,
+          r.cantidad || 0,
+        ]);
+      });
+    });
+
+    const totalGeneral = registrosPerdidas.reduce((s, r) => s + (r.cantidad || 0), 0);
+    const totalsRow = ["TOTAL", "", "", ...semanasUnicas.flatMap(() => ["", ""]), totalGeneral];
+
+    exportStyledExcel({
+      title: "Reporte de Pérdidas",
+      headers,
+      rows,
+      totalsRow,
+      sheetName: "Pérdidas",
+      fileName: `perdidas-${format(new Date(), "yyyy-MM-dd")}.xlsx`,
+    });
+  };
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl md:text-3xl font-heading font-bold">Pérdidas</h1>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <h1 className="text-2xl md:text-3xl font-heading font-bold">Pérdidas</h1>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={!registrosPerdidas.length}>
+            <Download className="w-4 h-4 mr-1" /> Exportar
+          </Button>
+        </div>
 
       {isViewer && (
         <div className="flex items-center gap-3 p-4 bg-muted rounded-xl text-muted-foreground text-sm">
@@ -131,7 +225,7 @@ export default function Perdidas() {
                   <th className="py-3 px-4 text-center font-semibold text-green-700">Cosechado</th>
                   <th className="py-3 px-4 text-center font-semibold text-destructive">Total Pérdidas</th>
                   <th className="py-3 px-4 text-center font-semibold text-primary">Saldo</th>
-                  {!isViewer && <th className="py-3 px-4 text-center font-semibold text-destructive">Registrar / Editar Pérdida</th>}
+                  {!isViewer && <th className="py-3 px-4 text-center font-semibold text-destructive">Cantidad | No.Sem | Causa | Guardar/Editar</th>}
                 </tr>
               </thead>
               <tbody>
@@ -198,15 +292,41 @@ export default function Perdidas() {
                               </>
                             ) : (
                               <>
+                                {/* Cantidad de pérdida */}
                                 <Input
                                   type="number"
                                   min="1"
-                                  placeholder="0"
-                                  className="w-20 h-8 text-center"
+                                  placeholder="Cant."
+                                  className="w-16 h-8 text-center"
                                   value={inputs[e.id] || ""}
                                   onChange={ev => setInputs(s => ({ ...s, [e.id]: ev.target.value }))}
                                   onKeyDown={ev => ev.key === "Enter" && handleSave(e)}
                                 />
+                                {/* No. de semana de cosecha */}
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  max="53"
+                                  placeholder="Sem."
+                                  title="No. Semana de cosecha"
+                                  className="w-14 h-8 text-center"
+                                  value={noSemanas[e.id] || ""}
+                                  onChange={ev => setNoSemanas(s => ({ ...s, [e.id]: ev.target.value }))}
+                                />
+                                {/* Causa de la pérdida */}
+                                <Select
+                                  value={causas[e.id] || ""}
+                                  onValueChange={val => setCausas(s => ({ ...s, [e.id]: val }))}
+                                >
+                                  <SelectTrigger className="h-8 w-24 text-xs">
+                                    <SelectValue placeholder="Causa" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {CAUSAS.map(c => (
+                                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                                 <Button
                                   size="sm"
                                   variant="destructive"
