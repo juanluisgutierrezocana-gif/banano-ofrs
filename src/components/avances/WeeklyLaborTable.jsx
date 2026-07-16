@@ -51,8 +51,9 @@ export default function WeeklyLaborTable() {
     // requiere que el scroll container tenga overflow-y (no solo overflow-x).
     <div className="overflow-auto max-h-[520px]">
       <Table className="text-xs">
-        <TableHeader>
-          <TableRow className="bg-muted sticky top-0 z-10">
+        {/* sticky en <thead> (TableHeader) — más compatible que en <tr> */}
+        <TableHeader className="sticky top-0 z-10 bg-muted">
+          <TableRow className="bg-muted">
             <TableHead className="w-12 font-bold">Semana</TableHead>
             {activeLaborFiltered.map((labor) => (
               <TableHead key={labor.id} className="text-center font-bold min-w-32">

@@ -9,8 +9,10 @@ import { exportStyledExcel } from "@/utils/excelExport";
 
 export default function ReportePerdidas() {
   // Cargar todos los registros de pérdidas
+  // Misma queryKey que Perdidas.jsx para compartir caché y recibir invalidaciones
+  // al registrar o editar pérdidas desde esa pantalla.
   const { data: perdidas = [], isLoading } = useQuery({
-    queryKey: ["perdidas-reporte"],
+    queryKey: ["perdidas-detalle"],
     queryFn: async () => {
       const { data, error } = await losses.list("-fecha");
       if (error) throw error;
