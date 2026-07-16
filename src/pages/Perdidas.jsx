@@ -93,8 +93,10 @@ export default function Perdidas() {
       return;
     }
 
+    // refetchQueries (no solo invalidate) para forzar actualización inmediata
+    // en ReportePerdidas aunque el componente ya esté montado en otro tab.
     queryClient.invalidateQueries({ queryKey: ["embolses"] });
-    queryClient.invalidateQueries({ queryKey: ["perdidas-detalle"] });
+    queryClient.refetchQueries({ queryKey: ["perdidas-detalle"] });
     setInputs(s => ({ ...s, [emb.id]: "" }));
     setNoSemanas(s => ({ ...s, [emb.id]: "" }));
     setCausas(s => ({ ...s, [emb.id]: "" }));
@@ -358,50 +360,6 @@ export default function Perdidas() {
         </div>
       )}
 
-      {/* ── Historial de registros individuales de pérdidas ── */}
-      {registrosPerdidas.length > 0 && (
-        <div className="rounded-xl border shadow overflow-hidden">
-          <div className="px-4 py-3 bg-muted/50 border-b">
-            <h2 className="text-sm font-semibold text-foreground">
-              Historial de Pérdidas ({registrosPerdidas.length} registros)
-            </h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted border-b text-xs">
-                  <th className="py-2 px-4 text-left font-semibold">Fecha</th>
-                  <th className="py-2 px-4 text-left font-semibold">Semana / Color</th>
-                  <th className="py-2 px-4 text-center font-semibold">Cantidad</th>
-                  <th className="py-2 px-4 text-center font-semibold">No. Semana</th>
-                  <th className="py-2 px-4 text-center font-semibold">Causa</th>
-                </tr>
-              </thead>
-              <tbody>
-                {registrosPerdidas.map((r, idx) => (
-                  <tr key={r.id} className={`border-b hover:bg-muted/30 ${idx % 2 === 0 ? "bg-background" : "bg-muted/10"}`}>
-                    <td className="py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">{r.fecha || "—"}</td>
-                    <td className="py-2 px-4 font-medium text-xs whitespace-nowrap">
-                      S{r.semana} — {r.color_name || "—"}
-                    </td>
-                    <td className="py-2 px-4 text-center font-bold text-destructive">{r.cantidad || 0}</td>
-                    <td className="py-2 px-4 text-center text-xs">
-                      {r.no_semana != null
-                        ? <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs font-medium">Sem. {r.no_semana}</span>
-                        : <span className="text-muted-foreground/40">—</span>}
-                    </td>
-                    <td className="py-2 px-4 text-center text-xs">
-                      {r.causa
-                        ? <span className="bg-destructive/10 text-destructive px-2 py-0.5 rounded text-xs font-medium">{r.causa}</span>
-                        : <span className="text-muted-foreground/40">—</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

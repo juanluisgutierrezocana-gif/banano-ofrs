@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { laborAgricola, reports } from "@/api/supabaseClient";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function WeeklyLaborTable() {
   const { data: labores = [] } = useQuery({
@@ -46,30 +45,32 @@ export default function WeeklyLaborTable() {
   const weeks = Array.from({ length: 52 }, (_, i) => i + 1);
   const activeLaborFiltered = labores.filter((l) => l.activa !== false);
 
+  // NOTA: se usa <table> HTML nativo (NO el componente shadcn <Table>) porque
+  // shadcn envuelve la tabla en un <div overflow-auto> interno, lo que crea dos
+  // scroll-containers anidados y hace que sticky top-0 en <thead> quede relativo
+  // al wrapper interno en vez del contenedor con max-h. Con HTML nativo hay UN
+  // solo scroll-container y sticky funciona correctamente.
   return (
-    // overflow-auto + max-h permiten scroll vertical; sticky top-0 en el header
-    // requiere que el scroll container tenga overflow-y (no solo overflow-x).
-    <div className="overflow-auto max-h-[520px]">
-      <Table className="text-xs">
-        {/* sticky en <thead> (TableHeader) — más compatible que en <tr> */}
-        <TableHeader className="sticky top-0 z-10 bg-muted">
-          <TableRow className="bg-muted">
-            <TableHead className="w-12 font-bold">Semana</TableHead>
+    <div className="overflow-auto max-h-[520px] rounded border border-border">
+      <table className="w-full text-xs border-collapse">
+        <thead className="sticky top-0 z-10 bg-muted">
+          <tr className="border-b border-border">
+            <th className="px-2 py-2 text-left font-bold w-12 whitespace-nowrap">Semana</th>
             {activeLaborFiltered.map((labor) => (
-              <TableHead key={labor.id} className="text-center font-bold min-w-32">
+              <th key={labor.id} className="px-2 py-2 text-center font-bold min-w-32 whitespace-nowrap">
                 {labor.nombre}
-              </TableHead>
+              </th>
             ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+          </tr>
+        </thead>
+        <tbody>
           {weeks.map((week) => (
-            <TableRow key={week} className="hover:bg-muted/30">
-              <TableCell className="font-semibold">{week}</TableCell>
+            <tr key={week} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+              <td className="px-2 py-1.5 font-semibold">{week}</td>
               {activeLaborFiltered.map((labor) => {
                 const data = dataByLaborAndWeek[labor.id]?.[week];
                 return (
-                  <TableCell key={`${labor.id}-${week}`} className="text-center">
+                  <td key={`${labor.id}-${week}`} className="px-2 py-1.5 text-center">
                     {data ? (
                       <div className="space-y-0.5">
                         <div className="font-medium">{data.acres.toFixed(1)} ac</div>
@@ -82,13 +83,13 @@ export default function WeeklyLaborTable() {
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
-                  </TableCell>
+                  </td>
                 );
               })}
-            </TableRow>
+            </tr>
           ))}
-        </TableBody>
-      </Table>
+        </tbody>
+      </table>
     </div>
   );
 }
