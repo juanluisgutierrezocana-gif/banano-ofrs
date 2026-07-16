@@ -119,8 +119,6 @@ export default function Perdidas() {
     const newPerdidas = parseInt(editVal);
     if (isNaN(newPerdidas) || newPerdidas < 0) { cancelEdit(); return; }
     const newSaldo = emb.total - (emb.cosechado || 0) - newPerdidas;
-    // FIXED: no destructuraba { error } — un fallo (ej. RLS) se ignoraba en
-    // silencio y el toast de éxito se disparaba igual sin haber guardado nada.
     const { error } = await inventory.updateEmbolse(emb.id, { perdidas: newPerdidas, saldo: newSaldo });
     if (error) {
       toast.error(`Error al actualizar pérdidas: ${error.message}`);
