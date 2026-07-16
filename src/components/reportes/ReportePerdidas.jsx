@@ -375,14 +375,14 @@ export default function ReportePerdidas() {
                         <td className="py-1 px-2 text-center border border-border">
                           {isEditing ? (
                             <Select
-                              value={editVals.causa}
-                              onValueChange={val => setEditVals(v => ({ ...v, causa: val }))}
+                              value={editVals.causa || "__none__"}
+                              onValueChange={val => setEditVals(v => ({ ...v, causa: val === "__none__" ? "" : val }))}
                             >
                               <SelectTrigger className="h-7 w-24 text-xs mx-auto">
                                 <SelectValue placeholder="Causa" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">Sin causa</SelectItem>
+                                <SelectItem value="__none__">Sin causa</SelectItem>
                                 {CAUSAS.map(c => (
                                   <SelectItem key={c} value={c}>{c}</SelectItem>
                                 ))}
