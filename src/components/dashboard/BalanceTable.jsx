@@ -1,14 +1,23 @@
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Pencil, Trash2, Check, X } from "lucide-react";
+import { toast } from "sonner";
 import { balanceCuadrilla } from "@/api/supabaseClient";
 
 // Tabla de Balance / Racimos Faltantes por cuadrilla.
-// FIXED: migrado de localStorage a Supabase para que todos los usuarios
-// vean y editen el mismo balance en tiempo real (localStorage era por
-// dispositivo y los cambios no se propagaban a otros usuarios).
+// Cada fila tiene botones explícitos Guardar / Editar / Eliminar para evitar
+// que los valores se modifiquen solos por sincronización en tiempo real.
 export default function BalanceTable({ trenadas, fecha }) {
   const queryClient = useQueryClient();
+
+  // Qué fila está en modo edición (cuadrilla number | null)
+  const [editingCrew, setEditingCrew] = useState(null);
+  // Valor temporal mientras se edita
+  const [editVal, setEditVal] = useState("");
+  const [saving, setSaving] = useState(false);
 
   // Cargar balances desde Supabase para la fecha actual
   const { data: balancesDB = [] } = useQuery({
@@ -20,42 +29,16 @@ export default function BalanceTable({ trenadas, fecha }) {
       return data ?? [];
     },
     enabled: !!fecha,
+    // NO refetch en background mientras alguien edita — evita sobreescritura
+    refetchOnWindowFocus: false,
   });
 
-  // Mapa cuadrilla → balance (desde Supabase)
+  // Mapa cuadrilla → { balance, id }
   const balancesMap = useMemo(() => {
     const m = {};
     balancesDB.forEach(r => { m[r.cuadrilla] = r.balance; });
     return m;
   }, [balancesDB]);
-
-  // Estado local para edición optimista (evita lag al escribir)
-  const [localBalances, setLocalBalances] = useState({});
-
-  // Sincronizar estado local cuando llegan datos de Supabase
-  useEffect(() => {
-    setLocalBalances(balancesMap);
-  }, [balancesDB]);
-
-  // Debounce: guardar en Supabase 800ms después de dejar de escribir
-  const saveTimers = useRef({});
-
-  const handleChange = (cuadrilla, valor) => {
-    setLocalBalances(prev => ({ ...prev, [cuadrilla]: valor }));
-
-    // Cancelar timer anterior para esta cuadrilla
-    if (saveTimers.current[cuadrilla]) {
-      clearTimeout(saveTimers.current[cuadrilla]);
-    }
-
-    // Guardar en Supabase tras 800ms de inactividad
-    saveTimers.current[cuadrilla] = setTimeout(async () => {
-      const num = valor === "" ? null : Number(valor);
-      await balanceCuadrilla.upsert(fecha, cuadrilla, num);
-      // Invalidar cache para que otros usuarios reciban el nuevo valor
-      queryClient.invalidateQueries({ queryKey: ["balance-cuadrilla", fecha] });
-    }, 800);
-  };
 
   const crewTotals = useMemo(() => {
     const crews = {};
@@ -66,6 +49,47 @@ export default function BalanceTable({ trenadas, fecha }) {
     });
     return Object.values(crews).sort((a, b) => a.cuadrilla - b.cuadrilla);
   }, [trenadas]);
+
+  const startEdit = (crew) => {
+    setEditingCrew(crew.cuadrilla);
+    setEditVal(balancesMap[crew.cuadrilla] != null ? String(balancesMap[crew.cuadrilla]) : "");
+  };
+
+  const cancelEdit = () => {
+    setEditingCrew(null);
+    setEditVal("");
+  };
+
+  const handleSave = async (crew) => {
+    const num = editVal === "" ? null : Number(editVal);
+    if (editVal !== "" && isNaN(num)) {
+      toast.error("Ingresa un número válido.");
+      return;
+    }
+    setSaving(true);
+    const { error } = await balanceCuadrilla.upsert(fecha, crew.cuadrilla, num);
+    setSaving(false);
+    if (error) {
+      toast.error("Error al guardar: " + error.message);
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["balance-cuadrilla", fecha] });
+    toast.success(`Balance #${crew.cuadrilla} guardado.`);
+    cancelEdit();
+  };
+
+  const handleDelete = async (crew) => {
+    if (!window.confirm(`¿Eliminar balance de cuadrilla #${crew.cuadrilla}?`)) return;
+    setSaving(true);
+    const { error } = await balanceCuadrilla.upsert(fecha, crew.cuadrilla, null);
+    setSaving(false);
+    if (error) {
+      toast.error("Error al eliminar: " + error.message);
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["balance-cuadrilla", fecha] });
+    toast.success(`Balance #${crew.cuadrilla} eliminado.`);
+  };
 
   if (!crewTotals.length) return null;
 
@@ -78,33 +102,100 @@ export default function BalanceTable({ trenadas, fecha }) {
         <table className="text-sm w-full">
           <thead>
             <tr className="border-b">
+              <th className="text-left py-2 px-2 font-semibold text-xs text-muted-foreground"></th>
               <th className="text-center py-2 px-3 font-semibold">Balance</th>
               <th className="text-center py-2 px-3 font-semibold">Rac. Faltantes</th>
+              <th className="text-center py-2 px-2 font-semibold"></th>
             </tr>
           </thead>
           <tbody>
             {crewTotals.map(crew => {
-              const val = localBalances[crew.cuadrilla];
-              const racFaltantes = val !== undefined && val !== "" && val !== null
-                ? Number(val) - crew.total
+              const isEditing = editingCrew === crew.cuadrilla;
+              const balanceGuardado = balancesMap[crew.cuadrilla];
+              const racFaltantes = balanceGuardado != null
+                ? balanceGuardado - crew.total
                 : "—";
+
               return (
                 <tr key={crew.cuadrilla} className="border-b last:border-0">
+                  {/* Label cuadrilla */}
+                  <td className="py-1 px-2">
+                    <span className="text-xs font-bold text-primary">#{crew.cuadrilla}</span>
+                  </td>
+
+                  {/* Balance */}
                   <td className="text-center py-1 px-2">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <span className="text-xs font-bold text-primary">#{crew.cuadrilla}</span>
-                      <input
+                    {isEditing ? (
+                      <Input
                         type="number"
                         min="0"
-                        className="w-20 text-center rounded border border-input bg-background px-1.5 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                        value={val ?? ""}
-                        onChange={e => handleChange(crew.cuadrilla, e.target.value)}
-                        placeholder="—"
+                        className="w-24 h-7 text-center mx-auto"
+                        value={editVal}
+                        onChange={e => setEditVal(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && handleSave(crew)}
+                        autoFocus
                       />
-                    </div>
+                    ) : (
+                      <span className={balanceGuardado != null ? "font-medium" : "text-muted-foreground/40"}>
+                        {balanceGuardado != null ? balanceGuardado : "—"}
+                      </span>
+                    )}
                   </td>
-                  <td className="text-center py-2 px-3 font-medium">
-                    {racFaltantes}
+
+                  {/* Rac. Faltantes */}
+                  <td className="text-center py-1 px-3 font-medium">
+                    {isEditing
+                      ? (editVal !== "" ? Number(editVal) - crew.total : "—")
+                      : racFaltantes}
+                  </td>
+
+                  {/* Acciones */}
+                  <td className="py-1 px-2">
+                    <div className="flex items-center justify-center gap-1">
+                      {isEditing ? (
+                        <>
+                          <Button
+                            size="icon"
+                            variant="default"
+                            className="h-7 w-7"
+                            disabled={saving}
+                            onClick={() => handleSave(crew)}
+                          >
+                            <Check className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-7 w-7"
+                            onClick={cancelEdit}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-7 w-7"
+                            onClick={() => startEdit(crew)}
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </Button>
+                          {balanceGuardado != null && (
+                            <Button
+                              size="icon"
+                              variant="destructive"
+                              className="h-7 w-7"
+                              disabled={saving}
+                              onClick={() => handleDelete(crew)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
