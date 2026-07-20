@@ -217,6 +217,30 @@ export const inventory = {
 };
 
 // ============================================================
+// BALANCE CUADRILLA — sincronizado en Supabase para que todos
+// los usuarios vean el mismo valor en tiempo real.
+// Una fila por (fecha, cuadrilla); upsert en conflicto.
+// ============================================================
+export const balanceCuadrilla = {
+  async getByFecha(fecha) {
+    return await supabase
+      .from('balance_cuadrilla')
+      .select('*')
+      .eq('fecha', fecha);
+  },
+  async upsert(fecha, cuadrilla, balance) {
+    return await supabase
+      .from('balance_cuadrilla')
+      .upsert(
+        { fecha, cuadrilla, balance },
+        { onConflict: 'fecha,cuadrilla' }
+      )
+      .select()
+      .single();
+  },
+};
+
+// ============================================================
 // SETTINGS (clave-valor)
 // ============================================================
 const settingsBase = createEntity('settings');

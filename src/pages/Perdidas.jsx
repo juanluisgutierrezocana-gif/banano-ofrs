@@ -12,7 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { exportStyledExcel } from "@/utils/excelExport";
 
 // Causas predefinidas de pérdidas
-const CAUSAS = ["VIENTO", "CAÍDO", "ROBO", "PLAGA", "OTRO"];
+const CAUSAS = ["VIENTO", "CAÍDO", "SIGATIKA", "PLAGA", "OTRO"];
 
 function pct(num, total) {
   if (!total) return 0;

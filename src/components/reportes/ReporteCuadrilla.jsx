@@ -56,7 +56,13 @@ export default function ReporteCuadrilla() {
         crewData[c][key] = (crewData[c][key] || 0) + r.count;
       });
     });
-    return { crews: Object.keys(crewData).map(Number).sort((a, b) => a - b), colorKeys: Array.from(colKeys), data: crewData };
+    // Ordenar cintas por semana numérica ascendente (S13 antes que S14, etc.)
+    const colorKeysSorted = Array.from(colKeys).sort((a, b) => {
+      const semA = parseInt(a.match(/S(\d+)/)?.[1] ?? "0");
+      const semB = parseInt(b.match(/S(\d+)/)?.[1] ?? "0");
+      return semA - semB;
+    });
+    return { crews: Object.keys(crewData).map(Number).sort((a, b) => a - b), colorKeys: colorKeysSorted, data: crewData };
   }, [trenadaList]);
 
   const sortedCrews = useMemo(() => {

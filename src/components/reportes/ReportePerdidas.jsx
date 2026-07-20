@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { exportStyledExcel } from "@/utils/excelExport";
 
 // Causas predefinidas (mismo listado que Perdidas.jsx)
-const CAUSAS = ["VIENTO", "CAÍDO", "ROBO", "PLAGA", "OTRO"];
+const CAUSAS = ["VIENTO", "CAÍDO", "SIGATIKA", "PLAGA", "OTRO"];
 
 export default function ReportePerdidas() {
   const queryClient = useQueryClient();
