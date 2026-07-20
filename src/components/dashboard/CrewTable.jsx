@@ -24,12 +24,12 @@ export default function CrewTable({ trenadas, buttons }) {
   const colorKeys = useMemo(() => {
     const keys = new Set();
     crewData.forEach(c => Object.keys(c.colors).forEach(k => keys.add(k)));
-    // Ordenar por semana numérica (el número después de la "S") ascendente,
-    // para que las cintas más viejas (semanas menores) aparezcan primero.
+    // Ordenar igual que los cards de "Racimos por Color": semana descendente
+    // (semana más reciente primero), para que columnas y cards coincidan.
     return Array.from(keys).sort((a, b) => {
       const semA = parseInt(a.match(/S(\d+)/)?.[1] ?? "0");
       const semB = parseInt(b.match(/S(\d+)/)?.[1] ?? "0");
-      return semA - semB;
+      return semB - semA;
     });
   }, [crewData]);
 

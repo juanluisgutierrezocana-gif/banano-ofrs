@@ -56,11 +56,12 @@ export default function ReporteCuadrilla() {
         crewData[c][key] = (crewData[c][key] || 0) + r.count;
       });
     });
-    // Ordenar cintas por semana numérica ascendente (S13 antes que S14, etc.)
+    // Ordenar cintas por semana descendente (más reciente primero),
+    // igual que los cards de "Racimos por Color" en el Panel Diario.
     const colorKeysSorted = Array.from(colKeys).sort((a, b) => {
       const semA = parseInt(a.match(/S(\d+)/)?.[1] ?? "0");
       const semB = parseInt(b.match(/S(\d+)/)?.[1] ?? "0");
-      return semA - semB;
+      return semB - semA;
     });
     return { crews: Object.keys(crewData).map(Number).sort((a, b) => a - b), colorKeys: colorKeysSorted, data: crewData };
   }, [trenadaList]);
