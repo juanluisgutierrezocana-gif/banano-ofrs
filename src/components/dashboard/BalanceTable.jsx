@@ -6,12 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Pencil, Trash2, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { balanceCuadrilla } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
 
 // Tabla de Balance / Racimos Faltantes por cuadrilla.
 // Cada fila tiene botones explícitos Guardar / Editar / Eliminar para evitar
 // que los valores se modifiquen solos por sincronización en tiempo real.
+// IMPORTANTE: siempre filtra por finca_id para que cada finca
+// tenga sus propios balances aislados.
 export default function BalanceTable({ trenadas, fecha }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const fincaId = user?.finca_id ?? null;
 
   // Qué fila está en modo edición (cuadrilla number | null)
   const [editingCrew, setEditingCrew] = useState(null);
@@ -19,16 +24,17 @@ export default function BalanceTable({ trenadas, fecha }) {
   const [editVal, setEditVal] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Cargar balances desde Supabase para la fecha actual
+  // Cargar balances desde Supabase para la fecha y finca actuales.
+  // El queryKey incluye fincaId para que cada finca tenga su propio caché.
   const { data: balancesDB = [] } = useQuery({
-    queryKey: ["balance-cuadrilla", fecha],
+    queryKey: ["balance-cuadrilla", fecha, fincaId],
     queryFn: async () => {
-      if (!fecha) return [];
-      const { data, error } = await balanceCuadrilla.getByFecha(fecha);
+      if (!fecha || !fincaId) return [];
+      const { data, error } = await balanceCuadrilla.getByFecha(fecha, fincaId);
       if (error) throw error;
       return data ?? [];
     },
-    enabled: !!fecha,
+    enabled: !!fecha && !!fincaId,
     // NO refetch en background mientras alguien edita — evita sobreescritura
     refetchOnWindowFocus: false,
   });
@@ -67,13 +73,13 @@ export default function BalanceTable({ trenadas, fecha }) {
       return;
     }
     setSaving(true);
-    const { error } = await balanceCuadrilla.upsert(fecha, crew.cuadrilla, num);
+    const { error } = await balanceCuadrilla.upsert(fecha, crew.cuadrilla, num, fincaId);
     setSaving(false);
     if (error) {
       toast.error("Error al guardar: " + error.message);
       return;
     }
-    queryClient.invalidateQueries({ queryKey: ["balance-cuadrilla", fecha] });
+    queryClient.invalidateQueries({ queryKey: ["balance-cuadrilla", fecha, fincaId] });
     toast.success(`Balance #${crew.cuadrilla} guardado.`);
     cancelEdit();
   };
@@ -81,13 +87,13 @@ export default function BalanceTable({ trenadas, fecha }) {
   const handleDelete = async (crew) => {
     if (!window.confirm(`¿Eliminar balance de cuadrilla #${crew.cuadrilla}?`)) return;
     setSaving(true);
-    const { error } = await balanceCuadrilla.upsert(fecha, crew.cuadrilla, null);
+    const { error } = await balanceCuadrilla.upsert(fecha, crew.cuadrilla, null, fincaId);
     setSaving(false);
     if (error) {
       toast.error("Error al eliminar: " + error.message);
       return;
     }
-    queryClient.invalidateQueries({ queryKey: ["balance-cuadrilla", fecha] });
+    queryClient.invalidateQueries({ queryKey: ["balance-cuadrilla", fecha, fincaId] });
     toast.success(`Balance #${crew.cuadrilla} eliminado.`);
   };
 

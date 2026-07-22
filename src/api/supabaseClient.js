@@ -219,21 +219,23 @@ export const inventory = {
 // ============================================================
 // BALANCE CUADRILLA — sincronizado en Supabase para que todos
 // los usuarios vean el mismo valor en tiempo real.
-// Una fila por (fecha, cuadrilla); upsert en conflicto.
+// Una fila por (fecha, cuadrilla, finca_id); SIEMPRE pasar finca_id
+// para que cada finca tenga sus propios balances y no se pisen entre sí.
 // ============================================================
 export const balanceCuadrilla = {
-  async getByFecha(fecha) {
+  async getByFecha(fecha, fincaId) {
     return await supabase
       .from('balance_cuadrilla')
       .select('*')
-      .eq('fecha', fecha);
+      .eq('fecha', fecha)
+      .eq('finca_id', fincaId);
   },
-  async upsert(fecha, cuadrilla, balance) {
+  async upsert(fecha, cuadrilla, balance, fincaId) {
     return await supabase
       .from('balance_cuadrilla')
       .upsert(
-        { fecha, cuadrilla, balance },
-        { onConflict: 'fecha,cuadrilla' }
+        { fecha, cuadrilla, balance, finca_id: fincaId },
+        { onConflict: 'fecha,cuadrilla,finca_id' }
       )
       .select()
       .single();
