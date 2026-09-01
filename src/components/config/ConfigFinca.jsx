@@ -37,6 +37,56 @@ async function upsertSetting(key, value, fincaId) {
   if (error) throw error;
 }
 
+// ============================================================
+// COMPRESIÓN DE LOGO
+// Antes el logo se guardaba como base64 crudo (hasta 2.7 MB) dentro de la
+// tabla `settings`, y el Sidebar lo re-descargaba en cada navegación. Eso
+// consumió 7.6 GB de egress y bloqueó el proyecto de Supabase (error 402).
+// Con 256px + WebP 0.85 un logo queda en ~20-30 KB: 99% menos tráfico.
+// ============================================================
+const LOGO_MAX_PX = 256;
+const LOGO_MAX_BYTES = 120 * 1024; // 120 KB de margen
+
+function leerComoDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Error al leer el archivo de imagen"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function comprimirImagen(file) {
+  // Los SVG ya son vectoriales y livianos; el canvas los rasterizaría y
+  // perderían calidad. Se guardan tal cual si no exceden el límite.
+  if (file.type === "image/svg+xml" && file.size <= LOGO_MAX_BYTES) {
+    return await leerComoDataURL(file);
+  }
+
+  const dataUrl = await leerComoDataURL(file);
+  const img = await new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("No se pudo procesar la imagen"));
+    image.src = dataUrl;
+  });
+
+  // Escala manteniendo proporción; nunca agranda una imagen ya pequeña
+  const escala = Math.min(1, LOGO_MAX_PX / Math.max(img.width, img.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.width * escala);
+  canvas.height = Math.round(img.height * escala);
+  canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  // WebP conserva la transparencia y pesa mucho menos que PNG
+  let salida = canvas.toDataURL("image/webp", 0.85);
+  // base64 infla ~1.37x: si aún supera el límite, se baja la calidad
+  if (salida.length > LOGO_MAX_BYTES * 1.37) {
+    salida = canvas.toDataURL("image/webp", 0.6);
+  }
+  return salida;
+}
+
 export default function ConfigFinca() {
   const queryClient = useQueryClient();
   const fileRef = useRef();
@@ -75,16 +125,11 @@ export default function ConfigFinca() {
       // Guardar nombre
       await upsertSetting(KEYS.nombre, nombre, fincaId);
 
-      // Si hay imagen nueva, convertirla a base64 y guardarla en settings
+      // Si hay imagen nueva, comprimirla y guardarla en settings
       // (evita dependencia de Storage bucket y sus políticas)
       if (pendingFile) {
         setUploading(true);
-        const base64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () => reject(new Error("Error al leer el archivo de imagen"));
-          reader.readAsDataURL(pendingFile);
-        });
+        const base64 = await comprimirImagen(pendingFile);
         setUploading(false);
         await upsertSetting(KEYS.logo, base64, fincaId);
         setLogoPreview(base64);
@@ -129,7 +174,7 @@ export default function ConfigFinca() {
                   ✓ {pendingFile.name} — se subirá al guardar
                 </p>
               )}
-              <p className="text-xs text-muted-foreground">PNG, JPG o SVG. Cualquier tamaño.</p>
+              <p className="text-xs text-muted-foreground">PNG, JPG o SVG. Se optimiza automáticamente a 256px.</p>
               <input
                 ref={fileRef}
                 type="file"

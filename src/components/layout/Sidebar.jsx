@@ -6,8 +6,10 @@ import { useRole } from "@/hooks/useRole";
 import { useQuery } from "@tanstack/react-query";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 
+// Pide solo las columnas necesarias (no `select("*")`) para no arrastrar
+// columnas extra de la tabla en cada lectura.
 async function getFincaSettings() {
-  const { data } = await supabase.from("settings").select("*").in("key", ["finca_nombre", "finca_logo"]);
+  const { data } = await supabase.from("settings").select("key, value").in("key", ["finca_nombre", "finca_logo"]);
   const map = {};
   (data || []).forEach(r => { map[r.key] = r.value; });
   return { nombre: map.finca_nombre || null, logo: map.finca_logo || null };
@@ -52,7 +54,21 @@ export default function Sidebar() {
   const [open, setOpen] = useState(false);
   const { isAdmin, isOwner, isEditor, hasPermiso } = useRole();
   const online = useOnlineStatus();
-  const { data: finca } = useQuery({ queryKey: ["finca-settings"], queryFn: getFincaSettings, staleTime: 60000 });
+  // El Sidebar se monta en TODAS las páginas. Con staleTime de 60s volvía a
+  // descargar el logo en cada navegación pasado un minuto; como el logo vive
+  // en la BD como base64, eso agotó los 5 GB de egress del plan Free.
+  // El logo y el nombre casi nunca cambian: se cachean de forma permanente y
+  // ConfigFinca invalida ["finca-settings"] al guardar, así que un cambio
+  // sigue reflejándose de inmediato.
+  const { data: finca } = useQuery({
+    queryKey: ["finca-settings"],
+    queryFn: getFincaSettings,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
   // Pestañas de Configuraciones->Usuarios cuyo permiso, si está activo en
   // CUALQUIERA de ellas, basta para que un Editor vea "Configuraciones" en

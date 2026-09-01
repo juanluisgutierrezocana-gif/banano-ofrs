@@ -5,9 +5,17 @@ export function useSettings() {
   const { data: settingsRows = [], isLoading } = useQuery({
     queryKey: ["settings"],
     queryFn: async () => {
-      const { data } = await supabase.from("settings").select("*");
+      // Se excluye `finca_logo`: es una imagen en base64 (hasta 2.7 MB) y este
+      // hook solo necesita valores numéricos de configuración. Traerla aquí
+      // fue una de las causas del agotamiento de egress en Supabase.
+      const { data } = await supabase
+        .from("settings")
+        .select("key, value")
+        .neq("key", "finca_logo");
       return data ?? [];
     },
+    // Configuración que cambia muy rara vez: evita refetches innecesarios.
+    staleTime: 5 * 60 * 1000,
   });
 
   // Convertir array de filas {key, value} a objeto plano
