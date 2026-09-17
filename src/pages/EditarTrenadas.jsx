@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +34,54 @@ export default function EditarTrenadas() {
       return data ?? [];
     },
   });
+
+  // Botones configurados. Solo se usan para ORDENAR las columnas de color
+  // igual que en Configuraciones > Botones y en el Panel Diario (campo position).
+  const { data: buttons = [] } = useQuery({
+    queryKey: ["buttons-all"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("button_config").select("*").order("position");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  // Columnas dinámicas: una por cada combinación color+semana presente
+  // en las trenadas del día.
+  const colorKeys = useMemo(() => {
+    const keys = new Set();
+    trenadaList.forEach(t => {
+      (t.racimos || []).forEach(r => keys.add(`${r.color_name}-S${r.week_age}`));
+    });
+
+    const positionByKey = new Map(
+      buttons.map(btn => [
+        `${btn.color_name ?? btn.button_name}-S${btn.week_age ?? 0}`,
+        btn.position ?? Number.MAX_SAFE_INTEGER,
+      ])
+    );
+
+    return Array.from(keys).sort((a, b) => {
+      const posA = positionByKey.get(a) ?? Number.MAX_SAFE_INTEGER;
+      const posB = positionByKey.get(b) ?? Number.MAX_SAFE_INTEGER;
+      if (posA !== posB) return posA - posB;
+      // Fallback (color sin botón configurado): semana ascendente.
+      const semA = parseInt(a.match(/S(\d+)/)?.[1] ?? "0");
+      const semB = parseInt(b.match(/S(\d+)/)?.[1] ?? "0");
+      return semA - semB;
+    });
+  }, [trenadaList, buttons]);
+
+  // Hex de cada color para pintar el punto del encabezado.
+  const colorHexByKey = useMemo(() => {
+    const map = {};
+    trenadaList.forEach(t => {
+      (t.racimos || []).forEach(r => {
+        map[`${r.color_name}-S${r.week_age}`] = r.color_hex;
+      });
+    });
+    return map;
+  }, [trenadaList]);
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }) => {
@@ -224,6 +272,18 @@ export default function EditarTrenadas() {
                     <th className="py-2 px-3 text-left">Cortero</th>
                     <th className="py-2 px-3 text-left">Sección</th>
                     <th className="py-2 px-3 text-left">Línea</th>
+                    {/* Una columna por color+semana (racimos de cada trenada) */}
+                    {colorKeys.map(k => (
+                      <th key={k} className="py-2 px-2 text-center text-xs whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1">
+                          <span
+                            className="inline-block w-2.5 h-2.5 rounded-full border border-black/20 flex-shrink-0"
+                            style={{ backgroundColor: colorHexByKey[k] || "#ccc" }}
+                          />
+                          {k}
+                        </span>
+                      </th>
+                    ))}
                     <th className="py-2 px-3 text-center">Total</th>
                     <th className="py-2 px-3 text-center">Acciones</th>
                   </tr>
@@ -277,6 +337,19 @@ export default function EditarTrenadas() {
                              ? <Input value={editData.linea} onChange={e => setEditData(d => ({ ...d, linea: e.target.value }))} className="h-7 w-20 text-xs" />
                              : t.linea || "-"}
                          </td>
+
+                         {/* Racimos por color: cuando la fila está en edición se
+                             lee de editData para que el número cambie en vivo. */}
+                         {colorKeys.map(k => {
+                           const fuente = isEditing ? (editData.racimos || []) : (t.racimos || []);
+                           const r = fuente.find(x => `${x.color_name}-S${x.week_age}` === k);
+                           const count = Number(r?.count || 0);
+                           return (
+                             <td key={k} className="py-2 px-2 text-center">
+                               {count ? count : <span className="text-muted-foreground">-</span>}
+                             </td>
+                           );
+                         })}
 
                          {/* Total */}
                          <td className="py-2 px-3 text-center font-bold">
@@ -332,7 +405,7 @@ export default function EditarTrenadas() {
                        {/* Fila expandida: edición de racimos por color */}
                        {isEditing && editData.racimos && editData.racimos.length > 0 && (
                          <tr className="bg-accent/20 border-b">
-                           <td colSpan={9} className="px-4 py-3">
+                           <td colSpan={9 + colorKeys.length} className="px-4 py-3">
                              <p className="text-xs font-semibold text-muted-foreground mb-2">Racimos por color:</p>
                              <div className="flex flex-wrap gap-3">
                                {editData.racimos.map((r, idx) => (
