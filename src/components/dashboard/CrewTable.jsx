@@ -24,14 +24,25 @@ export default function CrewTable({ trenadas, buttons }) {
   const colorKeys = useMemo(() => {
     const keys = new Set();
     crewData.forEach(c => Object.keys(c.colors).forEach(k => keys.add(k)));
-    // Ordenar igual que los cards de "Racimos por Color": semana descendente
-    // (semana más reciente primero), para que columnas y cards coincidan.
+    // Ordenar igual que los cards de "Racimos por Color" y que
+    // Configuraciones > Botones: por la columna "position" de button_config.
+    const positionByKey = new Map(
+      (buttons || []).map(btn => [
+        `${btn.color_name ?? btn.button_name}-S${btn.week_age ?? 0}`,
+        btn.position ?? Number.MAX_SAFE_INTEGER,
+      ])
+    );
+
     return Array.from(keys).sort((a, b) => {
+      const posA = positionByKey.get(a) ?? Number.MAX_SAFE_INTEGER;
+      const posB = positionByKey.get(b) ?? Number.MAX_SAFE_INTEGER;
+      if (posA !== posB) return posA - posB;
+      // Fallback: semana ascendente.
       const semA = parseInt(a.match(/S(\d+)/)?.[1] ?? "0");
       const semB = parseInt(b.match(/S(\d+)/)?.[1] ?? "0");
-      return semB - semA;
+      return semA - semB;
     });
-  }, [crewData]);
+  }, [crewData, buttons]);
 
   if (!crewData.length) return null;
 

@@ -102,6 +102,16 @@ export default function PanelDiario() {
       buttons.map(btn => `${btn.color_name ?? btn.button_name}-S${btn.week_age ?? 0}`)
     );
 
+    // Orden de los cards: el MISMO que en Configuraciones > Botones, es decir
+    // la columna "position" de button_config (ascendente). Antes se ordenaba
+    // por week_age descendente, lo que invertía el orden respecto a esa pantalla.
+    const positionByKey = new Map(
+      buttons.map(btn => [
+        `${btn.color_name ?? btn.button_name}-S${btn.week_age ?? 0}`,
+        btn.position ?? Number.MAX_SAFE_INTEGER,
+      ])
+    );
+
     // Solo se muestran colores con racimos realmente cargados (count > 0).
     // Si la fecha consultada es hoy, además el botón debe seguir activo (On).
     return Object.values(totals)
@@ -111,7 +121,14 @@ export default function PanelDiario() {
         const key = `${t.color_name}-S${t.week_age}`;
         return activeKeys.has(key);
       })
-      .sort((a, b) => b.week_age - a.week_age);
+      .sort((a, b) => {
+        const posA = positionByKey.get(`${a.color_name}-S${a.week_age}`) ?? Number.MAX_SAFE_INTEGER;
+        const posB = positionByKey.get(`${b.color_name}-S${b.week_age}`) ?? Number.MAX_SAFE_INTEGER;
+        // Si ambos tienen botón configurado, manda el orden de Configuraciones.
+        if (posA !== posB) return posA - posB;
+        // Fallback (fechas pasadas sin botón activo): semana ascendente.
+        return a.week_age - b.week_age;
+      });
   }, [trenadaRecords, buttons, fecha]);
 
   if (isLoading) {
