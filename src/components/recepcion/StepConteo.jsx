@@ -44,7 +44,11 @@ export default function StepConteo({ info, onSave, onBack }) {
     },
   });
 
-  // Cruzar botones configurados con embolses: solo los activos que tienen saldo > 0
+  // Cruzar botones configurados con embolses. Se muestran TODOS los botones
+  // activos aunque su saldo sea 0 o negativo: si entra más fruta de la que
+  // había en existencia, el saldo queda en negativo (igual que con Pérdidas)
+  // para ver cuánto entró de más. Para ocultar una cinta, el admin la
+  // desactiva en Configuraciones -> Botones.
   const buttons = useMemo(() =>
     buttonConfigs
       .map(bc => {
@@ -52,8 +56,6 @@ export default function StepConteo({ info, onSave, onBack }) {
         // NO al id propio de la fila de inventario — por eso nunca aparecían botones.
         const embolse = embolses.find(e => e.id === bc.embolse_id);
         if (!embolse) return null;
-        const saldo = embolse.saldo ?? (embolse.total - (embolse.cosechado || 0) - (embolse.perdidas || 0));
-        if (saldo <= 0) return null;
         return { ...embolse, week_age: bc.week_age, _buttonId: bc.id };
       })
       .filter(Boolean),
@@ -70,9 +72,8 @@ export default function StepConteo({ info, onSave, onBack }) {
   const { play: playSaveSound } = useSaveSound();
 
   const handleTap = (embolse) => {
-    const saldo = embolse.saldo ?? (embolse.total - (embolse.cosechado || 0) - (embolse.perdidas || 0));
+    // Sin tope: se permite superar el saldo (queda en negativo)
     const current = counts[embolse.id] || 0;
-    if (current >= saldo) return; // no superar saldo
     playSound();
     setCounts(prev => ({ ...prev, [embolse.id]: current + 1 }));
   };
@@ -215,23 +216,25 @@ export default function StepConteo({ info, onSave, onBack }) {
           {/* Color buttons from embolse inventory */}
           {buttons.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
-              No hay cintas con saldo disponible en el inventario
+              No hay cintas activas configuradas en Botones
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
               {buttons.map(btn => {
                 const saldo = btn.saldo ?? (btn.total - (btn.cosechado || 0) - (btn.perdidas || 0));
                 const count = counts[btn.id] || 0;
-                const agotado = count >= saldo;
+                const saldoRestante = saldo - count;
+                // Ya no se bloquea al llegar a 0: el botón sigue activo y el
+                // saldo se marca en negativo (excedente sobre la existencia).
+                const excedido = saldoRestante < 0;
                 return (
                   <button
                     key={btn.id}
                     onClick={() => handleTap(btn)}
-                    disabled={agotado}
                     className={cn(
                       "relative rounded-xl p-4 text-center transition-all active:scale-95 shadow-md border-2",
                       getTextColor(btn.color_hex),
-                      agotado && "opacity-40 cursor-not-allowed"
+                      excedido && "ring-2 ring-red-500 ring-offset-2"
                     )}
                     style={{
                       backgroundColor: btn.color_hex,
@@ -241,7 +244,13 @@ export default function StepConteo({ info, onSave, onBack }) {
                     <p className="text-3xl font-bold">{count}</p>
                     <p className="text-xs font-semibold mt-1">{btn.color_name}</p>
                     <p className="text-xs opacity-80">Sem. {btn.week_age ?? btn.semana}</p>
-                    <p className="text-xs opacity-60 mt-0.5">Saldo: {saldo - count}</p>
+                    {excedido ? (
+                      <p className="text-xs font-bold mt-0.5 rounded bg-red-600 text-white px-1">
+                        Saldo: {saldoRestante}
+                      </p>
+                    ) : (
+                      <p className="text-xs opacity-60 mt-0.5">Saldo: {saldoRestante}</p>
+                    )}
                     {count > 0 && (
                       <button
                         onClick={(e) => handleMinus(btn, e)}
