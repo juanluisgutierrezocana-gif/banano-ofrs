@@ -19,7 +19,10 @@ export default function AvancesLayout() {
   // permiso 'avances_agricolas'. Admin/Dueño siempre pasan. Lector queda
   // igual que antes (este layout nunca lo bloqueaba) — fuera del alcance
   // de este cambio, solo se restringe a role==='user'.
-  const { isAdmin, isEditor, hasPermiso } = useRole();
+  const { isAdmin, isEditor, hasPermiso, minifincasPermitidas } = useRole();
+  // Un caporal restringido por minifinca no ve "Configuraciones" (ahí se
+  // cambia la minifinca de las secciones).
+  const ocultarConfig = minifincasPermitidas !== null;
   const bloqueado = isEditor && !isAdmin && !hasPermiso("avances_agricolas");
 
   const { data: labores = [] } = useQuery({
@@ -147,7 +150,7 @@ export default function AvancesLayout() {
                 );
               })()}
 
-              {(() => {
+              {!ocultarConfig && (() => {
                 const isActive = location.pathname === configItem.path;
                 return (
                   <Link to={configItem.path} onClick={() => setOpen(false)}

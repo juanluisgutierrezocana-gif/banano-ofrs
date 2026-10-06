@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Users, ShieldCheck, Eye, Crown, Pencil, Trash2, UserPlus, Loader2, Shield, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useRole } from "@/hooks/useRole";
+import { useMinifincas } from "@/lib/useMinifincas";
 
 const ROLES = {
   admin:  { label: "Administrador", icon: ShieldCheck, color: "text-primary" },
@@ -65,18 +66,9 @@ export default function ConfigUsuarios() {
     },
   });
 
-  // Minifincas existentes (sacadas de las secciones agrícolas) para poder
-  // restringir a cada caporal a las suyas en Avances Agrícolas.
-  const { data: minifincasDisponibles = [] } = useQuery({
-    queryKey: ["minifincas-disponibles", currentUser?.finca_id],
-    enabled: isTrueAdmin,
-    queryFn: async () => {
-      const { data, error } = await seccionAgricola.list("minifinca");
-      if (error) throw error;
-      const set = new Set((data ?? []).map((s) => (s.minifinca || "").trim()).filter(Boolean));
-      return [...set].sort();
-    },
-  });
+  // Minifincas del catálogo (Avances Agrícolas → Configuraciones → Crear MF)
+  // para restringir a cada caporal a las suyas.
+  const { minifincas: minifincasDisponibles } = useMinifincas();
 
   const updateMutation = useMutation({
     mutationFn: ({ id, role }) => users.update(id, { role }),

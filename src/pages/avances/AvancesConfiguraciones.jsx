@@ -11,14 +11,44 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/component
 import { Settings, Plus, Trash2, MapPin, Layers, TreePine, ClipboardList, Pencil, Check, X, ChevronDown } from "lucide-react";
 import { useRole } from "@/hooks/useRole";
 import AdminOnlyMessage from "@/components/avances/AdminOnlyMessage";
+import { useMinifincas } from "@/lib/useMinifincas";
+import { toast } from "sonner";
 
 const emptySeccion = { nombre: "", acres: "", minifinca: "" };
 const emptyLabor = { nombre: "", num_ciclos: "9", unidad_extra: "", secciones_excluidas: [] };
 const UNIDADES = ["litros", "galones", "sacos", "matas", "racimos", "pulgadas", "milimetros"];
 
 export default function AvancesConfiguraciones() {
-  const { isAdmin, hasPermiso } = useRole();
+  const { isAdmin, hasPermiso, minifincasPermitidas } = useRole();
   const queryClient = useQueryClient();
+
+  // Catálogo de minifincas (barra CREAR MF / MF1 / MF2 / MF3...)
+  const { minifincas, conteoSecciones, crearMinifinca, creando, eliminarMinifinca } = useMinifincas();
+  const [creandoMF, setCreandoMF] = useState(false);
+  const [nuevaMF, setNuevaMF] = useState("");
+  const [filtroMF, setFiltroMF] = useState(null); // null = todas
+
+  const handleCrearMF = async () => {
+    try {
+      const mf = await crearMinifinca(nuevaMF);
+      toast.success(`Minifinca ${mf} creada`);
+      setNuevaMF("");
+      setCreandoMF(false);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleEliminarMF = async (mf) => {
+    if (!confirm(`¿Eliminar la minifinca ${mf}?`)) return;
+    try {
+      await eliminarMinifinca(mf);
+      if (filtroMF === mf) setFiltroMF(null);
+      toast.success(`Minifinca ${mf} eliminada`);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
 
   const [formSeccion, setFormSeccion] = useState(emptySeccion);
   const [savingSeccion, setSavingSeccion] = useState(false);
@@ -181,9 +211,15 @@ export default function AvancesConfiguraciones() {
   // Un Editor con el permiso 'avances_agricolas' edita igual que un admin
   // (AvancesLayout ya bloqueó por completo a quien no tenga el permiso;
   // este chequeo es solo una segunda barrera por si se entra directo a la URL).
-  if (!isAdmin && !hasPermiso("avances_agricolas")) {
+  // Un caporal restringido a ciertas minifincas NO puede entrar aquí: podría
+  // cambiar la minifinca de una sección y saltarse su restricción.
+  if ((!isAdmin && !hasPermiso("avances_agricolas")) || minifincasPermitidas !== null) {
     return <AdminOnlyMessage />;
   }
+
+  const seccionesVisibles = filtroMF
+    ? secciones.filter((s) => (s.minifinca || "").trim().toUpperCase() === filtroMF)
+    : secciones;
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -197,6 +233,75 @@ export default function AvancesConfiguraciones() {
           <p className="text-muted-foreground text-sm">Secciones y labores agrícolas</p>
         </div>
       </div>
+
+      {/* ===== MINIFINCAS: CREAR MF + MF1 / MF2 / MF3 ... ===== */}
+      <Card className="mb-6">
+        <CardContent className="py-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            {creandoMF ? (
+              <div className="flex items-center gap-1.5">
+                <Input
+                  className="h-8 w-28 text-sm uppercase"
+                  placeholder="Ej: MF3"
+                  value={nuevaMF}
+                  autoFocus
+                  onChange={(e) => setNuevaMF(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCrearMF();
+                    if (e.key === "Escape") { setCreandoMF(false); setNuevaMF(""); }
+                  }}
+                />
+                <Button size="icon" className="h-8 w-8" onClick={handleCrearMF} disabled={creando || !nuevaMF.trim()}>
+                  <Check className="w-4 h-4" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setCreandoMF(false); setNuevaMF(""); }}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => setCreandoMF(true)}>
+                <Plus className="w-4 h-4" /> Crear MF
+              </Button>
+            )}
+
+            <span className="w-px h-6 bg-border mx-1" />
+
+            <button
+              type="button"
+              onClick={() => setFiltroMF(null)}
+              className={`h-8 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                filtroMF === null ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-muted"
+              }`}
+            >
+              Todas
+            </button>
+
+            {minifincas.map((mf) => (
+              <div
+                key={mf}
+                className={`group flex items-center h-8 rounded-lg border text-sm font-medium transition-colors ${
+                  filtroMF === mf ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-muted"
+                }`}
+              >
+                <button type="button" className="px-3 h-full" onClick={() => setFiltroMF(filtroMF === mf ? null : mf)}
+                  title="Ver solo las secciones de esta minifinca">
+                  {mf}
+                  <span className="ml-1.5 text-xs opacity-70">({conteoSecciones[mf] || 0})</span>
+                </button>
+                {!conteoSecciones[mf] && (
+                  <button type="button" className="pr-2 opacity-60 hover:opacity-100" onClick={() => handleEliminarMF(mf)}
+                    title="Eliminar minifinca (no tiene secciones)">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Crea aquí las minifincas y asígnalas a cada sección. En Configuraciones → Usuarios le das a cada caporal su minifinca: solo podrá registrar en esas secciones.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* ===== SECCIONES ===== */}
       <Card className="mb-6">
@@ -225,8 +330,13 @@ export default function AvancesConfiguraciones() {
               <Label htmlFor="minifinca" className="flex items-center gap-1.5 text-xs">
                 <MapPin className="w-3.5 h-3.5" /> Minifinca
               </Label>
-              <Input id="minifinca" name="minifinca" placeholder="Ej: Minifinca 1"
-                value={formSeccion.minifinca} onChange={handleSeccionChange} />
+              {/* Se elige de las minifincas creadas con "Crear MF" */}
+              <select id="minifinca" name="minifinca"
+                value={formSeccion.minifinca} onChange={handleSeccionChange}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                <option value="">{minifincas.length ? "Seleccionar minifinca" : "Primero crea una MF"}</option>
+                {minifincas.map((mf) => <option key={mf} value={mf}>{mf}</option>)}
+              </select>
             </div>
           </div>
           <Button
@@ -245,7 +355,9 @@ export default function AvancesConfiguraciones() {
           <CollapsibleTrigger asChild>
             <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Secciones Registradas ({secciones.length})</CardTitle>
+                <CardTitle className="text-base">
+                  Secciones Registradas ({seccionesVisibles.length}{filtroMF ? ` de ${secciones.length} — ${filtroMF}` : ""})
+                </CardTitle>
                 <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform ${seccionesExpanded ? "rotate-180" : ""}`} />
               </div>
             </CardHeader>
@@ -254,11 +366,13 @@ export default function AvancesConfiguraciones() {
             <CardContent>
               {loadingSec ? (
                 <p className="text-muted-foreground text-sm text-center py-8">Cargando...</p>
-              ) : secciones.length === 0 ? (
-                <p className="text-muted-foreground text-sm text-center py-8">No hay secciones aún.</p>
+              ) : seccionesVisibles.length === 0 ? (
+                <p className="text-muted-foreground text-sm text-center py-8">
+                  {filtroMF ? `No hay secciones en ${filtroMF}.` : "No hay secciones aún."}
+                </p>
               ) : (
                 <div className="space-y-3">
-                  {secciones.map((s) => {
+                  {seccionesVisibles.map((s) => {
                     const isEditingThis = editingSeccion?.id === s.id;
                     return (
                       <div key={s.id}
@@ -280,13 +394,18 @@ export default function AvancesConfiguraciones() {
                               value={editingSeccion.acres}
                               onChange={(e) => setEditingSeccion({ ...editingSeccion, acres: e.target.value })}
                             />
-                            <Input
-                              className="h-7 text-sm w-28"
-                              placeholder="Minifinca"
+                            <select
+                              className="h-7 w-28 rounded-md border border-input bg-transparent px-2 text-sm"
                               value={editingSeccion.minifinca}
                               onChange={(e) => setEditingSeccion({ ...editingSeccion, minifinca: e.target.value })}
                               onKeyDown={(e) => { if (e.key === "Enter") handleSaveEditSeccion(); if (e.key === "Escape") setEditingSeccion(null); }}
-                            />
+                            >
+                              <option value="">Minifinca</option>
+                              {/* Incluye la MF actual aunque no esté en el catálogo */}
+                              {[...new Set([...minifincas, (editingSeccion.minifinca || "").trim()])].filter(Boolean).map((mf) => (
+                                <option key={mf} value={mf}>{mf}</option>
+                              ))}
+                            </select>
                             <Button size="icon" className="h-7 w-7" onClick={handleSaveEditSeccion} disabled={savingEditSeccion}>
                               <Check className="w-3.5 h-3.5" />
                             </Button>

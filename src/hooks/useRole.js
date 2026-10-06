@@ -34,7 +34,8 @@ export function useRole() {
       ? permisos.minifincas
       : null;
   const puedeEditarMinifinca = (mf) =>
-    minifincasPermitidas === null || minifincasPermitidas.includes((mf || "").trim());
+    minifincasPermitidas === null ||
+    minifincasPermitidas.some((p) => (p || "").trim().toUpperCase() === (mf || "").trim().toUpperCase());
 
   return {
     isAdmin, isEditor, isViewer, isOwner, permisos, hasPermiso,
