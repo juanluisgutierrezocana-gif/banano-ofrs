@@ -23,5 +23,21 @@ export function useRole() {
   // permiso específico está activo en su campo `permisos` de la tabla users.
   const hasPermiso = (key) => isAdmin || permisos[key] === true;
 
-  return { isAdmin, isEditor, isViewer, isOwner, permisos, hasPermiso };
+  // Restricción por minifinca (Avances Agrícolas): permisos.minifincas es un
+  // arreglo de nombres de minifinca (ej. ["MF1"]) asignado por un admin desde
+  // Configuraciones->Usuarios. Si es null => sin restricción (admin/dueño, o
+  // un usuario al que no se le marcó ninguna minifinca: ve y edita todas).
+  // La misma regla se aplica en Supabase con RLS (función
+  // minifincas_permitidas()), así que esto es solo la capa visual.
+  const minifincasPermitidas =
+    !isAdmin && Array.isArray(permisos.minifincas) && permisos.minifincas.length > 0
+      ? permisos.minifincas
+      : null;
+  const puedeEditarMinifinca = (mf) =>
+    minifincasPermitidas === null || minifincasPermitidas.includes((mf || "").trim());
+
+  return {
+    isAdmin, isEditor, isViewer, isOwner, permisos, hasPermiso,
+    minifincasPermitidas, puedeEditarMinifinca,
+  };
 }

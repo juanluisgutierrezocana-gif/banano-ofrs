@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports } from "@/api/supabaseClient";
+import { supabase, auth, users, trenadas, colors, sections, inventory, losses, laborAgricola, reports, seccionAgricola } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +62,19 @@ export default function ConfigUsuarios() {
       const { data, error } = await users.filter({ finca_id: currentUser.finca_id });
       if (error) throw error;
       return data ?? [];
+    },
+  });
+
+  // Minifincas existentes (sacadas de las secciones agrícolas) para poder
+  // restringir a cada caporal a las suyas en Avances Agrícolas.
+  const { data: minifincasDisponibles = [] } = useQuery({
+    queryKey: ["minifincas-disponibles", currentUser?.finca_id],
+    enabled: isTrueAdmin,
+    queryFn: async () => {
+      const { data, error } = await seccionAgricola.list("minifinca");
+      if (error) throw error;
+      const set = new Set((data ?? []).map((s) => (s.minifinca || "").trim()).filter(Boolean));
+      return [...set].sort();
     },
   });
 
@@ -335,6 +348,44 @@ export default function ConfigUsuarios() {
                               />
                             </div>
                           ))}
+
+                          {/* Restricción por minifinca (Avances Agrícolas).
+                              Ninguna marcada = puede registrar en todas.
+                              Marcadas = solo registra/edita en esas. */}
+                          {minifincasDisponibles.length > 0 && (
+                            <div className="sm:col-span-2 mt-2 pt-3 border-t border-dashed">
+                              <p className="text-xs font-semibold mb-1">Minifincas que puede registrar (Avances Agrícolas)</p>
+                              <p className="text-[11px] text-muted-foreground mb-2">
+                                Si no marcas ninguna, puede registrar en todas. Si marcas alguna, solo podrá agregar, editar o borrar registros de esas minifincas.
+                              </p>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                {minifincasDisponibles.map((mf) => {
+                                  const actuales = Array.isArray(u.permisos?.minifincas) ? u.permisos.minifincas : [];
+                                  return (
+                                    <div key={mf} className="flex items-center justify-between gap-2">
+                                      <Label htmlFor={`mf-${u.id}-${mf}`} className="text-xs font-normal cursor-pointer">{mf}</Label>
+                                      <Switch
+                                        id={`mf-${u.id}-${mf}`}
+                                        checked={actuales.includes(mf)}
+                                        disabled={permisosMutation.isPending}
+                                        onCheckedChange={(checked) =>
+                                          permisosMutation.mutate({
+                                            id: u.id,
+                                            permisos: {
+                                              ...(u.permisos || {}),
+                                              minifincas: checked
+                                                ? [...new Set([...actuales, mf])]
+                                                : actuales.filter((x) => x !== mf),
+                                            },
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </CollapsibleContent>
                     </Collapsible>

@@ -39,7 +39,8 @@ const playSuccessSound = () => {
 export default function LaborDetalle() {
   const { laborId } = useParams();
   const queryClient = useQueryClient();
-  const { isAdmin, hasPermiso } = useRole();
+  const { isAdmin, hasPermiso, minifincasPermitidas, puedeEditarMinifinca } = useRole();
+  const restringido = minifincasPermitidas !== null;
   const [entry, setEntry] = useState(emptyEntry);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -111,7 +112,10 @@ export default function LaborDetalle() {
   useEffect(() => {
     if (prefilledRef.current || registros.length === 0) return;
     prefilledRef.current = true;
-    const last = registros[0]; // ordenado por -fecha → [0] es el más reciente
+    // Para un caporal restringido, precargar con SU último registro (no con
+    // el de la otra minifinca, que no podría usar).
+    const last = registros.find((r) => puedeEditarMinifinca(r.minifinca)); // ordenado por -fecha
+    if (!last) return;
     setEntry(prev => ({
       ...prev,
       seccion_id: last.seccion_id || "",
@@ -147,6 +151,15 @@ export default function LaborDetalle() {
     return secciones.filter((s) => !excluidas.includes(s.id));
   }, [secciones, labor?.secciones_excluidas]);
 
+  // Secciones en las que ESTE usuario puede registrar/editar. Un caporal con
+  // minifinca asignada (ej. MF1) solo ve en el formulario las secciones de su
+  // minifinca. La tabla resumen sigue mostrando todas (solo lectura).
+  const seccionesEditables = useMemo(
+    () => seccionesActivas.filter((s) => puedeEditarMinifinca(s.minifinca)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [seccionesActivas, minifincasPermitidas]
+  );
+
   const totalAcresFinca = seccionesActivas.reduce((s, sec) => s + (sec.acres || 0), 0);
   const seccionesTabla = seccionesActivas;
 
@@ -169,11 +182,27 @@ export default function LaborDetalle() {
   }, [secciones]);
 
   const sinSecciones = seccionesActivas.length === 0;
+  // Un caporal restringido no puede registrar en labores sin secciones
+  // (no pertenecen a ninguna minifinca) — eso lo registra el administrador.
+  const bloqueadoSinSecciones = restringido && sinSecciones;
+
+  // ¿Este usuario puede editar/eliminar el registro r? (según su minifinca)
+  const puedeEditarRegistro = (r) => {
+    if (!restringido) return true;
+    if (!r.seccion_id) return false;
+    return puedeEditarMinifinca(seccionMap[r.seccion_id]?.minifinca ?? r.minifinca);
+  };
 
   const handleSave = async () => {
     if (!entry.fecha || (!sinSecciones && !entry.seccion_id) || !entry.ciclo || !entry.acres_realizados) return;
-    setSaving(true);
+    if (bloqueadoSinSecciones) return;
     const sec = sinSecciones ? null : seccionMap[entry.seccion_id];
+    // Doble verificación en el cliente (la base de datos también lo bloquea con RLS)
+    if (sec && !puedeEditarMinifinca(sec.minifinca)) {
+      toast.error(`No tienes permiso para registrar en ${sec.minifinca}`);
+      return;
+    }
+    setSaving(true);
     const valorIngresado = parseFloat(entry.acres_realizados);
     const payload = {
       labor_id: laborId,
@@ -209,6 +238,11 @@ export default function LaborDetalle() {
   };
 
   const handleDelete = async (id) => {
+    const reg = registros.find((r) => r.id === id);
+    if (reg && !puedeEditarRegistro(reg)) {
+      toast.error("No puedes eliminar registros de otra minifinca");
+      return;
+    }
     setDeletingId(id);
     // FIXED: comprobar { error } de reports.delete antes de invalidar la query
     const { error } = await reports.delete(id);
@@ -238,8 +272,12 @@ export default function LaborDetalle() {
   };
 
   const handleUpdate = async (r) => {
-    setUpdatingId(r.id);
     const sec = seccionMap[editRow.seccion_id] || { nombre: r.seccion_nombre, minifinca: r.minifinca };
+    if (!puedeEditarRegistro(r) || !puedeEditarMinifinca(sec.minifinca)) {
+      toast.error("No puedes mover o editar registros de otra minifinca");
+      return;
+    }
+    setUpdatingId(r.id);
     const acresVal = parseFloat(editRow.acres);
     const payload = {
       fecha: editRow.fecha,
@@ -305,9 +343,19 @@ export default function LaborDetalle() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Plus className="w-4 h-4 text-primary" /> Nuevo Registro
+                {restringido && (
+                  <span className="ml-auto text-[11px] font-medium rounded-full bg-amber-100 text-amber-800 px-2 py-0.5">
+                    Solo {minifincasPermitidas.join(", ")}
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              {bloqueadoSinSecciones && (
+                <p className="text-xs rounded-md bg-amber-50 text-amber-800 border border-amber-200 px-2 py-1.5">
+                  Esta labor no usa secciones, así que no pertenece a ninguna minifinca. Solo el administrador puede registrarla.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-2">
                <div className="space-y-1">
                  <Label className="text-xs">Fecha</Label>
@@ -339,7 +387,7 @@ export default function LaborDetalle() {
                     className="flex h-7 w-full rounded-md border border-input bg-transparent px-2 py-0.5 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="">Seleccionar sección</option>
-                    {seccionesActivas.map((s) => (
+                    {seccionesEditables.map((s) => (
                       <option key={s.id} value={s.id}>{s.nombre}{s.minifinca ? ` — ${s.minifinca}` : ""}</option>
                     ))}
                   </select>
@@ -402,7 +450,7 @@ export default function LaborDetalle() {
               <Button
                   ref={btnRef}
                   onClick={handleSave}
-                  disabled={saving || !entry.fecha || (!sinSecciones && !entry.seccion_id) || !entry.ciclo || !entry.acres_realizados}
+                  disabled={saving || bloqueadoSinSecciones || !entry.fecha || (!sinSecciones && !entry.seccion_id) || !entry.ciclo || !entry.acres_realizados}
                 className="w-full"
                 onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
               >
@@ -456,7 +504,7 @@ export default function LaborDetalle() {
                                     onChange={(e) => setEditRow({ ...editRow, seccion_id: e.target.value })}
                                     className="h-7 w-full rounded border border-input bg-transparent px-1 text-xs"
                                   >
-                                    {seccionesActivas.map((s) => (
+                                    {seccionesEditables.map((s) => (
                                       <option key={s.id} value={s.id}>{s.nombre}</option>
                                     ))}
                                   </select>
@@ -516,6 +564,12 @@ export default function LaborDetalle() {
                                   </td>
                                 )}
                                 <td className="px-1 py-1">
+                                  {!puedeEditarRegistro(r) ? (
+                                    // Registro de otra minifinca: solo lectura para este caporal
+                                    <span className="text-[10px] text-muted-foreground/60 whitespace-nowrap px-1" title="Pertenece a otra minifinca">
+                                      Solo lectura
+                                    </span>
+                                  ) : (
                                   <div className="flex gap-0.5">
                                     <Button variant="ghost" size="icon"
                                       className="text-primary hover:bg-primary/10 h-6 w-6"
@@ -529,6 +583,7 @@ export default function LaborDetalle() {
                                       <Trash2 className="w-3 h-3" />
                                     </Button>
                                   </div>
+                                  )}
                                 </td>
                               </>
                             )}
