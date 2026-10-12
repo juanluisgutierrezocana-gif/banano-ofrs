@@ -61,15 +61,17 @@ export default function EditarTrenadas() {
       ])
     );
 
-    return Array.from(keys).sort((a, b) => {
-      const posA = positionByKey.get(a) ?? Number.MAX_SAFE_INTEGER;
-      const posB = positionByKey.get(b) ?? Number.MAX_SAFE_INTEGER;
-      if (posA !== posB) return posA - posB;
-      // Fallback (color sin botón configurado): semana ascendente.
-      const semA = parseInt(a.match(/S(\d+)/)?.[1] ?? "0");
-      const semB = parseInt(b.match(/S(\d+)/)?.[1] ?? "0");
-      return semA - semB;
-    });
+    // ORDEN FIJO (mismo criterio que Reportería > General):
+    // 1) Semana descendente (S13, S12, S11...) = cinta más vieja primero.
+    // 2) Empate: posición del botón en Configuraciones.
+    // 3) Empate final: alfabético.
+    const semana = k => parseInt(k.match(/S(\d+)$/)?.[1] ?? "0", 10);
+    return Array.from(keys).sort((a, b) =>
+      semana(b) - semana(a) ||
+      (positionByKey.get(a) ?? Number.MAX_SAFE_INTEGER) -
+        (positionByKey.get(b) ?? Number.MAX_SAFE_INTEGER) ||
+      a.localeCompare(b)
+    );
   }, [trenadaList, buttons]);
 
   // Hex de cada color para pintar el punto del encabezado.
