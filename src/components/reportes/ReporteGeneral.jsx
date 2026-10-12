@@ -47,9 +47,30 @@ const { data: buttons = [] } = useQuery({
       (t.racimos || []).forEach(r => racimoKeys.add(`${r.color_name} S${r.week_age}`))
     );
 
+    // ORDEN FIJO de columnas (mismo criterio que Editar Trenadas):
+    // 1) Semana descendente (S13, S12, S11, S10, S9...) = cinta más vieja primero.
+    // 2) Empate: posición del botón en Configuraciones.
+    // 3) Empate final: alfabético, para que nunca dependa del orden de captura.
+    // Antes se devolvía el Set tal cual, y el orden dependía de qué color
+    // apareció primero en las trenadas del día → cambiaba de un día a otro.
+    const semana = k => parseInt(k.match(/S(\d+)$/)?.[1] ?? "0", 10);
+    const posicionPorKey = new Map(
+      buttons.map(btn => [
+        `${btn.color_name ?? btn.button_name} S${btn.week_age ?? ""}`,
+        btn.position ?? Number.MAX_SAFE_INTEGER,
+      ])
+    );
+    const ordenar = keys =>
+      Array.from(keys).sort((a, b) =>
+        semana(b) - semana(a) ||
+        (posicionPorKey.get(a) ?? Number.MAX_SAFE_INTEGER) -
+          (posicionPorKey.get(b) ?? Number.MAX_SAFE_INTEGER) ||
+        a.localeCompare(b)
+      );
+
     if (racimoKeys.size > 0) {
       // Hay datos: solo mostrar las columnas que realmente tienen información
-      return Array.from(racimoKeys);
+      return ordenar(racimoKeys);
     }
 
     // Sin registros en el día: usar los botones activos como plantilla de columnas vacías
@@ -57,7 +78,7 @@ const { data: buttons = [] } = useQuery({
     buttons.forEach(btn =>
       buttonKeys.add(`${btn.color_name ?? btn.button_name} S${btn.week_age ?? ""}`)
     );
-    return Array.from(buttonKeys);
+    return ordenar(buttonKeys);
   }, [trenadaRecords, buttons]);
 
   const exportExcel = () => {
