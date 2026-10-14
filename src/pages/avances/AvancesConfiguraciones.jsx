@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Settings, Plus, Trash2, MapPin, Layers, TreePine, ClipboardList, Pencil, Check, X, ChevronDown } from "lucide-react";
 import { useRole } from "@/hooks/useRole";
+import { toast } from "sonner";
 import AdminOnlyMessage from "@/components/avances/AdminOnlyMessage";
 import { useMinifincas } from "@/lib/useMinifincas";
 import { toast } from "sonner";
@@ -148,8 +149,20 @@ export default function AvancesConfiguraciones() {
   // Labores
   const handleLaborChange = (e) => setFormLabor({ ...formLabor, [e.target.name]: e.target.value });
 
+  // Evita labores duplicadas: si dos labores activas comparten nombre, los
+  // registros se reparten entre ambas y "desaparecen" del resumen.
+  const normalizarNombre = (n) => (n || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const nombreLaborDuplicado = (nombre, excludeId = null) =>
+    labores.some(
+      (l) => l.activa !== false && l.id !== excludeId && normalizarNombre(l.nombre) === normalizarNombre(nombre)
+    );
+
   const handleSaveLabor = async () => {
     if (!formLabor.nombre.trim()) return;
+    if (nombreLaborDuplicado(formLabor.nombre)) {
+      toast.error(`Ya existe una labor activa llamada "${formLabor.nombre.trim()}"`);
+      return;
+    }
     setSavingLabor(true);
     const payload = {
       nombre: formLabor.nombre.trim(),
@@ -189,18 +202,42 @@ export default function AvancesConfiguraciones() {
 
   const handleDeleteLabor = async (id) => {
     setDeletingLaborId(id);
+    // No borrar labores con registros: quedarían huérfanos (labor_id NULL) y
+    // desaparecerían de resumen y reportería. En ese caso se debe desactivar.
+    const { count, error: countError } = await supabase
+      .from("registros_labor")
+      .select("id", { count: "exact", head: true })
+      .eq("labor_id", id);
+    if (countError || count > 0) {
+      toast.error(
+        countError
+          ? `Error al verificar registros: ${countError.message}`
+          : `Esta labor tiene ${count} registros. Desactívala en lugar de eliminarla.`
+      );
+      setDeletingLaborId(null);
+      return;
+    }
     await laborAgricola.delete(id);
     queryClient.invalidateQueries({ queryKey: ["labores-agricolas"] });
     setDeletingLaborId(null);
   };
 
   const handleToggleLabor = async (labor) => {
+    // Al reactivar, no permitir que choque con otra labor activa del mismo nombre
+    if (!labor.activa && nombreLaborDuplicado(labor.nombre, labor.id)) {
+      toast.error(`Ya hay otra labor activa llamada "${labor.nombre}". Desactívala primero.`);
+      return;
+    }
     await laborAgricola.update(labor.id, { activa: !labor.activa });
     queryClient.invalidateQueries({ queryKey: ["labores-agricolas"] });
   };
 
   const handleSaveEditLabor = async () => {
     if (!editingLabor?.nombre?.trim()) return;
+    if (nombreLaborDuplicado(editingLabor.nombre, editingLabor.id)) {
+      toast.error(`Ya existe una labor activa llamada "${editingLabor.nombre.trim()}"`);
+      return;
+    }
     setSavingEditLabor(true);
     await laborAgricola.update(editingLabor.id, { nombre: editingLabor.nombre.trim() });
     queryClient.invalidateQueries({ queryKey: ["labores-agricolas"] });
