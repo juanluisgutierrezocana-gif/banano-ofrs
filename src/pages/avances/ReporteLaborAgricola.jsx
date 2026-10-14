@@ -70,7 +70,8 @@ export default function ReporteLaborAgricola() {
   const { data: registros = [], isLoading: loadingRegistros } = useQuery({
     queryKey: ["registros-labor-reporte"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("registros_labor").select("*").order("fecha", { ascending: false });
+      // reports.list pagina internamente (Supabase corta en 1000 filas)
+      const { data, error } = await reports.list("-fecha");
       if (error) throw error;
       return data ?? [];
     },
@@ -202,7 +203,11 @@ export default function ReporteLaborAgricola() {
   const matrizDatos = useMemo(() => {
     if (!laborActualSeleccionado) return null;
     
-    const ciclos = Array.from({ length: laborActualSeleccionado.num_ciclos || 9 }, (_, i) => i + 1);
+    // Mostrar al menos num_ciclos, pero extender si hay registros en ciclos mayores
+    // (ej. Embolse lleva ciclo 40 aunque la labor esté configurada con 13)
+    const maxCicloData = registrosLaborSeleccionado.reduce((m, r) => Math.max(m, r.ciclo || 0), 0);
+    const numCiclos = Math.max(laborActualSeleccionado.num_ciclos || 9, maxCicloData);
+    const ciclos = Array.from({ length: numCiclos }, (_, i) => i + 1);
     const seccionesActivas = secciones.filter(s => s.activa !== false);
     
     const matriz = {};

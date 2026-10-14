@@ -30,27 +30,46 @@ const applyFilters = (query, filters = {}) => {
 };
 
 // ============================================================
+// HELPER: Trae TODAS las filas paginando de 1000 en 1000.
+// Supabase/PostgREST corta cada respuesta en 1000 filas (max-rows).
+// Sin esto, tablas grandes (registros_labor) "pierden" datos en pantalla:
+// no se borran, simplemente no llegan al navegador.
+// buildQuery() debe devolver un query NUEVO cada vez (con filtros y orden).
+// ============================================================
+const PAGE_SIZE = 1000;
+export const fetchAll = async (buildQuery) => {
+  const all = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
+    if (error) return { data: null, error };
+    all.push(...(data ?? []));
+    if (!data || data.length < PAGE_SIZE) break;
+  }
+  return { data: all, error: null };
+};
+
+// Aplica orden "campo" / "-campo" + desempate por id (orden estable para paginar)
+const applyOrder = (query, orderBy) => {
+  if (orderBy) {
+    const desc = orderBy.startsWith('-');
+    query = query.order(desc ? orderBy.slice(1) : orderBy, { ascending: !desc });
+  }
+  return query.order('id', { ascending: true });
+};
+
+// ============================================================
 // FACTORY: Genera cliente Base44-compatible para cada tabla
 // Todos retornan { data, error } (Supabase style)
 // ============================================================
 const createEntity = (tableName) => ({
   async list(orderBy = null) {
-    let query = supabase.from(tableName).select('*');
-    if (orderBy) {
-      const desc = orderBy.startsWith('-');
-      query = query.order(desc ? orderBy.slice(1) : orderBy, { ascending: !desc });
-    }
-    return await query;
+    return await fetchAll(() => applyOrder(supabase.from(tableName).select('*'), orderBy));
   },
 
   async filter(filters = {}, orderBy = null) {
-    let query = supabase.from(tableName).select('*');
-    query = applyFilters(query, filters);
-    if (orderBy) {
-      const desc = orderBy.startsWith('-');
-      query = query.order(desc ? orderBy.slice(1) : orderBy, { ascending: !desc });
-    }
-    return await query;
+    return await fetchAll(() =>
+      applyOrder(applyFilters(supabase.from(tableName).select('*'), filters), orderBy)
+    );
   },
 
   async get(id) {

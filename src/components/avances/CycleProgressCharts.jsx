@@ -97,9 +97,11 @@ export default function CycleProgressCharts() {
   return (
     <div className="space-y-4">
       {activeLaborFiltered.map((labor) => {
-        const numCiclos = labor.num_ciclos || 9;
-        const ciclos = Array.from({ length: numCiclos }, (_, i) => i + 1);
         const laborData = dataByLaborAndCycle[labor.id] || {};
+        // Extender ciclos si hay registros por encima de num_ciclos configurado
+        const maxCicloData = Object.keys(laborData).reduce((m, c) => Math.max(m, Number(c) || 0), 0);
+        const numCiclos = Math.max(labor.num_ciclos || 9, maxCicloData);
+        const ciclos = Array.from({ length: numCiclos }, (_, i) => i + 1);
         const hasData = ciclos.some((c) => (laborData[c]?.acres || 0) > 0);
         const isEmbolse = labor.nombre.toLowerCase().includes("embolse");
 
